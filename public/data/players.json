@@ -1,0 +1,70 @@
+{
+  "p_Zarg5L1FLADM": {
+    "pid": "p_Zarg5L1FLADM",
+    "name": "Guest7188",
+    "createdAt": 1792233982288,
+    "lastSeen": 1792234016368,
+    "coins": 250,
+    "speed": 10,
+    "treadmillLevel": 1,
+    "baseLevel": 1,
+    "baseIndex": 0,
+    "pets": [],
+    "equippedPet": null,
+    "eggs": [],
+    "trails": [],
+    "equippedTrail": null,
+    "quests": [
+      {
+        "id": "hatch5",
+        "desc": "Hatch 5 pets",
+        "target": 5,
+        "progress": 0,
+        "reward": 9000,
+        "claimed": false,
+        "resetsAt": 1792281600000
+      },
+      {
+        "id": "earn50k",
+        "desc": "Earn 50,000 coins",
+        "target": 50000,
+        "progress": 0,
+        "reward": 12000,
+        "claimed": false,
+        "resetsAt": 1792281600000
+      },
+      {
+        "id": "hatch2",
+        "desc": "Hatch 2 pets",
+        "target": 2,
+        "progress": 0,
+        "reward": 2000,
+        "claimed": false,
+        "resetsAt": 1792281600000
+      }
+    ],
+    "dailyClaimedAt": 0,
+    "dailyStreak": 0,
+    "stats": {
+      "eggsDelivered": 0,
+      "eggsHatched": 0,
+      "totalEarned": 0,
+      "eventsCompleted": 0,
+      "biomesUnlocked": 1
+    },
+    "discoveredPets": [],
+    "settings": {
+      "graphics": "medium",
+      "music": 0.5,
+      "sfx": 0.7,
+      "ambient": 0.5,
+      "sensitivity": 1,
+      "motion": true
+    },
+    "isAdmin": false,
+    "muted": false,
+    "banned": false,
+    "lastTrainedAt": 0,
+    "trainingSince": 0
+  }
+}
