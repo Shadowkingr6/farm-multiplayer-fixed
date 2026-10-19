@@ -583,7 +583,7 @@ html.touch .seedCfgRow .sname{font-size:12px}
 <div id="cdNum"><span id="cdNumTxt">10</span></div>
 <div id="cinLetter"></div>
 <div id="cinTitle"><div class="s1">Season 1</div><div class="sp">SPOOKY</div></div>
-<div id="annBar"><div id="annIcon">!</div><div><div class="lbl" id="annLbl">Global Announcement</div><div class="msg" id="annMsg"></div></div></div>
+<div id="annBar"><div id="annIcon">!</div><div><div class="lbl" id="annLbl">Global Announcement</div><div class="msg" id="annDisplayMsg"></div></div></div>
 <div class="win" id="win"><div class="winHead"><h2 id="winTitle"></h2><button id="winClose">✕</button></div><div class="winBody" id="winBody"></div></div>
 <div id="dialog"><div id="dialogBox"><h3 id="dlgTitle"></h3><p id="dlgMsg" style="margin-bottom:18px;line-height:1.5"></p><div class="row" style="justify-content:center"><button class="btnR" id="dlgOk">Confirm</button><button class="btnGhost" id="dlgCancel">Cancel</button></div></div></div>
 <div id="hatchOv"><div id="hatchCard"></div><button class="btnGhost" id="hatchSkip">Skip</button></div>
@@ -2467,7 +2467,7 @@ function showAnnounce(msg,opts={}){
  const c=color||(targeted?'#3f9fd6':'#e8a33d');
  bar.style.setProperty('--annColor',c);
  $('#annLbl').textContent=targeted?'Message from Admin':'Global Announcement';
- $('#annMsg').textContent=msg;
+ $('#annDisplayMsg').textContent=msg;
  bar.classList.add('show');
  if(annTimer)clearTimeout(annTimer);
  annTimer=setTimeout(()=>bar.classList.remove('show'),dur);}
@@ -2863,7 +2863,18 @@ function handleNet(m){
   case 'event':weather.set(m.ev,Cin.active);break;
   case 'plots':ST.plots=m.plots;rebuildPlots();break;
   case 'expanded':toast('Plot expanded!','good');break;
-  case 'pJoin':toast(m.name+' joined the garden','info');break;
+  case 'pJoin':{
+   toast(m.name+' joined the garden','info');
+   /* Create the other player's farmer mesh so we can see them.
+      The pJoin message only has {id, name} — no position yet, so spawn them at 0,26
+      (the default spawn). The first ppos broadcast will move them to their real position. */
+   if(ST.me&&m.id!==ST.me.id&&!otherObjs.has(m.id)){
+    const g=makeFarmer(0x8a5a33,0xe8b48a,0xb0885a,0x6a4a2a,0x4a4050);
+    const tag=nameTag(m.name||'Farmer');tag.position.y=3.25;tag.scale.set(2.2,.55,1);g.add(tag);
+    scene.add(g);
+    otherObjs.set(m.id,{g,tx:0,tz:26,ry:0});
+   }
+   break;}
   case 'pLeft':{const r=otherObjs.get(m.id);
    if(r){scene.remove(r.g);disposeGroup(r.g);otherObjs.delete(m.id);}break;}
   case 'ppos':{const r=otherObjs.get(m.id);if(r){r.tx=m.x;r.tz=m.z;r.ry=m.ry;}break;}
@@ -3478,14 +3489,14 @@ function admTab(t){
     return `<button class="chaosBtn" onclick="if(confirm('Trigger ${n} for everyone?'))admCmd('chaos',{mode:'${id}'})">⚡ ${n}</button>`;}).join('')}</div></div>`;
  if(t==='Announce')el.innerHTML=`
   <div class="admCard"><h4>Broadcast Announcement</h4>
-   <div class="admRow"><label>Message</label><input id="annMsg" style="flex:1;min-width:280px" placeholder="Write your announcement…"></div>
+   <div class="admRow"><label>Message</label><input id="annInput" style="flex:1;min-width:280px" placeholder="Write your announcement…"></div>
    <div class="admRow"><label>Color</label><input type="color" id="annColor" value="#e8a33d">
     <label style="min-width:60px">Style</label>
     <select id="annStyle"><option value="classic">Classic</option><option value="spooky">Spooky</option><option value="neon">Neon</option><option value="elegant">Elegant</option></select>
     <label style="min-width:90px">Duration (sec)</label><input type="number" id="annDur" value="6" min="2" max="120" style="width:90px"></div>
    <div class="admRow">
-    <button class="btnSm btnGhost" onclick="showAnnounce(annMsg.value||'Preview',{color:annColor.value,style:annStyle.value,dur:+annDur.value})">Preview on me</button>
-    <button class="btnSm btnA" onclick="if(annMsg.value.trim())admCmd('announce',{msg:annMsg.value,color:annColor.value,style:annStyle.value,dur:+annDur.value})">Broadcast to all</button></div></div>`;
+    <button class="btnSm btnGhost" onclick="showAnnounce(document.getElementById('annInput').value||'Preview',{color:document.getElementById('annColor').value,style:document.getElementById('annStyle').value,dur:+document.getElementById('annDur').value})">Preview on me</button>
+    <button class="btnSm btnA" onclick="const msg=document.getElementById('annInput').value.trim();if(msg)admCmd('announce',{msg,color:document.getElementById('annColor').value,style:document.getElementById('annStyle').value,dur:+document.getElementById('annDur').value})">Broadcast to all</button></div></div>`;
  if(t==='Logs')send({t:'admin',token:ST.adminToken,cmd:'logs'});
  if(t==='Settings')el.innerHTML=`
   <div class="admCard"><h4>Simulation</h4>
