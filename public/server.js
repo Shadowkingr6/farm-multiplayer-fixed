@@ -2,7 +2,7 @@
 'use strict';
 const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto');
 const PORT=process.env.PORT||3000;
-const ADMIN_CODE=process.env.ADMIN_CODE;
+const ADMIN_CODE=process.env.ADMIN_CODE||'486900892414';
 const SAVE_FILE='farm_save.json',SAVE_BAK='farm_save.bak.json';
 const RESTOCK_MS=5*60*1000,SAVE_MS=30*1000,CINEMATIC_MS=46000;
 const EMOTE_RESTOCK_MS=2*60*60*1000;
@@ -244,6 +244,8 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
  s2:{phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,
      totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,
      act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},
+ /* ===== GLOBAL COUNTDOWN TIMER ===== */
+ timer:{active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},
  adminSessions:new Map(),authFails:new Map(),logs:[],startedAt:Date.now(),savedAt:Date.now(),dirty:false,nextId:1};
 G.maintenance={active:false,until:0,msg:'',fix:'',by:''};
 
@@ -267,7 +269,7 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
- maintenance:G.maintenance,s2:G.s2,
+ maintenance:G.maintenance,s2:G.s2,timer:G.timer,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
@@ -293,6 +295,9 @@ function load(){let raw=null;
   G.season=Object.assign({id:'SPOOKY',name:'Season 1: SPOOKY',status:'inactive',launchAt:0,cinematicAt:0,active:false},d.season||{});
   G.maintenance=Object.assign({active:false,until:0,msg:'',fix:'',by:''},d.maintenance||{});
   G.s2=Object.assign({phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},d.s2||{});
+  G.timer=Object.assign({active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},d.timer||{});
+  /* If a timer was active and expired while the server was down, clear it */
+  if(G.timer.active&&G.timer.end<now()){G.timer.active=false;G.timer.end=0;}
   if(!Array.isArray(G.s2.deciderWishes))G.s2.deciderWishes=[];
   if(d.event&&EV_MAP[d.event.id]&&d.event.end>Date.now())G.event={def:EV_MAP[d.event.id],start:d.event.start,end:d.event.end};
   else G.nextEventRoll=Date.now()+20000;
@@ -761,6 +766,28 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    if(idx>=0){G.s2.deciderWishes.splice(idx,1);G.dirty=true;save();
     sendTo(admin.id,{t:'admData',kind:'deciderWishes',data:G.s2.deciderWishes});}
    break;}
+  /* ===== GLOBAL COUNTDOWN TIMER ===== */
+  case 'setTimer':{
+   const hours=Math.max(0,Math.min(23,+a.hours||0));
+   const mins=Math.max(0,Math.min(59,+a.mins||0));
+   const secs=Math.max(0,Math.min(59,+a.secs||0));
+   const totalSec=hours*3600+mins*60+secs;
+   if(totalSec<1)return sendTo(admin.id,{t:'toast',msg:'Timer must be at least 1 second.',kind:'err'});
+   if(totalSec>86400)return sendTo(admin.id,{t:'toast',msg:'Timer max is 24 hours.',kind:'err'});
+   const text=String(a.text||'').slice(0,80);
+   const color=/^#[0-9a-fA-F]{6}$/.test(a.color||'')?a.color:'#e8a33d';
+   const evId=String(a.event||'').slice(0,32);
+   G.timer={active:true,end:now()+totalSec*1000,text,color,event:evId,by:admin.name};
+   G.dirty=true;save();
+   broadcast({t:'timerSet',end:G.timer.end,text:G.timer.text,color:G.timer.color,event:G.timer.event,by:G.timer.by,serverTime:now()});
+   log('timer:set','global',totalSec+'s '+(evId||'no-event'));
+   sendTo(admin.id,{t:'toast',msg:'Timer set for '+totalSec+'s.',kind:'good'});break;}
+  case 'cancelTimer':{
+   if(!G.timer.active)return sendTo(admin.id,{t:'toast',msg:'No active timer.',kind:'err'});
+   G.timer={active:false,end:0,text:'',color:'#e8a33d',event:'',by:''};
+   G.dirty=true;save();
+   broadcast({t:'timerCancel'});
+   sendTo(admin.id,{t:'toast',msg:'Timer cancelled.',kind:'good'});break;}
   case 'giveRelics':if(target){target.relics=(target.relics||0)+Math.max(0,+a.v||0);pushMe(target);}break;
   case 'rotateEmoteShop':rotateEmoteShop();break;
   case 'launchSeason':{if(G.season.active||G.season.status==='cinematic')return;
@@ -850,7 +877,7 @@ if(WebSocketServer){
     else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
     sock._id=p.id;joined=true;
     sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,
+     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,
      plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
      prices:priceMap(),cfg:G.shopConfig,
      emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
@@ -870,6 +897,24 @@ if(WebSocketServer){
    G.maintenance={active:false,until:0,msg:'',fix:'',by:''};G.dirty=true;
    broadcast({t:'maintenance',until:0,msg:'',fix:'',by:''});}
   if(G.season.status==='scheduled'&&G.season.launchAt&&now()>=G.season.launchAt)launchSeason();},2000);
+ /* ===== TIMER TICK — checks every 250ms for smooth 3-2-1 countdown + fires event on expiry ===== */
+ setInterval(()=>{
+  if(!G.timer.active)return;
+  const rem=G.timer.end-now();
+  if(rem<=0){
+   /* Timer expired — fire the event if one was selected */
+   const evId=G.timer.event;
+   G.timer={active:false,end:0,text:'',color:'#e8a33d',event:'',by:''};
+   G.dirty=true;save();
+   broadcast({t:'timerEnd',event:evId,serverTime:now()});
+   if(evId&&EV_MAP[evId]){
+    startEvent(EV_MAP[evId],0,true);
+    log('timer:event','global',evId);
+   }else{
+    broadcast({t:'toast',msg:'Timer ended.',kind:'event'});
+   }
+  }
+ },250);
  setInterval(()=>{broadcast({t:'seasonState',season:seasonPacket()});
   broadcast({t:'s2State',s2:s2Packet()});},5000);
  setInterval(pushPlants,5000);
