@@ -4601,62 +4601,50 @@ function startPassBgAnim(){
  frame();
 }
 /* ============================================================
-   PORTAL WORLD — life-sim with Rupees, houses, jobs, pets
+   PORTAL LIFE: RISE TO RICHES — full life-sim expansion
    ============================================================ */
 const Portal = {
-  // State
-  inPortal: false,
-  portalData: null,
-  nearPortal: false,
-  portalModel: null,
-  zoneScene: null,
-  zoneRenderer: null,
-  zoneCamera: null,
-  zoneRAF: null,
-  zoneType: null,
-  nearBed: false,
-  nearJobBoard: false,
-  nearUpgrade: false,
-  nearEggShop: false,
-  nearReturn: false,
-  activeJob: null,
-
-  // Portal position in farm world
+  inPortal: false, portalData: null, nearPortal: false,
+  portalModel: null, zoneScene: null, zoneRenderer: null, zoneCamera: null,
+  zoneRAF: null, zoneType: null, zonePlayer: null, zoneKeys: {},
+  zoneYaw: 0, zonePitch: 0.5, zoneDist: 8, firstPerson: false,
+  nearBed: false, nearReturn: false, nearJobBoard: false, nearUpgrade: false,
+  nearEggShop: false, nearDoor: false, inInterior: false,
+  interiorScene: null, interiorRenderer: null, interiorCamera: null,
   portalPos: { x: 22, z: 22 },
+  activeJob: null, jobState: null,
 
-  // Job definitions (mirror server)
   JOBS: [
-    { id: 'dogwalk', n: 'Dog Walking', icon: '🐕', payout: 100, cd: 120000 },
-    { id: 'factory', n: 'Factory Work', icon: '🏭', payout: 150, cd: 120000 },
-    { id: 'pizza', n: 'Pizza Delivery', icon: '🍕', payout: 120, cd: 120000 },
-    { id: 'farmhand', n: 'Farm Hand', icon: '🌾', payout: 80, cd: 120000 },
+    { id: 'dogwalk', n: 'Dog Walking', icon: '🐕', payout: 120, cd: 120000, desc: 'Walk the dog to 3 markers' },
+    { id: 'factory', n: 'Factory Work', icon: '🏭', payout: 180, cd: 120000, desc: 'Press SPACE when items align' },
+    { id: 'shop', n: 'Shop Assistant', icon: '🛒', payout: 140, cd: 120000, desc: 'Serve 5 customers' },
+    { id: 'office', n: 'Office Worker', icon: '💼', payout: 200, cd: 120000, desc: 'Type the words shown' },
   ],
   HOUSE_PETS: [
-    { id: 'puppy', n: 'Puppy', rar: 'Common', ch: 30, boost: 0, col: '#e8a060' },
-    { id: 'kitten', n: 'Kitten', rar: 'Common', ch: 25, boost: 0, col: '#a0a0a0' },
-    { id: 'hamster', n: 'Hamster', rar: 'Uncommon', ch: 20, boost: 0.05, col: '#e8c060' },
-    { id: 'parrot', n: 'Parrot', rar: 'Rare', ch: 15, boost: 0.10, col: '#40e060' },
-    { id: 'minidragon', n: 'Mini Dragon', rar: 'Epic', ch: 9, boost: 0.25, col: '#ff4040' },
-    { id: 'workbear', n: 'Work Work Work Bear', rar: 'Mythical', ch: 1, boost: 9, col: '#ffd060' },
+    { id: 'puppy', n: 'Puppy', rar: 'Common', ch: 30, boost: 0, col: 0xe8a060 },
+    { id: 'goldcat', n: 'Golden Cat', rar: 'Uncommon', ch: 25, boost: 0.05, col: 0xffd24a },
+    { id: 'crystalfox', n: 'Crystal Fox', rar: 'Rare', ch: 20, boost: 0.10, col: 0x8affff },
+    { id: 'frostwolf', n: 'Frost Wolf', rar: 'Epic', ch: 15, boost: 0.25, col: 0xcfeaff },
+    { id: 'royalphoenix', n: 'Royal Phoenix', rar: 'Legendary', ch: 9, boost: 0.50, col: 0xff5a1a },
+    { id: 'workbear', n: 'Work Work Work Bear', rar: 'Mythical', ch: 1, boost: 9, col: 0xffd060 },
+  ],
+  HOUSE_TIERS: [
+    { n: 'Starter House', cost: 0, size: 1 },
+    { n: 'Family Home', cost: 8000, size: 2 },
+    { n: 'Luxury Villa', cost: 40000, size: 3 },
+    { n: 'Grand Mansion', cost: 150000, size: 4 },
   ],
 
   init() {
     const A = this;
-    // Hook into handleNet
     if (typeof handleNet === 'function') {
       const orig = handleNet;
-      window.handleNet = function (m) {
-        if (A.handleNet(m)) return;
-        orig(m);
-      };
+      window.handleNet = function (m) { if (A.handleNet(m)) return; orig(m); };
     }
-    // Build portal model in farm world
     A.buildPortalModel();
-    // House selection cards
     document.querySelectorAll('#portalSelect .psCard').forEach(c => {
       c.onclick = () => A.selectHouse(c.dataset.zone);
     });
-    // Tick loop for proximity checks
     A.tickLoop();
     console.log('[Portal] initialized.');
   },
@@ -4664,94 +4652,104 @@ const Portal = {
   handleNet(m) {
     const A = this;
     switch (m.t) {
-      case 'init':
-        if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); }
-        return false;
-      case 'me':
-        if (m.me && m.me.portal) { A.portalData = m.me.portal; A.updateRupeeChip(); }
-        return false;
-      case 'portalUpdate':
-        A.portalData = m.portal;
-        A.updateRupeeChip();
-        A.updateZoneHUD();
-        return true;
-      case 'portalHatch':
-        A.portalData = m.portal;
-        A.showHatchResult(m.petId);
-        return true;
-      case 'portalVisit':
-        A.enterZone(m.portal.zone, m.portal, m.friendName, true);
-        return true;
-      default:
-        return false;
+      case 'init': if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); } return false;
+      case 'me': if (m.me && m.me.portal) { A.portalData = m.me.portal; A.updateRupeeChip(); } return false;
+      case 'portalUpdate': A.portalData = m.portal; A.updateRupeeChip(); A.updateZoneHUD(); return true;
+      case 'portalHatch': A.portalData = m.portal; A.showHatchResult(m.petId); return true;
+      case 'portalVisit': A.enterZone(m.portal.zone, m.portal, m.friendName, true); return true;
+      default: return false;
     }
   },
 
-  // ===== PORTAL MODEL in farm world =====
+  // ===== MONUMENTAL PORTAL MODEL =====
   buildPortalModel() {
     const A = this;
     const g = new THREE.Group();
     const pos = A.portalPos;
 
-    // Outer ring — torus
-    const ringGeom = new THREE.TorusGeometry(2, 0.3, 16, 32);
-    const ringMat = new THREE.MeshLambertMaterial({
-      color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.6
-    });
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(pos.x, 2.5, pos.z);
-    ring.rotation.y = Math.PI / 2;
-    ring.castShadow = true;
-    g.add(ring);
+    // 3 concentric rings — outer, middle, inner
+    const ringCols = [0x6a3fd6, 0xa86fd6, 0xc0a0ff];
+    A.portalRings = [];
+    for (let i = 0; i < 3; i++) {
+      const r = 2.5 - i * 0.5;
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(r, 0.15 + i * 0.05, 16, 48),
+        new THREE.MeshLambertMaterial({ color: ringCols[i], emissive: new THREE.Color(ringCols[i]), emissiveIntensity: 0.7 })
+      );
+      ring.position.set(pos.x, 3, pos.z);
+      ring.rotation.y = Math.PI / 2;
+      ring.userData.spin = 0.3 + i * 0.4;
+      g.add(ring); A.portalRings.push(ring);
+    }
 
-    // Vortex — a swirling canvas texture on a plane inside the ring
-    const vortexCv = document.createElement('canvas');
-    vortexCv.width = 256; vortexCv.height = 256;
-    const vctx = vortexCv.getContext('2d');
-    A.vortexCtx = vctx; A.vortexCv = vortexCv;
-    const vortexTex = new THREE.CanvasTexture(vortexCv);
-    A.vortexTex = vortexTex;
-    const vortexMat = new THREE.MeshBasicMaterial({ map: vortexTex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-    const vortex = new THREE.Mesh(new THREE.CircleGeometry(1.8, 32), vortexMat);
-    vortex.position.set(pos.x, 2.5, pos.z);
-    vortex.rotation.y = Math.PI / 2;
+    // Vertical light beam — a tall transparent cylinder
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.8, 2.2, 20, 24, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xa86fd6, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
+    );
+    beam.position.set(pos.x, 10, pos.z);
+    g.add(beam); A.portalBeam = beam;
+
+    // Ground glow disc
+    const glow = new THREE.Mesh(
+      new THREE.CircleGeometry(4, 32),
+      new THREE.MeshBasicMaterial({ color: 0xa86fd6, transparent: true, opacity: 0.2, depthWrite: false })
+    );
+    glow.rotation.x = -Math.PI / 2; glow.position.set(pos.x, 0.05, pos.z);
+    g.add(glow); A.portalGlow = glow;
+
+    // Swirling vortex
+    const vCv = document.createElement('canvas'); vCv.width = vCv.height = 256;
+    A.vortexCtx = vCv.getContext('2d'); A.vortexCv = vCv;
+    A.vortexTex = new THREE.CanvasTexture(vCv);
+    const vortex = new THREE.Mesh(
+      new THREE.CircleGeometry(2, 32),
+      new THREE.MeshBasicMaterial({ map: A.vortexTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+    );
+    vortex.position.set(pos.x, 3, pos.z); vortex.rotation.y = Math.PI / 2;
     g.add(vortex);
-    A.vortex = vortex;
 
-    // Point light
-    const light = new THREE.PointLight(0xa86fd6, 2, 12);
-    light.position.set(pos.x, 2.5, pos.z);
-    g.add(light);
-    A.portalLight = light;
+    // Pulsing point light
+    A.portalLight = new THREE.PointLight(0xa86fd6, 3, 20);
+    A.portalLight.position.set(pos.x, 3, pos.z);
+    g.add(A.portalLight);
 
-    // Floating particles spiraling inward
-    const pN = 30;
+    // 50 spiraling particles
+    const pN = 50;
     const pGeo = new THREE.BufferGeometry();
     const pPos = new Float32Array(pN * 3);
     A.portalParticles = [];
     for (let i = 0; i < pN; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = 1 + Math.random() * 1.5;
+      const r = 1 + Math.random() * 2;
       pPos[i * 3] = pos.x + Math.cos(a) * r;
-      pPos[i * 3 + 1] = 2.5 + (Math.random() - 0.5) * 2;
+      pPos[i * 3 + 1] = 1 + Math.random() * 6;
       pPos[i * 3 + 2] = pos.z + Math.sin(a) * r;
-      A.portalParticles.push({ a, r, y: pPos[i * 3 + 1], speed: 0.5 + Math.random() });
+      A.portalParticles.push({ a, r, y: pPos[i * 3 + 1], speed: 0.3 + Math.random() * 0.7 });
     }
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    const pMat = new THREE.PointsMaterial({ color: 0xc0a0ff, size: 0.15, transparent: true, opacity: 0.8, depthWrite: false });
-    const particles = new THREE.Points(pGeo, pMat);
-    g.add(particles);
-    A.portalParticleObj = particles;
+    const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0xc0a0ff, size: 0.18, transparent: true, opacity: 0.9, depthWrite: false }));
+    g.add(particles); A.portalParticleObj = particles;
 
     // Down arrow
-    const arrow = new THREE.Mesh(
-      new THREE.ConeGeometry(0.6, 1.5, 6),
-      new THREE.MeshBasicMaterial({ color: 0xa86fd6 })
+    A.portalArrow = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.5, 6), new THREE.MeshBasicMaterial({ color: 0xc0a0ff }));
+    A.portalArrow.position.set(pos.x, 6, pos.z); A.portalArrow.rotation.x = Math.PI;
+    g.add(A.portalArrow);
+
+    // Stone base — a proper dais
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 4, 0.6, 24),
+      new THREE.MeshLambertMaterial({ color: 0x3a2a4a })
     );
-    arrow.position.set(pos.x, 5, pos.z);
-    arrow.rotation.x = Math.PI;
-    g.add(arrow);
-    A.portalArrow = arrow;
+    base.position.set(pos.x, 0.3, pos.z); base.receiveShadow = true; base.castShadow = true;
+    g.add(base);
+    // Base rim
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(3.5, 0.1, 8, 24),
+      new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 })
+    );
+    rim.rotation.x = -Math.PI / 2; rim.position.set(pos.x, 0.6, pos.z);
+    g.add(rim);
 
     scene.add(g);
     A.portalModel = g;
@@ -4760,50 +4758,45 @@ const Portal = {
   tickPortal(t) {
     const A = this;
     if (!A.portalModel) return;
-    // Animate vortex texture
+    // Spin rings
+    A.portalRings.forEach((r, i) => { r.rotation.z = t * r.userData.spin; });
+    // Vortex
     if (A.vortexCtx) {
-      const cv = A.vortexCv, ctx = A.vortexCtx;
-      ctx.fillStyle = 'rgba(20,5,40,0.3)';
-      ctx.fillRect(0, 0, cv.width, cv.height);
-      for (let i = 0; i < 5; i++) {
-        const a = t * 2 + i * 1.2;
-        const r = 40 + Math.sin(t + i) * 30;
-        ctx.fillStyle = `hsla(${270 + i * 15},80%,60%,0.3)`;
-        ctx.beginPath();
-        ctx.arc(128 + Math.cos(a) * r, 128 + Math.sin(a) * r, 30 + Math.sin(t * 2 + i) * 10, 0, Math.PI * 2);
-        ctx.fill();
+      const ctx = A.vortexCtx, cv = A.vortexCv;
+      ctx.fillStyle = 'rgba(20,5,40,0.25)'; ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 8; i++) {
+        const a = t * 1.5 + i * 0.8;
+        const r = 30 + Math.sin(t + i) * 25;
+        ctx.fillStyle = `hsla(${270 + i * 12},85%,60%,0.25)`;
+        ctx.beginPath(); ctx.arc(128 + Math.cos(a) * r, 128 + Math.sin(a) * r, 25 + Math.sin(t * 2 + i) * 8, 0, Math.PI * 2); ctx.fill();
       }
       A.vortexTex.needsUpdate = true;
     }
-    // Pulsing light
-    if (A.portalLight) A.portalLight.intensity = 1.5 + Math.sin(t * 2) * 0.5;
-    // Bobbing arrow
-    if (A.portalArrow) { A.portalArrow.position.y = 5 + Math.sin(t * 2) * 0.3; A.portalArrow.rotation.y = t * 0.5; }
-    // Spiral particles
+    // Pulsing light + glow
+    const p = 0.5 + Math.sin(t * 2) * 0.5;
+    if (A.portalLight) A.portalLight.intensity = 2 + p * 2;
+    if (A.portalGlow) A.portalGlow.material.opacity = 0.15 + p * 0.15;
+    if (A.portalBeam) A.portalBeam.material.opacity = 0.08 + p * 0.08;
+    // Arrow bob
+    if (A.portalArrow) { A.portalArrow.position.y = 6 + Math.sin(t * 2) * 0.3; A.portalArrow.rotation.y = t * 0.5; }
+    // Particles spiral inward
     if (A.portalParticleObj) {
       const pos = A.portalParticleObj.geometry.attributes.position.array;
       for (let i = 0; i < A.portalParticles.length; i++) {
-        const p = A.portalParticles[i];
-        p.a += 0.02 * p.speed;
-        p.r -= 0.01 * p.speed;
-        if (p.r < 0.3) p.r = 2.5;
-        pos[i * 3] = A.portalPos.x + Math.cos(p.a) * p.r;
-        pos[i * 3 + 1] = p.y + Math.sin(t * 2 + i) * 0.1;
-        pos[i * 3 + 2] = A.portalPos.z + Math.sin(p.a) * p.r;
+        const p2 = A.portalParticles[i];
+        p2.a += 0.02 * p2.speed; p2.r -= 0.008 * p2.speed;
+        if (p2.r < 0.3) p2.r = 2.5;
+        pos[i * 3] = A.portalPos.x + Math.cos(p2.a) * p2.r;
+        pos[i * 3 + 1] = p2.y + Math.sin(t * 2 + i) * 0.15;
+        pos[i * 3 + 2] = A.portalPos.z + Math.sin(p2.a) * p2.r;
       }
       A.portalParticleObj.geometry.attributes.position.needsUpdate = true;
     }
   },
 
-  // ===== ENTER PORTAL =====
   enterPortal() {
     const A = this;
-    if (!A.portalData || !A.portalData.zone) {
-      // Show welcome screen, then house selection
-      A.showWelcome();
-      return;
-    }
-    // Already has a house — go directly to zone
+    if (!A.portalData || !A.portalData.zone) { A.showWelcome(); return; }
     A.enterZone(A.portalData.zone, A.portalData);
   },
 
@@ -4811,149 +4804,415 @@ const Portal = {
     const A = this;
     const w = document.getElementById('portalWelcome');
     w.classList.add('on');
-    if (typeof AudioSys !== 'undefined') AudioSys.play('emote');
-    setTimeout(() => {
-      w.classList.remove('on');
-      setTimeout(() => A.showHouseSelect(), 500);
-    }, 3500);
+    if (typeof AudioSys !== 'undefined') { AudioSys.play('emote'); AudioSys.play('rumble'); }
+    setTimeout(() => { w.classList.remove('on'); setTimeout(() => A.showHouseSelect(), 600); }, 3500);
   },
 
-  showHouseSelect() {
-    document.getElementById('portalSelect').classList.add('on');
-  },
+  showHouseSelect() { document.getElementById('portalSelect').classList.add('on'); },
 
   selectHouse(zone) {
     const A = this;
     document.getElementById('portalSelect').classList.remove('on');
     if (typeof send === 'function') send({ t: 'portalSelectHouse', zone });
-    // Wait for server response, then enter zone
-    setTimeout(() => {
-      if (A.portalData && A.portalData.zone) A.enterZone(A.portalData.zone, A.portalData);
-    }, 800);
+    setTimeout(() => { if (A.portalData && A.portalData.zone) A.enterZone(A.portalData.zone, A.portalData); }, 800);
   },
 
-  // ===== ZONE SCENE (3D) =====
+  // ===== LARGE OPEN WORLD =====
   enterZone(zone, portalData, friendName, isVisit) {
     const A = this;
-    A.inPortal = true;
-    A.zoneType = zone;
-    A.portalData = portalData;
-    A.isVisiting = !!isVisit;
-    A.visitingName = friendName || '';
-
-    // Hide farm HUD, show portal zone
+    A.inPortal = true; A.zoneType = zone; A.portalData = portalData;
+    A.isVisiting = !!isVisit; A.visitingName = friendName || '';
     document.getElementById('hud').style.display = 'none';
     document.getElementById('topnav').style.display = 'none';
-    const pz = document.getElementById('portalZone');
-    pz.classList.add('on');
-    A.updateZoneHUD();
-    A.updateRupeeChip();
-
-    // Build the 3D scene
-    A.buildZoneScene(zone, portalData.houseTier || 0);
-    A.startZoneRender();
+    document.getElementById('portalZone').classList.add('on');
+    A.updateZoneHUD(); A.updateRupeeChip();
+    A.buildWorld(zone, portalData.houseTier || 0);
+    A.startRender();
   },
 
-  buildZoneScene(zone, houseTier) {
+  buildWorld(zone, houseTier) {
     const A = this;
-    // Clean up old scene
-    if (A.zoneScene) { A.disposeZoneScene(); }
-
+    if (A.zoneScene) A.disposeWorld();
     const canvas = document.getElementById('portalCanvas');
-    A.zoneRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    A.zoneRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     A.zoneRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     A.zoneRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
     A.zoneRenderer.shadowMap.enabled = true;
     A.zoneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
     A.zoneScene = new THREE.Scene();
-    A.zoneScene.background = new THREE.Color(zone === 'beach' ? 0x4a8abf : 0x4a4a5a);
-    A.zoneScene.fog = new THREE.Fog(zone === 'beach' ? 0x4a8abf : 0x4a4a5a, 30, 100);
-
-    A.zoneCamera = new THREE.PerspectiveCamera(60, canvas.offsetWidth / canvas.offsetHeight, 0.1, 200);
-    A.zoneCamera.position.set(0, 5, 12);
-    A.zoneCamera.lookAt(0, 2, 0);
-
-    // Lights
-    const amb = new THREE.AmbientLight(0xffffff, 0.5);
-    A.zoneScene.add(amb);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(10, 20, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
-    sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+    // Sky
+    const skyCol = zone === 'beach' ? 0x6ab0d8 : 0x5a6a8a;
+    A.zoneScene.background = new THREE.Color(skyCol);
+    A.zoneScene.fog = new THREE.Fog(skyCol, 40, 150);
+    A.zoneCamera = new THREE.PerspectiveCamera(65, canvas.offsetWidth / canvas.offsetHeight, 0.1, 300);
+    // Lights — sun + ambient + hemi
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.0);
+    sun.position.set(30, 50, 20); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
+    sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -80;
+    sun.shadow.camera.far = 200; sun.shadow.bias = -0.001;
     A.zoneScene.add(sun);
+    A.zoneScene.add(new THREE.AmbientLight(0x90a0b0, 0.4));
+    A.zoneScene.add(new THREE.HemisphereLight(0x8ab0d8, 0x5a4a3a, 0.3));
 
-    // Ground
-    const groundColor = zone === 'beach' ? 0xe8c890 : 0x6a6a7a;
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(40, 40, 1, 48),
-      new THREE.MeshLambertMaterial({ color: groundColor })
-    );
-    ground.position.y = -0.5;
-    ground.receiveShadow = true;
+    // Ground — large terrain (200x200)
+    const groundMat = new THREE.MeshLambertMaterial({ color: zone === 'beach' ? 0xe8d090 : 0x5a5a6a });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200, 1, 1), groundMat);
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
     A.zoneScene.add(ground);
 
-    if (zone === 'beach') {
-      // Ocean
-      const ocean = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 50),
-        new THREE.MeshLambertMaterial({ color: 0x2a6a9a, transparent: true, opacity: 0.7 })
-      );
-      ocean.rotation.x = -Math.PI / 2;
-      ocean.position.set(0, -0.3, -25);
-      A.zoneScene.add(ocean);
-      A.zoneOcean = ocean;
-      // Palm trees
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        const r = 15 + Math.random() * 8;
-        A.makePalmTree(Math.cos(a) * r, Math.sin(a) * r);
-      }
-    } else {
-      // City — cobblestone path + lampposts
-      for (let i = 0; i < 6; i++) {
-        A.makeLamppost(-8 + i * 3, 8);
-        A.makeLamppost(-8 + i * 3, -8);
-      }
-      // NPC townhouses
-      for (let i = 0; i < 4; i++) {
-        A.makeTownhouse(-12 + i * 8, -15, 0).rotation.y = Math.PI;
-      }
-    }
+    // Roads
+    A.buildRoads(zone);
+    // Buildings
+    A.buildCity(zone);
+    // Player's house (center)
+    A.buildPlayerHouse(0, 0, houseTier);
+    // Return portal
+    A.buildReturnPortal(0, 12);
+    // Job board
+    A.buildJobBoard(15, 0);
+    // Upgrade NPC
+    A.buildUpgradeNPC(-15, 0);
+    // Egg shop
+    A.buildEggShop(0, -15);
+    // Job locations
+    A.buildJobLocations(zone);
 
-    // Your house (center)
-    A.makeHouse(0, 0, houseTier, true);
-    A.playerHouseTier = houseTier;
-
-    // Return portal (in front of house)
-    A.makeReturnPortal(0, 8);
-
-    // Job board (to the right)
-    A.makeJobBoard(10, 0);
-
-    // Upgrade NPC (to the left)
-    A.makeUpgradeNPC(-10, 0);
-
-    // Egg shop (behind house)
-    A.makeEggShop(0, -10);
-
-    // Simple player avatar in zone
-    A.zonePlayer = { x: 0, z: 6, ry: 0, obj: A.makeZonePlayerModel() };
+    // Player avatar
+    A.zonePlayer = { x: 0, z: 8, ry: 0, obj: A.makePlayerAvatar() };
     A.zoneScene.add(A.zonePlayer.obj);
-
-    // Zone movement state
-    A.zoneKeys = {};
-    A.zoneYaw = 0;
-    A.zonePitch = 0.4;
-    A.zoneDist = 10;
-
-    // Input handlers
-    A.bindZoneInput();
+    A.zoneYaw = 0; A.zonePitch = 0.5; A.zoneDist = 8; A.firstPerson = false;
+    A.bindInput();
   },
 
-  makeZonePlayerModel() {
+  buildRoads(zone) {
+    const A = this;
+    const roadMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+    const pathMat = new THREE.MeshLambertMaterial({ color: 0x9a9080 });
+    // Main cross roads
+    const roads = [
+      { x: 0, z: 0, w: 200, d: 8 }, // horizontal
+      { x: 0, z: 0, w: 8, d: 200 }, // vertical
+    ];
+    roads.forEach(r => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), roadMat);
+      m.rotation.x = -Math.PI / 2; m.position.set(r.x, 0.02, r.z); m.receiveShadow = true;
+      A.zoneScene.add(m);
+    });
+    // Sidewalks
+    for (const off of [-5, 5]) {
+      [-1, 1].forEach(s => {
+        const sw1 = new THREE.Mesh(new THREE.PlaneGeometry(200, 2), pathMat);
+        sw1.rotation.x = -Math.PI / 2; sw1.position.set(0, 0.03, s * (off + 1)); sw1.receiveShadow = true;
+        A.zoneScene.add(sw1);
+        const sw2 = new THREE.Mesh(new THREE.PlaneGeometry(2, 200), pathMat);
+        sw2.rotation.x = -Math.PI / 2; sw2.position.set(s * (off + 1), 0.03, 0); sw2.receiveShadow = true;
+        A.zoneScene.add(sw2);
+      });
+    }
+    // Streetlights along roads
+    for (let i = -40; i <= 40; i += 20) {
+      A.buildStreetlight(i, 7); A.buildStreetlight(i, -7);
+      A.buildStreetlight(7, i); A.buildStreetlight(-7, i);
+    }
+    if (zone === 'beach') {
+      // Beach sand + ocean
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(200, 40), new THREE.MeshLambertMaterial({ color: 0xf0e0a0 }));
+      sand.rotation.x = -Math.PI / 2; sand.position.set(0, 0.01, -80); sand.receiveShadow = true;
+      A.zoneScene.add(sand);
+      const ocean = new THREE.Mesh(new THREE.PlaneGeometry(200, 60), new THREE.MeshLambertMaterial({ color: 0x2a7abf, transparent: true, opacity: 0.8 }));
+      ocean.rotation.x = -Math.PI / 2; ocean.position.set(0, 0.005, -110);
+      A.zoneScene.add(ocean); A.zoneOcean = ocean;
+      // Palm trees
+      for (let i = 0; i < 12; i++) A.buildPalmTree(-30 + i * 6, -75 + Math.random() * 10);
+    }
+  },
+
+  buildStreetlight(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 5, 8), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    post.position.y = 2.5; post.castShadow = true; g.add(post);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.1), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    arm.position.set(0.5, 4.8, 0); g.add(arm);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 10), new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
+    lamp.position.set(1, 4.7, 0); g.add(lamp);
+    const light = new THREE.PointLight(0xffd070, 0.4, 10); light.position.set(1, 4.5, 0); g.add(light);
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+  },
+
+  buildPalmTree(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 5, 8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a }));
+    trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
+    for (let i = 0; i < 6; i++) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 4), new THREE.MeshLambertMaterial({ color: 0x2f8a3a }));
+      leaf.position.y = 5; leaf.rotation.z = (i / 6) * Math.PI * 2; leaf.rotation.x = 0.7;
+      leaf.position.x = Math.cos(i / 6 * Math.PI * 2) * 0.8; leaf.position.z = Math.sin(i / 6 * Math.PI * 2) * 0.8;
+      g.add(leaf);
+    }
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+  },
+
+  buildCity(zone) {
+    const A = this;
+    const buildingColors = [0x8a7a6a, 0x9a8a7a, 0x7a6a5a, 0x8a8a9a, 0x6a7a8a, 0xa09080];
+    // City buildings — 25+ buildings along roads
+    const spots = [];
+    for (let i = -2; i <= 2; i++) {
+      if (i === 0) continue;
+      spots.push({ x: i * 18, z: 15, rot: 0 });
+      spots.push({ x: i * 18, z: -15, rot: Math.PI });
+      spots.push({ x: 15, z: i * 18, rot: -Math.PI / 2 });
+      spots.push({ x: -15, z: i * 18, rot: Math.PI / 2 });
+    }
+    spots.forEach((s, i) => {
+      const w = 6 + Math.random() * 4;
+      const h = 4 + Math.random() * 10;
+      const d = 6 + Math.random() * 4;
+      const col = buildingColors[i % buildingColors.length];
+      A.buildBuilding(s.x, s.z, w, h, d, col, s.rot);
+    });
+    // Park area
+    A.buildPark(25, 25);
+  },
+
+  buildBuilding(x, z, w, h, d, col, rot) {
+    const A = this;
+    const g = new THREE.Group();
+    // Main body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: col }));
+    body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+    // Roof
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.4, d + 0.4), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
+    roof.position.y = h + 0.2; g.add(roof);
+    // Windows — rows of small emissive boxes
+    const winMat = new THREE.MeshLambertMaterial({ color: 0xa0d0e0, emissive: new THREE.Color(0x6090a0), emissiveIntensity: 0.2 });
+    const floors = Math.floor(h / 2.5);
+    const wPerRow = Math.floor(w / 1.5);
+    for (let f = 0; f < floors; f++) {
+      for (let wi = 0; wi < wPerRow; wi++) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.05), winMat);
+        win.position.set(-w / 2 + 1 + wi * 1.5, 1.5 + f * 2.5, d / 2 + 0.01);
+        g.add(win);
+        const win2 = win.clone(); win2.position.z = -d / 2 - 0.01; win2.rotation.y = Math.PI; g.add(win2);
+      }
+    }
+    // Door
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+    door.position.set(0, 1.1, d / 2 + 0.05); g.add(door);
+    g.position.set(x, 0, z); g.rotation.y = rot;
+    A.zoneScene.add(g);
+  },
+
+  buildPark(x, z) {
+    const A = this;
+    // Grass
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+    grass.rotation.x = -Math.PI / 2; grass.position.set(x, 0.02, z); grass.receiveShadow = true;
+    A.zoneScene.add(grass);
+    // Trees
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      A.buildTree(x + Math.cos(a) * 4, z + Math.sin(a) * 4);
+    }
+    // Fountain
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 0.5, 16), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+    base.position.set(x, 0.25, z); base.castShadow = true; A.zoneScene.add(base);
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.1, 16), new THREE.MeshLambertMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
+    water.position.set(x, 0.5, z); A.zoneScene.add(water);
+  },
+
+  buildTree(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.5, 8), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    trunk.position.y = 1.25; trunk.castShadow = true; g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.2 - i * 0.2, 12, 10), new THREE.MeshLambertMaterial({ color: 0x3a7a2a }));
+      leaves.position.y = 2.5 + i * 0.7; leaves.castShadow = true; g.add(leaves);
+    }
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+  },
+
+  // ===== PLAYER HOUSE (exterior, 4 tiers) =====
+  buildPlayerHouse(x, z, tier) {
+    const A = this;
+    if (A.playerHouse) { A.zoneScene.remove(A.playerHouse); A.disposeGroup(A.playerHouse); }
+    const g = new THREE.Group();
+    const t = A.HOUSE_TIERS[tier] || A.HOUSE_TIERS[0];
+    if (tier === 0) {
+      // Starter — small cottage
+      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 5), new THREE.MeshLambertMaterial({ color: 0xc0b090 }));
+      body.position.y = 1.75; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(4, 2, 4), new THREE.MeshLambertMaterial({ color: 0x8a3a2a }));
+      roof.position.y = 4; roof.rotation.y = Math.PI / 4; g.add(roof);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+      door.position.set(0, 1, 2.55); g.add(door);
+      for (const wx of [-1.5, 1.5]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+        win.position.set(wx, 1.8, 2.55); g.add(win);
+      }
+    } else if (tier === 1) {
+      // Family home — two-story
+      const body = new THREE.Mesh(new THREE.BoxGeometry(7, 5, 6), new THREE.MeshLambertMaterial({ color: 0xe0d0a0 }));
+      body.position.y = 2.5; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(5.5, 2.5, 4), new THREE.MeshLambertMaterial({ color: 0x6a3a2a }));
+      roof.position.y = 6.25; roof.rotation.y = Math.PI / 4; g.add(roof);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+      door.position.set(0, 1.2, 3.05); g.add(door);
+      for (const wx of [-2.2, 2.2]) {
+        for (const wy of [1.5, 3.5]) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          win.position.set(wx, wy, 3.05); g.add(win);
+        }
+      }
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), new THREE.MeshLambertMaterial({ color: 0x5a4a3a }));
+      chim.position.set(2, 5.5, 0); g.add(chim);
+    } else if (tier === 2) {
+      // Luxury villa
+      const body = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 8), new THREE.MeshLambertMaterial({ color: 0xf0e8d0 }));
+      body.position.y = 2.5; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 9), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+      roof.position.y = 5.25; g.add(roof);
+      for (const cx of [-3.5, 3.5]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+        col.position.set(cx, 2, 4.1); g.add(col);
+      }
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 3, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.2 }));
+      door.position.set(0, 1.5, 4.05); g.add(door);
+      for (const wx of [-3, 3]) {
+        for (const wy of [1.5, 3.5]) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          win.position.set(wx, wy, 4.05); g.add(win);
+        }
+      }
+      // Garden
+      const garden = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+      garden.rotation.x = -Math.PI / 2; garden.position.set(0, 0.02, 5.5); g.add(garden);
+    } else {
+      // Grand mansion
+      const body = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 10), new THREE.MeshLambertMaterial({ color: 0xf8f0e0 }));
+      body.position.y = 3.5; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(10, 3.5, 4), new THREE.MeshLambertMaterial({ color: 0x5a3a2a }));
+      roof.position.y = 8.75; roof.rotation.y = Math.PI / 4; g.add(roof);
+      for (const cx of [-4.5, 4.5]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+        col.position.set(cx, 3, 5.1); g.add(col);
+      }
+      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.3 }));
+      door.position.set(0, 2, 5.05); g.add(door);
+      for (const wx of [-4.5, 4.5]) {
+        for (const wy of [2, 5]) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          win.position.set(wx, wy, 5.05); g.add(win);
+        }
+      }
+      // Fountain garden
+      const garden = new THREE.Mesh(new THREE.PlaneGeometry(12, 4), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+      garden.rotation.x = -Math.PI / 2; garden.position.set(0, 0.02, 7); g.add(garden);
+      const fb = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 0.6, 16), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      fb.position.set(0, 0.3, 7); g.add(fb);
+      const fw = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16), new THREE.MeshLambertMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
+      fw.position.set(0, 0.55, 7); g.add(fw);
+    }
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.playerHouse = g;
+    A.doorPos = { x, z: z + (tier >= 2 ? 5 : 3) };
+    return g;
+  },
+
+  buildReturnPortal(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 12, 24), new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 }));
+    ring.position.y = 2.5; g.add(ring);
+    const light = new THREE.PointLight(0xa86fd6, 1.5, 10); light.position.y = 2.5; g.add(light);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 0.3, 16), new THREE.MeshLambertMaterial({ color: 0x3a2a4a }));
+    base.position.y = 0.15; g.add(base);
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+    A.returnPortalPos = { x, z };
+  },
+
+  buildJobBoard(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.5, 8), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    post.position.y = 1.75; post.castShadow = true; g.add(post);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.2, 0.2), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    board.position.y = 3; board.castShadow = true; g.add(board);
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#f0e8d0'; cx.fillRect(0, 0, 256, 64);
+    cx.fillStyle = '#3a2a1a'; cx.font = '700 26px Fredoka, sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('JOB BOARD', 128, 32);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.7), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) }));
+    sign.position.set(0, 3, 0.11); g.add(sign);
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+    A.jobBoardPos = { x, z };
+  },
+
+  buildUpgradeNPC(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshLambertMaterial({ color: 0xe8a33d }));
+    body.position.y = 1.55; body.castShadow = true; g.add(body);
+    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xe8c030 }));
+    hat.position.y = 2.4; g.add(hat);
+    const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
+    const tc = tagCv.getContext('2d');
+    tc.fillStyle = 'rgba(30,40,25,.8)'; tc.beginPath(); tc.roundRect(4, 4, 248, 56, 14); tc.fill();
+    tc.fillStyle = '#ffd24a'; tc.font = '700 22px Fredoka, sans-serif';
+    tc.textAlign = 'center'; tc.textBaseline = 'middle'; tc.fillText('Builder Bob', 128, 32);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false }));
+    tag.position.y = 3.1; tag.scale.set(2, 0.5, 1); g.add(tag);
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+    A.upgradeNpcPos = { x, z };
+  },
+
+  buildEggShop(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const stall = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1, 2.5), new THREE.MeshLambertMaterial({ color: 0x6a4a8a }));
+    stall.position.y = 0.5; stall.castShadow = true; g.add(stall);
+    const egg = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshLambertMaterial({ color: 0xd8b0ff, emissive: new THREE.Color(0x7a3fd6), emissiveIntensity: 0.4 }));
+    egg.scale.y = 1.3; egg.position.y = 1.5; g.add(egg);
+    const light = new THREE.PointLight(0xa86fd6, 1.2, 8); light.position.y = 2; g.add(light);
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = 'rgba(20,5,40,.85)'; cx.beginPath(); cx.roundRect(4, 4, 248, 56, 14); cx.fill();
+    cx.fillStyle = '#d8b0ff'; cx.font = '700 20px Fredoka, sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('HOUSE EGG SHOP', 128, 32);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+    sign.position.y = 2.8; sign.scale.set(2.8, 0.7, 1); g.add(sign);
+    g.position.set(x, 0, z); A.zoneScene.add(g);
+    A.eggShopPos = { x, z };
+  },
+
+  buildJobLocations(zone) {
+    const A = this;
+    // Dog park
+    const dp = new THREE.Group();
+    const fence = new THREE.Mesh(new THREE.TorusGeometry(5, 0.1, 8, 24), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    fence.rotation.x = -Math.PI / 2; fence.position.y = 1; dp.add(fence);
+    const grass = new THREE.Mesh(new THREE.CircleGeometry(5, 24), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+    grass.rotation.x = -Math.PI / 2; grass.position.y = 0.02; dp.add(grass);
+    dp.position.set(25, 0, -25); A.zoneScene.add(dp); A.dogParkPos = { x: 25, z: -25 };
+    // Factory
+    A.buildBuilding(30, 20, 10, 8, 8, 0x6a6a7a, 0);
+    A.factoryPos = { x: 30, z: 20 };
+    // Shop
+    A.buildBuilding(-25, 25, 8, 5, 8, 0xa09080, 0);
+    A.shopPos = { x: -25, z: 25 };
+    // Office
+    A.buildBuilding(-30, -20, 8, 12, 8, 0x8a8a9a, 0);
+    A.officePos = { x: -30, z: -20 };
+  },
+
+  makePlayerAvatar() {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: 0x4f8a5c });
     const skinMat = new THREE.MeshLambertMaterial({ color: 0xe8b48a });
@@ -4967,325 +5226,223 @@ const Portal = {
     const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x4a5a7a }));
     legL.position.set(-0.15, 1.14, 0); g.add(legL);
     const legR = legL.clone(); legR.position.x = 0.15; g.add(legR);
-    g.userData.parts = { torso, head, armL, armR, legL, legR };
     return g;
   },
 
-  makePalmTree(x, z) {
+  // ===== INPUT =====
+  bindInput() {
     const A = this;
-    const g = new THREE.Group();
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, 0.4, 5, 8),
-      new THREE.MeshLambertMaterial({ color: 0x8a6a3a })
-    );
-    trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
-    for (let i = 0; i < 5; i++) {
-      const leaf = new THREE.Mesh(
-        new THREE.ConeGeometry(0.4, 2.5, 4),
-        new THREE.MeshLambertMaterial({ color: 0x2f8a3a })
-      );
-      leaf.position.y = 5;
-      leaf.rotation.z = (i / 5) * Math.PI * 2;
-      leaf.rotation.x = 0.8;
-      leaf.position.x = Math.cos(i / 5 * Math.PI * 2) * 1;
-      leaf.position.z = Math.sin(i / 5 * Math.PI * 2) * 1;
-      g.add(leaf);
-    }
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-  },
-
-  makeLamppost(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.12, 4, 8),
-      new THREE.MeshLambertMaterial({ color: 0x2a2a2a })
-    );
-    post.position.y = 2; post.castShadow = true; g.add(post);
-    const lamp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 12, 10),
-      new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 })
-    );
-    lamp.position.y = 4; g.add(lamp);
-    const light = new THREE.PointLight(0xffd070, 0.5, 8);
-    light.position.y = 4; g.add(light);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-  },
-
-  makeTownhouse(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(5, 4, 5),
-      new THREE.MeshLambertMaterial({ color: 0x8a7a6a })
-    );
-    body.position.y = 2; body.castShadow = true; g.add(body);
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(3.8, 2, 4),
-      new THREE.MeshLambertMaterial({ color: 0x3a2a1a })
-    );
-    roof.position.y = 5; roof.rotation.y = Math.PI / 4; g.add(roof);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    return g;
-  },
-
-  makeHouse(x, z, tier, isMine) {
-    const A = this;
-    const g = new THREE.Group();
-    if (tier === 0) {
-      // Shack
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 3, 4),
-        new THREE.MeshLambertMaterial({ color: 0x8a6a3a })
-      );
-      body.position.y = 1.5; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(3.2, 1.5, 4),
-        new THREE.MeshLambertMaterial({ color: 0x4a3a20 })
-      );
-      roof.position.y = 3.75; roof.rotation.y = Math.PI / 4; g.add(roof);
-      // Door
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 1.8, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0x3a2a1a })
-      );
-      door.position.set(0, 0.9, 2.05); g.add(door);
-    } else if (tier === 1) {
-      // House (two-story)
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(6, 5, 5),
-        new THREE.MeshLambertMaterial({ color: 0xe0d0b0 })
-      );
-      body.position.y = 2.5; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(4.5, 2, 4),
-        new THREE.MeshLambertMaterial({ color: 0x8a3a2a })
-      );
-      roof.position.y = 6; roof.rotation.y = Math.PI / 4; g.add(roof);
-      // Door
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 2.2, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0x4a2a1a })
-      );
-      door.position.set(0, 1.1, 2.55); g.add(door);
-      // Windows
-      for (const wx of [-1.8, 1.8]) {
-        const w1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
-        w1.position.set(wx, 1.5, 2.55); g.add(w1);
-        const w2 = w1.clone(); w2.position.y = 3.5; g.add(w2);
-      }
-      // Chimney
-      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), new THREE.MeshLambertMaterial({ color: 0x5a4a3a }));
-      chim.position.set(1.5, 5.5, 0); g.add(chim);
-    } else {
-      // Mansion
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 6, 7),
-        new THREE.MeshLambertMaterial({ color: 0xf0e8d8 })
-      );
-      body.position.y = 3; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(7, 3, 4),
-        new THREE.MeshLambertMaterial({ color: 0x6a3a2a })
-      );
-      roof.position.y = 7.5; roof.rotation.y = Math.PI / 4; g.add(roof);
-      // Columns
-      for (const cx of [-2.5, 2.5]) {
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
-        col.position.set(cx, 2, 3.6); g.add(col);
-      }
-      // Grand door
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 3, 0.1),
-        new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.2 })
-      );
-      door.position.set(0, 1.5, 3.55); g.add(door);
-      // Windows
-      for (const wx of [-3, 3]) {
-        const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
-        w.position.set(wx, 2, 3.55); g.add(w);
-        const w2 = w.clone(); w2.position.y = 4; g.add(w2);
-      }
-    }
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    A.playerHouse = g;
-    A.bedPos = { x: x, z: z - 1 }; // bed is inside, but interaction point is at the door
-    return g;
-  },
-
-  makeReturnPortal(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.5, 0.2, 12, 24),
-      new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 })
-    );
-    ring.position.y = 2; ring.rotation.y = 0; g.add(ring);
-    const light = new THREE.PointLight(0xa86fd6, 1.5, 8);
-    light.position.y = 2; g.add(light);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    A.returnPortal = g;
-    A.returnPortalPos = { x, z };
-  },
-
-  makeJobBoard(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    // Post
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.15, 3, 8),
-      new THREE.MeshLambertMaterial({ color: 0x6a4a2a })
-    );
-    post.position.y = 1.5; post.castShadow = true; g.add(post);
-    // Board
-    const board = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 2, 0.2),
-      new THREE.MeshLambertMaterial({ color: 0x8a6a4a })
-    );
-    board.position.y = 2.5; board.castShadow = true; g.add(board);
-    // Sign text (canvas)
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
-    const cx = cv.getContext('2d');
-    cx.fillStyle = '#f0e8d0'; cx.fillRect(0, 0, 256, 64);
-    cx.fillStyle = '#3a2a1a'; cx.font = '700 28px Fredoka, sans-serif';
-    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('JOB BOARD', 128, 32);
-    const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.5, 0.6),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })
-    );
-    sign.position.set(0, 2.5, 0.11); g.add(sign);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    A.jobBoardPos = { x, z };
-  },
-
-  makeUpgradeNPC(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    // Body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 0.95, 0.42),
-      new THREE.MeshLambertMaterial({ color: 0xe8a33d })
-    );
-    body.position.y = 1.55; body.castShadow = true; g.add(body);
-    // Hard hat
-    const hat = new THREE.Mesh(
-      new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshLambertMaterial({ color: 0xe8c030 })
-    );
-    hat.position.y = 2.4; g.add(hat);
-    // Name tag
-    const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
-    const tc = tagCv.getContext('2d');
-    tc.fillStyle = 'rgba(30,40,25,.8)'; tc.beginPath(); tc.roundRect(4, 4, 248, 56, 14); tc.fill();
-    tc.fillStyle = '#ffd24a'; tc.font = '700 24px Fredoka, sans-serif';
-    tc.textAlign = 'center'; tc.textBaseline = 'middle'; tc.fillText('Builder Bob', 128, 32);
-    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false }));
-    tag.position.y = 3.1; tag.scale.set(2, 0.5, 1); g.add(tag);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    A.upgradeNpcPos = { x, z };
-  },
-
-  makeEggShop(x, z) {
-    const A = this;
-    const g = new THREE.Group();
-    // Stall
-    const stall = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 1, 2),
-      new THREE.MeshLambertMaterial({ color: 0x6a4a8a })
-    );
-    stall.position.y = 0.5; stall.castShadow = true; g.add(stall);
-    // Egg display
-    const egg = new THREE.Mesh(
-      new THREE.SphereGeometry(0.6, 16, 12),
-      new THREE.MeshLambertMaterial({ color: 0xd8b0ff, emissive: new THREE.Color(0x7a3fd6), emissiveIntensity: 0.4 })
-    );
-    egg.scale.y = 1.3; egg.position.y = 1.5; g.add(egg);
-    // Light
-    const light = new THREE.PointLight(0xa86fd6, 1, 6);
-    light.position.y = 2; g.add(light);
-    // Sign
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
-    const cx = cv.getContext('2d');
-    cx.fillStyle = 'rgba(20,5,40,.85)'; cx.beginPath(); cx.roundRect(4, 4, 248, 56, 14); cx.fill();
-    cx.fillStyle = '#d8b0ff'; cx.font = '700 22px Fredoka, sans-serif';
-    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('🥚 HOUSE EGG SHOP', 128, 32);
-    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
-    sign.position.y = 2.8; sign.scale.set(2.5, 0.6, 1); g.add(sign);
-    g.position.set(x, 0, z);
-    A.zoneScene.add(g);
-    A.eggShopPos = { x, z };
-  },
-
-  // ===== ZONE INPUT =====
-  bindZoneInput() {
-    const A = this;
-    A._zoneKeydown = (e) => {
-      if (!A.inPortal) return;
+    A._kd = (e) => {
+      if (!A.inPortal || A.inInterior) return;
       A.zoneKeys[e.code] = true;
-      if (e.key === 'e' || e.key === 'E') A.zoneInteract();
-      if (e.key === 'Escape') A.exitZone();
+      if (e.key === 'e' || e.key === 'E') A.interact();
+      if (e.key === 'f' || e.key === 'F') { A.firstPerson = !A.firstPerson; if (typeof toast === 'function') toast(A.firstPerson ? 'First-person mode' : 'Third-person mode', 'info'); }
+      if (e.code === 'Escape') A.exitZone();
     };
-    A._zoneKeyup = (e) => { A.zoneKeys[e.code] = false; };
-    addEventListener('keydown', A._zoneKeydown);
-    addEventListener('keyup', A._zoneKeyup);
-
-    // Mouse drag for camera
+    A._ku = (e) => { A.zoneKeys[e.code] = false; };
+    addEventListener('keydown', A._kd); addEventListener('keyup', A._ku);
     const canvas = document.getElementById('portalCanvas');
-    A._zoneMouseDown = (e) => { A._zoneDrag = true; A._zoneMX = e.clientX; A._zoneMY = e.clientY; };
-    A._zoneMouseUp = () => { A._zoneDrag = false; };
-    A._zoneMouseMove = (e) => {
-      if (!A._zoneDrag) return;
-      A.zoneYaw -= (e.clientX - A._zoneMX) * 0.005;
-      A.zonePitch = Math.max(-0.3, Math.min(1.2, A.zonePitch + (e.clientY - A._zoneMY) * 0.004));
-      A._zoneMX = e.clientX; A._zoneMY = e.clientY;
+    A._md = (e) => { A._drag = true; A._mx = e.clientX; A._my = e.clientY; canvas.style.cursor = 'grabbing'; };
+    A._mu = () => { A._drag = false; canvas.style.cursor = 'grab'; };
+    A._mm = (e) => {
+      if (!A._drag) return;
+      A.zoneYaw -= (e.clientX - A._mx) * 0.005;
+      A.zonePitch = Math.max(-0.5, Math.min(1.3, A.zonePitch + (e.clientY - A._my) * 0.004));
+      A._mx = e.clientX; A._my = e.clientY;
     };
-    canvas.addEventListener('mousedown', A._zoneMouseDown);
-    addEventListener('mouseup', A._zoneMouseUp);
-    addEventListener('mousemove', A._zoneMouseMove);
+    canvas.addEventListener('mousedown', A._md);
+    addEventListener('mouseup', A._mu);
+    addEventListener('mousemove', A._mm);
+    canvas.style.cursor = 'grab';
   },
 
-  unbindZoneInput() {
+  unbindInput() {
     const A = this;
-    if (A._zoneKeydown) removeEventListener('keydown', A._zoneKeydown);
-    if (A._zoneKeyup) removeEventListener('keyup', A._zoneKeyup);
-    if (A._zoneMouseDown) document.getElementById('portalCanvas').removeEventListener('mousedown', A._zoneMouseDown);
-    if (A._zoneMouseUp) removeEventListener('mouseup', A._zoneMouseUp);
-    if (A._zoneMouseMove) removeEventListener('mousemove', A._zoneMouseMove);
+    if (A._kd) removeEventListener('keydown', A._kd);
+    if (A._ku) removeEventListener('keyup', A._ku);
+    if (A._md) document.getElementById('portalCanvas').removeEventListener('mousedown', A._md);
+    if (A._mu) removeEventListener('mouseup', A._mu);
+    if (A._mm) removeEventListener('mousemove', A._mm);
   },
 
-  zoneInteract() {
+  interact() {
     const A = this;
-    if (A.nearBed) A.sleep();
-    else if (A.nearReturn) A.exitZone();
-    else if (A.nearJobBoard) A.openJobBoard();
-    else if (A.nearUpgrade) A.openUpgrade();
-    else if (A.nearEggShop) A.openEggShop();
+    if (A.nearDoor) { A.enterInterior(); return; }
+    if (A.nearReturn) { A.exitZone(); return; }
+    if (A.nearJobBoard) { A.openJobBoard(); return; }
+    if (A.nearUpgrade) { A.openUpgrade(); return; }
+    if (A.nearEggShop) { A.openEggShop(); return; }
+    if (A.nearDogPark) { A.startJob('dogwalk'); return; }
+    if (A.nearFactory) { A.startJob('factory'); return; }
+    if (A.nearShop) { A.startJob('shop'); return; }
+    if (A.nearOffice) { A.startJob('office'); return; }
   },
 
-  // ===== ZONE RENDER LOOP =====
-  startZoneRender() {
+  // ===== HOUSE INTERIOR =====
+  enterInterior() {
+    const A = this;
+    A.inInterior = true;
+    document.getElementById('portalZonePrompt').classList.remove('on');
+    // Build interior scene
+    const canvas = document.getElementById('portalCanvas');
+    A.interiorRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    A.interiorRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    A.interiorRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+    A.interiorRenderer.shadowMap.enabled = true;
+    A.interiorScene = new THREE.Scene();
+    A.interiorScene.background = new THREE.Color(0x2a2018);
+    A.interiorScene.fog = new THREE.Fog(0x2a2018, 15, 40);
+    A.interiorCamera = new THREE.PerspectiveCamera(70, canvas.offsetWidth / canvas.offsetHeight, 0.1, 100);
+    // Lights
+    A.interiorScene.add(new THREE.AmbientLight(0xfff0d0, 0.6));
+    const ceil = new THREE.PointLight(0xffe8a0, 1.5, 20); ceil.position.set(0, 4, 0); A.interiorScene.add(ceil);
+    // Floor
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; A.interiorScene.add(floor);
+    // Walls
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xe0d0b0 });
+    const walls = [
+      { p: [0, 2, -6], s: [12, 4, 0.2] }, // back
+      { p: [0, 2, 6], s: [12, 4, 0.2] },  // front
+      { p: [-6, 2, 0], s: [0.2, 4, 12] }, // left
+      { p: [6, 2, 0], s: [0.2, 4, 12] },  // right
+    ];
+    walls.forEach(w => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...w.s), wallMat);
+      m.position.set(...w.p); A.interiorScene.add(m);
+    });
+    // Bed
+    const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 3), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+    bedFrame.position.set(-3, 0.25, -3); A.interiorScene.add(bedFrame);
+    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 2.8), new THREE.MeshLambertMaterial({ color: 0xf0e8d0 }));
+    mattress.position.set(-3, 0.65, -3); A.interiorScene.add(mattress);
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    pillow.position.set(-3, 0.9, -4); A.interiorScene.add(pillow);
+    A.interiorBedPos = { x: -3, z: -3 };
+    // Table + chair
+    const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    table.position.set(3, 0.4, 3); A.interiorScene.add(table);
+    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.5), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+    chair.position.set(3, 0.4, 4.2); A.interiorScene.add(chair);
+    // Lamp
+    const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    lampPost.position.set(4, 1.25, -3); A.interiorScene.add(lampPost);
+    const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
+    lampHead.position.set(4, 2, -3); A.interiorScene.add(lampHead);
+    const lampLight = new THREE.PointLight(0xffd070, 0.8, 8); lampLight.position.set(4, 2, -3); A.interiorScene.add(lampLight);
+    // Kitchen counter
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+    counter.position.set(-3, 0.5, 5); A.interiorScene.add(counter);
+    // Rug
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(2.5, 24), new THREE.MeshLambertMaterial({ color: 0x8a3a2a }));
+    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.01, 0); A.interiorScene.add(rug);
+    // Interior player
+    A.interiorPlayer = { x: 0, z: 5, ry: 0, obj: A.makePlayerAvatar() };
+    A.interiorScene.add(A.interiorPlayer.obj);
+    // Start interior render
+    A.startInteriorRender();
+    if (typeof toast === 'function') toast('Entered your home. Walk to the bed to sleep.', 'info');
+  },
+
+  startInteriorRender() {
     const A = this;
     let lastT = performance.now();
     function loop() {
-      if (!A.inPortal) { A.zoneRAF = null; return; }
+      if (!A.inInterior) return;
       const t = performance.now() / 1000;
       const dt = Math.min(0.05, (t * 1000 - lastT) / 1000); lastT = t * 1000;
+      // Movement
+      if (A.interiorPlayer) {
+        let mx = 0, mz = 0;
+        if (A.zoneKeys.KeyW) mz -= 1;
+        if (A.zoneKeys.KeyS) mz += 1;
+        if (A.zoneKeys.KeyA) mx -= 1;
+        if (A.zoneKeys.KeyD) mx += 1;
+        const sp = 4;
+        if (mx || mz) {
+          const len = Math.hypot(mx, mz); mx /= len; mz /= len;
+          const cy = A.zoneYaw;
+          const wx = mx * Math.cos(cy) + mz * Math.sin(cy);
+          const wz = -mx * Math.sin(cy) + mz * Math.cos(cy);
+          let nx = A.interiorPlayer.x + wx * sp * dt;
+          let nz = A.interiorPlayer.z + wz * sp * dt;
+          // Wall collision
+          nx = Math.max(-5, Math.min(5, nx)); nz = Math.max(-5, Math.min(5, nz));
+          A.interiorPlayer.x = nx; A.interiorPlayer.z = nz;
+          A.interiorPlayer.ry = Math.atan2(wx, wz);
+        }
+        A.interiorPlayer.obj.position.set(A.interiorPlayer.x, 0, A.interiorPlayer.z);
+        A.interiorPlayer.obj.rotation.y = A.interiorPlayer.ry;
+      }
+      // Camera
+      if (A.interiorCamera && A.interiorPlayer) {
+        if (A.firstPerson) {
+          A.interiorCamera.position.set(A.interiorPlayer.x, 1.8, A.interiorPlayer.z);
+          A.interiorCamera.rotation.set(0, A.zoneYaw, 0);
+        } else {
+          A.interiorCamera.position.set(
+            A.interiorPlayer.x + Math.sin(A.zoneYaw) * Math.cos(A.zonePitch) * 6,
+            2.5 + Math.sin(A.zonePitch) * 6,
+            A.interiorPlayer.z + Math.cos(A.zoneYaw) * Math.cos(A.zonePitch) * 6
+          );
+          A.interiorCamera.lookAt(A.interiorPlayer.x, 1.8, A.interiorPlayer.z);
+        }
+      }
+      // Bed proximity
+      const px = A.interiorPlayer ? A.interiorPlayer.x : 0, pz = A.interiorPlayer ? A.interiorPlayer.z : 0;
+      const nearBedInt = A.interiorBedPos && Math.hypot(px - A.interiorBedPos.x, pz - A.interiorBedPos.z) < 2.5;
+      const el = document.getElementById('portalZonePrompt');
+      // Check near door (front wall center)
+      const nearDoorInt = pz > 4.5 && Math.abs(px) < 1.5;
+      if (nearBedInt) { el.innerHTML = '<b>[E]</b> Sleep (+50 Rupees)'; el.classList.add('on'); A._interactTarget = 'sleep'; }
+      else if (nearDoorInt) { el.innerHTML = '<b>[E]</b> Exit house'; el.classList.add('on'); A._interactTarget = 'exit'; }
+      else { el.classList.remove('on'); A._interactTarget = null; }
+      A.interiorRenderer.render(A.interiorScene, A.interiorCamera);
+      requestAnimationFrame(loop);
+    }
+    // Override interact for interior
+    A._interiorInteract = (e) => {
+      if (!A.inInterior) return;
+      if (e.key === 'e' || e.key === 'E') {
+        if (A._interactTarget === 'sleep') A.sleep();
+        else if (A._interactTarget === 'exit') A.exitInterior();
+      }
+      if (e.code === 'Escape') A.exitInterior();
+    };
+    addEventListener('keydown', A._interiorInteract);
+    loop();
+  },
 
-      // Movement (WASD)
+  exitInterior() {
+    const A = this;
+    A.inInterior = false;
+    if (A._interiorInteract) removeEventListener('keydown', A._interiorInteract);
+    if (A.interiorScene) { A.disposeGroup(A.interiorScene); A.interiorScene = null; }
+    if (A.interiorRenderer) { A.interiorRenderer.dispose(); A.interiorRenderer = null; }
+    // Move zone player away from door
+    if (A.zonePlayer) { A.zonePlayer.x = A.doorPos.x; A.zonePlayer.z = A.doorPos.z + 3; }
+    A.startRender();
+    if (typeof toast === 'function') toast('Exited house', 'info');
+  },
+
+  // ===== RENDER LOOP (exterior) =====
+  startRender() {
+    const A = this;
+    if (A.zoneRAF) cancelAnimationFrame(A.zoneRAF);
+    let lastT = performance.now();
+    function loop() {
+      if (!A.inPortal || A.inInterior) { A.zoneRAF = null; return; }
+      const t = performance.now() / 1000;
+      const dt = Math.min(0.05, (t * 1000 - lastT) / 1000); lastT = t * 1000;
+      // Movement
       if (A.zonePlayer) {
         let mx = 0, mz = 0;
         if (A.zoneKeys.KeyW) mz -= 1;
         if (A.zoneKeys.KeyS) mz += 1;
         if (A.zoneKeys.KeyA) mx -= 1;
         if (A.zoneKeys.KeyD) mx += 1;
-        const sp = 6;
+        let sp = 6;
+        if (A.zoneKeys.ShiftLeft || A.zoneKeys.ShiftRight) sp = 10;
         if (mx || mz) {
           const len = Math.hypot(mx, mz); mx /= len; mz /= len;
           const cy = A.zoneYaw;
@@ -5293,102 +5450,101 @@ const Portal = {
           const wz = -mx * Math.sin(cy) + mz * Math.cos(cy);
           let nx = A.zonePlayer.x + wx * sp * dt;
           let nz = A.zonePlayer.z + wz * sp * dt;
-          const r = Math.hypot(nx, nz); if (r > 35) { nx *= 35 / r; nz *= 35 / r; }
+          const r = Math.hypot(nx, nz); if (r > 90) { nx *= 90 / r; nz *= 90 / r; }
           A.zonePlayer.x = nx; A.zonePlayer.z = nz;
           A.zonePlayer.ry = Math.atan2(wx, wz);
         }
         A.zonePlayer.obj.position.set(A.zonePlayer.x, 0, A.zonePlayer.z);
         A.zonePlayer.obj.rotation.y = A.zonePlayer.ry;
       }
-
-      // Camera follows player
+      // Camera
       if (A.zoneCamera && A.zonePlayer) {
-        A.zoneCamera.position.set(
-          A.zonePlayer.x + Math.sin(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist,
-          2.5 + Math.sin(A.zonePitch) * A.zoneDist,
-          A.zonePlayer.z + Math.cos(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist
-        );
-        A.zoneCamera.lookAt(A.zonePlayer.x, 1.8, A.zonePlayer.z);
+        if (A.firstPerson) {
+          A.zoneCamera.position.set(A.zonePlayer.x, 1.8, A.zonePlayer.z);
+          A.zoneCamera.rotation.set(A.zonePitch, A.zoneYaw, 0);
+        } else {
+          A.zoneCamera.position.set(
+            A.zonePlayer.x + Math.sin(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist,
+            1.8 + Math.sin(A.zonePitch) * A.zoneDist,
+            A.zonePlayer.z + Math.cos(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist
+          );
+          A.zoneCamera.lookAt(A.zonePlayer.x, 1.8, A.zonePlayer.z);
+        }
       }
-
-      // Proximity checks
-      A.checkZoneProximity();
-
-      // Ocean waves
-      if (A.zoneOcean) A.zoneOcean.position.y = -0.3 + Math.sin(t * 1.5) * 0.1;
-
+      A.checkProximity();
+      if (A.zoneOcean) A.zoneOcean.position.y = 0.005 + Math.sin(t * 1.5) * 0.05;
       A.zoneRenderer.render(A.zoneScene, A.zoneCamera);
       A.zoneRAF = requestAnimationFrame(loop);
     }
     loop();
   },
 
-  checkZoneProximity() {
+  checkProximity() {
     const A = this;
     if (!A.zonePlayer) return;
     const px = A.zonePlayer.x, pz = A.zonePlayer.z;
-    A.nearBed = A.bedPos && Math.hypot(px - A.bedPos.x, pz - A.bedPos.z) < 3;
-    A.nearReturn = A.returnPortalPos && Math.hypot(px - A.returnPortalPos.x, pz - A.returnPortalPos.z) < 3;
-    A.nearJobBoard = A.jobBoardPos && Math.hypot(px - A.jobBoardPos.x, pz - A.jobBoardPos.z) < 3;
-    A.nearUpgrade = A.upgradeNpcPos && Math.hypot(px - A.upgradeNpcPos.x, pz - A.upgradeNpcPos.z) < 3;
-    A.nearEggShop = A.eggShopPos && Math.hypot(px - A.eggShopPos.x, pz - A.eggShopPos.z) < 3;
-
+    const dist = (p) => p ? Math.hypot(px - p.x, pz - p.z) : 999;
+    A.nearDoor = dist(A.doorPos) < 3;
+    A.nearReturn = dist(A.returnPortalPos) < 3;
+    A.nearJobBoard = dist(A.jobBoardPos) < 3;
+    A.nearUpgrade = dist(A.upgradeNpcPos) < 3;
+    A.nearEggShop = dist(A.eggShopPos) < 3;
+    A.nearDogPark = dist(A.dogParkPos) < 6;
+    A.nearFactory = dist(A.factoryPos) < 5;
+    A.nearShop = dist(A.shopPos) < 5;
+    A.nearOffice = dist(A.officePos) < 5;
     const el = document.getElementById('portalZonePrompt');
     let txt = '';
-    if (A.nearBed) txt = '<b>[E]</b> Sleep (+50 Rupees)';
+    if (A.nearDoor) txt = '<b>[E]</b> Enter your house';
     else if (A.nearReturn) txt = '<b>[E]</b> Return to Farm World';
     else if (A.nearJobBoard) txt = '<b>[E]</b> View Job Board';
-    else if (A.nearUpgrade) txt = '<b>[E]</b> Talk to Builder Bob (Upgrade House)';
-    else if (A.nearEggShop) txt = '<b>[E]</b> Buy House Egg (2000 Rupees)';
-    if (txt) { el.innerHTML = txt; el.classList.add('on'); }
-    else el.classList.remove('on');
+    else if (A.nearUpgrade) txt = '<b>[E]</b> Talk to Builder Bob';
+    else if (A.nearEggShop) txt = '<b>[E]</b> Buy House Egg';
+    else if (A.nearDogPark) txt = '<b>[E]</b> Start Dog Walking Job';
+    else if (A.nearFactory) txt = '<b>[E]</b> Start Factory Work';
+    else if (A.nearShop) txt = '<b>[E]</b> Start Shop Assistant Job';
+    else if (A.nearOffice) txt = '<b>[E]</b> Start Office Work';
+    if (txt) { el.innerHTML = txt; el.classList.add('on'); } else el.classList.remove('on');
   },
 
-  // ===== SLEEP =====
   sleep() {
     const A = this;
     if (typeof send === 'function') send({ t: 'portalSleep' });
-    // Fade effect
     const fade = document.createElement('div');
     fade.style.cssText = 'position:fixed;inset:0;background:#000;z-index:698;opacity:0;transition:opacity 1s;pointer-events:none';
     document.body.appendChild(fade);
     setTimeout(() => { fade.style.opacity = '1'; }, 50);
-    setTimeout(() => {
-      fade.style.opacity = '0';
-      setTimeout(() => fade.remove(), 1000);
-    }, 2000);
+    setTimeout(() => { fade.style.opacity = '0'; setTimeout(() => fade.remove(), 1000); }, 2500);
     if (typeof AudioSys !== 'undefined') AudioSys.play('emote');
   },
 
-  // ===== EXIT ZONE =====
   exitZone() {
     const A = this;
     A.inPortal = false;
-    A.unbindZoneInput();
+    A.unbindInput();
     if (A.zoneRAF) { cancelAnimationFrame(A.zoneRAF); A.zoneRAF = null; }
-    A.disposeZoneScene();
+    A.disposeWorld();
     document.getElementById('portalZone').classList.remove('on');
     document.getElementById('portalZonePrompt').classList.remove('on');
     document.getElementById('hud').style.display = '';
     document.getElementById('topnav').style.display = '';
     A.isVisiting = false;
-    // Teleport farm player back to near the portal
-    if (typeof player !== 'undefined') {
-      player.x = A.portalPos.x + 4; player.z = A.portalPos.z + 4; player.y = 0; player.vy = 0;
-    }
+    if (typeof player !== 'undefined') { player.x = A.portalPos.x + 4; player.z = A.portalPos.z + 4; player.y = 0; player.vy = 0; }
   },
 
-  disposeZoneScene() {
+  disposeWorld() {
     const A = this;
-    if (A.zoneScene) {
-      A.zoneScene.traverse(o => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m => m.dispose()); else o.material.dispose(); }
-      });
-      A.zoneScene = null;
-    }
+    if (A.zoneScene) { A.disposeGroup(A.zoneScene); A.zoneScene = null; }
     if (A.zoneRenderer) { A.zoneRenderer.dispose(); A.zoneRenderer = null; }
-    A.zoneOcean = null; A.playerHouse = null; A.returnPortal = null;
+    A.zoneOcean = null; A.playerHouse = null; A.portalRings = [];
+  },
+
+  disposeGroup(g) {
+    if (!g) return;
+    g.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m => m.dispose()); else o.material.dispose(); }
+    });
   },
 
   // ===== JOB BOARD =====
@@ -5396,119 +5552,290 @@ const Portal = {
     const A = this;
     const el = document.getElementById('jobBoardCard');
     const now = Date.now();
-    let rows = A.JOBS.map(j => {
+    const rows = A.JOBS.map(j => {
       const cd = A.portalData && A.portalData.jobCd && A.portalData.jobCd[j.id] || 0;
       const cdRem = Math.max(0, Math.ceil((cd + j.cd - now) / 1000));
       const onCd = cdRem > 0;
-      return `<div class="jobRow">
-        <div class="ji">
-          <div class="jIcon">${j.icon}</div>
-          <div>
-            <div class="jn">${j.n}</div>
-            <div class="jp">🪙 ${j.payout} Rupees</div>
-            ${onCd ? `<div class="jcd">Cooldown: ${cdRem}s</div>` : ''}
-          </div>
-        </div>
-        <button class="work" data-job="${j.id}" ${onCd ? 'disabled' : ''}>${onCd ? 'Wait' : 'WORK'}</button>
-      </div>`;
+      return `<div class="jobRow"><div class="ji"><div class="jIcon">${j.icon}</div><div>
+        <div class="jn">${j.n}</div><div class="jp">🪙 ${j.payout} Rupees</div>
+        <div class="jcd" style="color:#8060a0;font-size:11px">${j.desc}</div>
+        ${onCd ? `<div class="jcd">Cooldown: ${cdRem}s</div>` : ''}
+      </div></div><button class="work" data-job="${j.id}" ${onCd ? 'disabled' : ''}>${onCd ? 'Wait' : 'WORK'}</button></div>`;
     }).join('');
-    el.innerHTML = `<h2>Job Board</h2><p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Work to earn Rupees. 2-min cooldown per job.</p>${rows}
+    el.innerHTML = `<h2>Job Board</h2><p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Walk to a job location and press E to start working.</p>${rows}
       <button class="esClose" id="jbClose" style="width:100%;margin-top:8px">Close</button>`;
     document.getElementById('jobBoard').classList.add('on');
     el.querySelectorAll('[data-job]').forEach(b => {
       b.onclick = () => {
-        const jobId = b.dataset.job;
         document.getElementById('jobBoard').classList.remove('on');
-        A.startJob(jobId);
+        // Teleport player to job location
+        const job = b.dataset.job;
+        const pos = job === 'dogwalk' ? A.dogParkPos : job === 'factory' ? A.factoryPos : job === 'shop' ? A.shopPos : A.officePos;
+        if (pos && A.zonePlayer) { A.zonePlayer.x = pos.x; A.zonePlayer.z = pos.z + 3; }
+        if (typeof toast === 'function') toast(`Walk to the ${A.JOBS.find(j=>j.id===job).n} location and press E`, 'info');
       };
     });
     document.getElementById('jbClose').onclick = () => document.getElementById('jobBoard').classList.remove('on');
   },
 
+  // ===== REAL JOB GAMEPLAY =====
   startJob(jobId) {
     const A = this;
-    A.activeJob = jobId;
-    // Simple job mini-game: press the right key sequence
     const job = A.JOBS.find(j => j.id === jobId);
     if (!job) return;
-    // Generate a sequence of 5 keys
-    const keys = ['Q', 'W', 'E', 'A', 'S', 'D'];
-    const seq = [];
-    for (let i = 0; i < 5; i++) seq.push(keys[Math.floor(Math.random() * keys.length)]);
+    A.activeJob = jobId;
 
-    // Show mini-game overlay
+    if (jobId === 'dogwalk') A.startDogWalk();
+    else if (jobId === 'factory') A.startFactory();
+    else if (jobId === 'shop') A.startShop();
+    else if (jobId === 'office') A.startOffice();
+  },
+
+  startDogWalk() {
+    const A = this;
+    // Generate 3 markers around the dog park
+    const markers = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + Math.random();
+      markers.push({ x: A.dogParkPos.x + Math.cos(a) * 3, z: A.dogParkPos.z + Math.sin(a) * 3, reached: false });
+    }
+    A.jobState = { markers, current: 0, dogX: A.zonePlayer.x, dogZ: A.zonePlayer.z + 2 };
+
+    // Create visual markers
+    A.jobMarkers = markers.map(m => {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1, 0.15, 8, 16),
+        new THREE.MeshBasicMaterial({ color: 0x80e890, transparent: true, opacity: 0.7 })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(m.x, 0.1, m.z);
+      A.zoneScene.add(ring);
+      return ring;
+    });
+
+    // Create dog model
+    A.jobDog = A.makeDog();
+    A.jobDog.position.set(A.jobState.dogX, 0, A.jobState.dogZ);
+    A.zoneScene.add(A.jobDog);
+
+    // Job UI
     const ov = document.createElement('div');
-    ov.id = 'jobMinigame';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:699;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.9);flex-direction:column;gap:20px';
-    ov.innerHTML = `
-      <h2 style="font-family:Fredoka;color:#e8d8ff;font-size:28px">${job.icon} ${job.n}</h2>
-      <p style="color:#8060a0;font-size:14px">Press the keys in order!</p>
-      <div id="mgSeq" style="display:flex;gap:10px">${seq.map((k, i) => `<div class="mgKey" data-i="${i}" style="width:50px;height:50px;border-radius:10px;background:#1a0e2a;border:2px solid #a86fd644;display:flex;align-items:center;justify-content:center;font-family:Fredoka;font-size:24px;color:#a86fd688">${k}</div>`).join('')}</div>
-      <div id="mgStatus" style="color:#80e890;font-size:16px;font-family:Fredoka">Press the first key...</div>
-    `;
+    ov.id = 'jobUI';
+    ov.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:699;background:rgba(10,4,20,.9);border:2px solid #4fae68;border-radius:12px;padding:14px 24px;color:#80e890;font-family:Fredoka;text-align:center';
+    ov.innerHTML = `<h3 style="font-size:18px">🐕 Dog Walking</h3><p style="font-size:13px;color:#c0d8c0">Walk the dog to the glowing markers! <span id="dogProgress">0/3</span></p>`;
     document.body.appendChild(ov);
 
-    let idx = 0;
-    const handler = (e) => {
-      const key = e.key.toUpperCase();
-      if (!['Q', 'W', 'E', 'A', 'S', 'D'].includes(key)) return;
-      const expected = seq[idx];
-      const keyEls = ov.querySelectorAll('.mgKey');
-      if (key === expected) {
-        keyEls[idx].style.background = '#2d6b45'; keyEls[idx].style.color = '#fff';
-        idx++;
-        if (idx >= seq.length) {
-          // Job complete!
-          removeEventListener('keydown', handler);
+    A._jobTick = setInterval(() => {
+      if (!A.inPortal || A.activeJob !== 'dogwalk') { clearInterval(A._jobTick); return; }
+      // Dog follows player
+      const px = A.zonePlayer.x, pz = A.zonePlayer.z;
+      const dx = px - A.jobState.dogX, dz = pz - A.jobState.dogZ;
+      const d = Math.hypot(dx, dz);
+      if (d > 2) { A.jobState.dogX += (dx / d) * 3 * 0.05; A.jobState.dogZ += (dz / d) * 3 * 0.05; }
+      A.jobDog.position.set(A.jobState.dogX, 0, A.jobState.dogZ);
+      A.jobDog.lookAt(px, 0, pz);
+
+      // Check marker proximity
+      const m = A.jobState.markers[A.jobState.current];
+      if (m && !m.reached) {
+        const md = Math.hypot(px - m.x, pz - m.z);
+        if (md < 2) {
+          m.reached = true;
+          A.jobMarkers[A.jobState.current].material.color.setHex(0x4fae68);
+          A.jobState.current++;
+          document.getElementById('dogProgress').textContent = A.jobState.current + '/3';
+          if (typeof AudioSys !== 'undefined') AudioSys.play('pop');
+          if (A.jobState.current >= 3) {
+            // Job complete
+            clearInterval(A._jobTick);
+            A.jobMarkers.forEach(m => A.zoneScene.remove(m));
+            A.zoneScene.remove(A.jobDog);
+            ov.remove();
+            if (typeof send === 'function') send({ t: 'portalJobComplete', jobId: 'dogwalk' });
+            if (typeof toast === 'function') toast('Dogs walked! +Rupees', 'good');
+          }
+        }
+      }
+    }, 50);
+  },
+
+  makeDog() {
+    const g = new THREE.Group();
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x8a5a3a });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 1), bodyMat);
+    body.position.y = 0.5; body.castShadow = true; g.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), bodyMat);
+    head.position.set(0, 0.6, 0.6); g.add(head);
+    for (const lx of [-0.15, 0.15]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), bodyMat);
+      leg.position.set(lx, 0.2, 0.3); g.add(leg);
+      const leg2 = leg.clone(); leg2.position.z = -0.3; g.add(leg2);
+    }
+    // Tail
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 4), bodyMat);
+    tail.position.set(0, 0.6, -0.6); tail.rotation.x = -0.5; g.add(tail);
+    return g;
+  },
+
+  startFactory() {
+    const A = this;
+    // Conveyor belt timing mini-game
+    const ov = document.createElement('div');
+    ov.id = 'jobUI';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:699;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.92);flex-direction:column;gap:20px';
+    ov.innerHTML = `
+      <h2 style="font-family:Fredoka;color:#e8d8ff;font-size:28px">🏭 Factory Work</h2>
+      <p style="color:#8060a0;font-size:14px">Press SPACE when the item is in the green zone!</p>
+      <div style="position:relative;width:400px;height:60px;background:#1a0e2a;border:2px solid #a86fd644;border-radius:10px;overflow:hidden">
+        <div id="fbGreen" style="position:absolute;left:160px;width:80px;height:100%;background:#4fae6844;border-left:2px solid #4fae68;border-right:2px solid #4fae68"></div>
+        <div id="fbItem" style="position:absolute;left:0;top:15px;width:30px;height:30px;background:#ff7020;border-radius:6px"></div>
+      </div>
+      <div id="fbStatus" style="color:#80e890;font-size:18px;font-family:Fredoka">Hits: 0/10</div>
+      <p style="color:#8060a0;font-size:12px">Press SPACE to stamp. 10 correct hits to finish.</p>
+    `;
+    document.body.appendChild(ov);
+    let pos = 0, dir = 1, hits = 0, misses = 0;
+    const item = ov.querySelector('#fbItem');
+    const status = ov.querySelector('#fbStatus');
+    A._factoryActive = true;
+    A._factoryKey = (e) => {
+      if (e.code !== 'Space' || !A._factoryActive) return;
+      e.preventDefault();
+      if (pos >= 160 && pos <= 240) {
+        hits++; status.textContent = `Hits: ${hits}/10`;
+        if (typeof AudioSys !== 'undefined') AudioSys.play('pop');
+        if (hits >= 10) {
+          A._factoryActive = false;
+          removeEventListener('keydown', A._factoryKey);
           ov.remove();
-          if (typeof send === 'function') send({ t: 'portalJobComplete', jobId });
-          if (typeof toast === 'function') toast('Job complete! Collecting Rupees...', 'good');
-        } else {
-          document.getElementById('mgStatus').textContent = 'Next: ' + seq[idx];
+          if (typeof send === 'function') send({ t: 'portalJobComplete', jobId: 'factory' });
+          if (typeof toast === 'function') toast('Factory shift done! +Rupees', 'good');
         }
       } else {
-        // Wrong key — flash red
-        document.getElementById('mgStatus').textContent = 'Wrong! Try again.';
-        document.getElementById('mgStatus').style.color = '#ff4040';
-        setTimeout(() => { document.getElementById('mgStatus').style.color = '#80e890'; document.getElementById('mgStatus').textContent = 'Next: ' + seq[idx]; }, 500);
+        misses++; status.textContent = `Hits: ${hits}/10 | Misses: ${misses}`;
+        status.style.color = '#ff4040'; setTimeout(() => status.style.color = '#80e890', 300);
       }
     };
-    addEventListener('keydown', handler);
-    // Cancel button
-    ov.addEventListener('click', (e) => {
-      if (e.target === ov) { removeEventListener('keydown', handler); ov.remove(); }
-    });
+    addEventListener('keydown', A._factoryKey);
+    A._factoryAnim = () => {
+      if (!A._factoryActive) return;
+      pos += dir * 3;
+      if (pos > 370) dir = -1;
+      if (pos < 0) dir = 1;
+      item.style.left = pos + 'px';
+      requestAnimationFrame(A._factoryAnim);
+    };
+    A._factoryAnim();
+  },
+
+  startShop() {
+    const A = this;
+    // Serve customers — type the item they want
+    const items = ['Apple', 'Bread', 'Milk', 'Eggs', 'Cheese', 'Fish', 'Cake', 'Juice'];
+    let served = 0;
+    const ov = document.createElement('div');
+    ov.id = 'jobUI';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:699;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.92);flex-direction:column;gap:20px';
+    const next = () => {
+      const item = items[Math.floor(Math.random() * items.length)];
+      ov.innerHTML = `
+        <h2 style="font-family:Fredoka;color:#e8d8ff;font-size:28px">🛒 Shop Assistant</h2>
+        <p style="color:#8060a0;font-size:14px">Customer wants: <b style="color:#ffd24a;font-size:20px" id="custWant">${item}</b></p>
+        <p style="color:#8060a0;font-size:12px">Type the item name and press Enter</p>
+        <input id="shopInput" style="background:#0a0418;border:2px solid #a86fd633;border-radius:8px;color:#e8d8ff;padding:10px 16px;font-size:18px;font-family:Nunito;outline:none" autocomplete="off">
+        <div id="shopStatus" style="color:#80e890;font-size:16px;font-family:Fredoka">Served: ${served}/5</div>
+      `;
+      document.body.appendChild(ov);
+      const input = ov.querySelector('#shopInput');
+      input.focus();
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          if (input.value.trim().toLowerCase() === item.toLowerCase()) {
+            served++;
+            if (typeof AudioSys !== 'undefined') AudioSys.play('pop');
+            if (served >= 5) {
+              ov.remove();
+              if (typeof send === 'function') send({ t: 'portalJobComplete', jobId: 'shop' });
+              if (typeof toast === 'function') toast('All customers served! +Rupees', 'good');
+            } else { next(); }
+          } else {
+            const s = ov.querySelector('#shopStatus');
+            s.textContent = 'Wrong item! Try again.'; s.style.color = '#ff4040';
+            setTimeout(() => { s.style.color = '#80e890'; s.textContent = `Served: ${served}/5`; }, 500);
+          }
+        }
+      };
+    };
+    next();
+  },
+
+  startOffice() {
+    const A = this;
+    // Type words correctly
+    const words = ['meeting', 'report', 'budget', 'client', 'project', 'deadline', 'invoice', 'salary', 'office', 'printer', 'keyboard', 'monitor'];
+    let typed = 0;
+    const ov = document.createElement('div');
+    ov.id = 'jobUI';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:699;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.92);flex-direction:column;gap:20px';
+    const next = () => {
+      const word = words[Math.floor(Math.random() * words.length)];
+      ov.innerHTML = `
+        <h2 style="font-family:Fredoka;color:#e8d8ff;font-size:28px">💼 Office Work</h2>
+        <p style="color:#8060a0;font-size:14px">Type this word:</p>
+        <h3 id="offWord" style="font-family:Nunito;color:#ffd24a;font-size:42px;letter-spacing:.1em">${word}</h3>
+        <input id="offInput" style="background:#0a0418;border:2px solid #a86fd633;border-radius:8px;color:#e8d8ff;padding:10px 16px;font-size:24px;font-family:Nunito;outline:none" autocomplete="off">
+        <div id="offStatus" style="color:#80e890;font-size:16px;font-family:Fredoka">Words typed: ${typed}/8</div>
+      `;
+      document.body.appendChild(ov);
+      const input = ov.querySelector('#offInput');
+      input.focus();
+      input.oninput = () => {
+        const val = input.value.toLowerCase();
+        const wEl = ov.querySelector('#offWord');
+        if (word.startsWith(val)) {
+          wEl.innerHTML = word.split('').map((c, i) => i < val.length ? `<span style="color:#4fae68">${c}</span>` : c).join('');
+        } else {
+          wEl.style.color = '#ff4040'; setTimeout(() => wEl.style.color = '#ffd24a', 200);
+        }
+      };
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter' && input.value.toLowerCase() === word) {
+          typed++;
+          if (typeof AudioSys !== 'undefined') AudioSys.play('pop');
+          if (typed >= 8) {
+            ov.remove();
+            if (typeof send === 'function') send({ t: 'portalJobComplete', jobId: 'office' });
+            if (typeof toast === 'function') toast('Office work done! +Rupees', 'good');
+          } else next();
+        }
+      };
+    };
+    next();
   },
 
   // ===== UPGRADE NPC =====
   openUpgrade() {
     const A = this;
-    if (A.isVisiting) { if (typeof toast === 'function') toast("You can't upgrade someone else's house!", 'err'); return; }
+    if (A.isVisiting) { if (typeof toast === 'function') toast("Can't upgrade someone else's house!", 'err'); return; }
     const tier = A.portalData ? A.portalData.houseTier || 0 : 0;
-    const tiers = [
-      { n: 'Shack', cost: 0 },
-      { n: 'House', cost: 5000 },
-      { n: 'Mansion', cost: 50000 },
-    ];
-    const next = tier < 2 ? tiers[tier + 1] : null;
+    const next = tier < 3 ? A.HOUSE_TIERS[tier + 1] : null;
+    const cur = A.HOUSE_TIERS[tier];
     const body = document.getElementById('jobBoardCard');
     body.innerHTML = `<h2>Builder Bob</h2>
-      <p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Your current house: <b style="color:#e8d8ff">${tiers[tier].n}</b></p>
+      <p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Current: <b style="color:#e8d8ff">${cur.n}</b> (Tier ${tier + 1}/4)</p>
       ${next ? `<div style="background:#0a0418;border:1px solid #a86fd622;border-radius:12px;padding:18px;text-align:center;margin-bottom:14px">
         <h3 style="font-family:Fredoka;color:#e8d8ff;font-size:22px">Upgrade to ${next.n}</h3>
         <p style="color:#80e890;font-size:18px;margin:8px 0">🪙 ${next.cost} Rupees</p>
         <button class="btnA" id="upgBtn" style="width:100%;padding:12px;font-size:16px"${(A.portalData.rupees || 0) < next.cost ? ' disabled' : ''}>UPGRADE</button>
-      </div>` : '<p style="color:#80e890;text-align:center">You\'re at the max tier — Mansion! 🏛</p>'}
+      </div>` : '<p style="color:#80e890;text-align:center">Grand Mansion — max tier! 🏛</p>'}
       <button class="esClose" id="upgClose" style="width:100%">Close</button>`;
     document.getElementById('jobBoard').classList.add('on');
     const upgBtn = document.getElementById('upgBtn');
     if (upgBtn) upgBtn.onclick = () => {
       if (typeof send === 'function') send({ t: 'portalUpgradeHouse' });
       document.getElementById('jobBoard').classList.remove('on');
-      // Rebuild the house model after a delay
-      setTimeout(() => { if (A.portalData && A.playerHouse) { A.zoneScene.remove(A.playerHouse); A.makeHouse(0, 0, A.portalData.houseTier, true); } }, 500);
+      setTimeout(() => { if (A.portalData) A.buildPlayerHouse(0, 0, A.portalData.houseTier); }, 600);
     };
-    document.getElementById('upgClose').onclick = () => document.getElementById('jobBoard').classList.remove('off');
     document.getElementById('upgClose').onclick = () => document.getElementById('jobBoard').classList.remove('on');
   },
 
@@ -5522,9 +5849,7 @@ const Portal = {
       <div class="esEgg"></div>
       <p style="color:#80e890;font-size:16px">🪙 2,000 Rupees</p>
       <p style="color:#8060a0;font-size:12px">You have: ${rupees} Rupees</p>
-      <div class="esPets">
-        ${A.HOUSE_PETS.map(p => `<div class="esPet"><b>${p.n}</b><small style="color:${p.rar === 'Mythical' ? '#ffd060' : '#a86fd6'}">${p.rar} · ${p.ch}%</small></div>`).join('')}
-      </div>
+      <div class="esPets">${A.HOUSE_PETS.map(p => `<div class="esPet"><b>${p.n}</b><small style="color:${p.rar === 'Mythical' ? '#ffd060' : '#a86fd6'}">${p.rar} · ${p.ch}%${p.boost ? ` · +${p.boost * 100}%` : ''}</small></div>`).join('')}</div>
       <button class="esBuy" id="esBuy" ${rupees < 2000 ? 'disabled style="opacity:.5"' : ''}>BUY EGG</button>
       <button class="esClose" id="esClose">Close</button>`;
     document.getElementById('eggShop').classList.add('on');
@@ -5544,8 +5869,6 @@ const Portal = {
     document.getElementById('hoRar').style.display = 'none';
     document.getElementById('hoOk').style.display = 'none';
     ov.classList.add('on');
-    // The actual result comes from the server via portalHatch message
-    // But we'll also auto-hide after 5s as fallback
     A._hatchTimeout = setTimeout(() => { if (ov.classList.contains('on')) A.showHatchResult('puppy'); }, 5000);
   },
 
@@ -5562,16 +5885,12 @@ const Portal = {
     rarEl.textContent = pet.rar; rarEl.style.display = 'block';
     rarEl.style.color = pet.rar === 'Mythical' ? '#ffd060' : '#a86fd6';
     document.getElementById('hoOk').style.display = 'block';
-    if (typeof AudioSys !== 'undefined') {
-      AudioSys.play('hatch');
-      if (pet.rar === 'Mythical') setTimeout(() => AudioSys.play('mut'), 300);
-    }
+    if (typeof AudioSys !== 'undefined') { AudioSys.play('hatch'); if (pet.rar === 'Mythical') setTimeout(() => AudioSys.play('mut'), 300); }
     document.getElementById('hoOk').onclick = () => ov.classList.remove('on');
-    // Auto-close after 4s
     setTimeout(() => ov.classList.remove('on'), 4000);
   },
 
-  // ===== HUD UPDATES =====
+  // ===== HUD =====
   updateRupeeChip() {
     const A = this;
     const chip = document.getElementById('rupeeChip');
@@ -5585,36 +5904,27 @@ const Portal = {
   updateZoneHUD() {
     const A = this;
     if (!A.inPortal) return;
-    const zone = A.zoneType === 'beach' ? '🏖 Beach' : '🏙 City';
+    const zone = A.zoneType === 'beach' ? '🏖 Beach District' : '🏙 City District';
     const title = A.isVisiting ? `${zone} — Visiting ${A.visitingName}` : `${zone} — Your Home`;
     document.getElementById('pzTitle').textContent = title;
     document.getElementById('pzRupees').textContent = '🪙 ' + (A.portalData ? A.portalData.rupees : 0) + ' Rupees';
   },
 
-  fmtR(n) {
-    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-    return String(Math.floor(n));
-  },
+  fmtR(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(Math.floor(n)); },
 
-  // ===== TICK LOOP (proximity check in farm world) =====
+  // ===== TICK LOOP =====
   tickLoop() {
     const A = this;
     const tick = (t_ms) => {
       const t = t_ms / 1000;
       A.tickPortal(t);
-      // Check proximity to portal in farm world
       if (!A.inPortal && typeof player !== 'undefined' && A.portalModel) {
         const d = Math.hypot(player.x - A.portalPos.x, player.z - A.portalPos.z);
-        A.nearPortal = d < 4;
+        A.nearPortal = d < 5;
         const el = document.getElementById('portalPrompt');
-        if (A.nearPortal) {
-          el.innerHTML = '<b>[E]</b> Enter the Portal';
-          el.classList.add('on');
-        } else el.classList.remove('on');
-      } else {
-        document.getElementById('portalPrompt').classList.remove('on');
-      }
+        if (A.nearPortal) { el.innerHTML = '<b>[E]</b> Enter Portal Life'; el.classList.add('on'); }
+        else el.classList.remove('on');
+      } else { const el = document.getElementById('portalPrompt'); if (el) el.classList.remove('on'); }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
