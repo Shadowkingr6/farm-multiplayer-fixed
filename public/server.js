@@ -279,7 +279,8 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  charShirt:p.charShirt||0x4f8a5c,charPants:p.charPants||0x4a5a7a,charSkinCol:p.charSkinCol||0xe8b48a,
  ownedCharBodies:p.ownedCharBodies||['farmer'],
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
- bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought};}
+ bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
+ role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||''};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,
@@ -321,6 +322,7 @@ function load(){let raw=null;
    if(p.charShirt===undefined)p.charShirt=0x4f8a5c;if(p.charPants===undefined)p.charPants=0x4a5a7a;
    if(p.charSkinCol===undefined)p.charSkinCol=0xe8b48a;
    if(!p.ownedCharBodies)p.ownedCharBodies=['farmer'];
+   if(!p.role)p.role='player';if(p.lastRolePay===undefined)p.lastRolePay=0;
    if(!p.gear.includes('shovel'))p.gear.push('shovel');
    G.players.set(p.id,p);if(p.plot>=0&&p.plot<6)G.plots[p.plot]=p.id;}
   const el=Math.min(Date.now()-(d.savedAt||Date.now()),12*3600*1000);
@@ -336,6 +338,7 @@ function newPlayer(id,name){let plot=G.plots.findIndex(o=>o===null);if(plot<0)pl
  charBody:'farmer',charHat:null,charShirt:0x4f8a5c,charPants:0x4a5a7a,charSkinCol:0xe8b48a,ownedCharBodies:['farmer'],
  lastAbility:0,relicDay:'',relicDrops:0,
  bloodDrops:0,lastAlienTry:0,deciderBought:false,
+ role:'player',roleGivenBy:'',lastRolePay:0,
  x:0,z:26,ry:0,online:false};}
 const now=()=>Date.now(),rand=(a,b)=>a+Math.random()*(b-a),rint=(a,b)=>Math.floor(rand(a,b+1));
 function log(action,target,params){G.logs.push({t:now(),action,target:target||'global',params:params||''});
@@ -731,6 +734,16 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
   case 'admin':{const sess=G.adminSessions.get(msg.token);
    if(!sess||sess.exp<now()||sess.id!==p.id)return sendTo(p.id,{t:'toast',msg:'Admin session expired.',kind:'err'});
    adminCommand(p,msg);break;}
+  /* ===== ROLE-ADMIN WEATHER CONTROL (no full admin session needed) ===== */
+  case 'roleWeather':{
+   if(p.role!=='admin')return sendTo(p.id,{t:'toast',msg:'You need the Admin role for this.',kind:'err'});
+   const sub=String(msg.sub||'').slice(0,16);
+   if(sub==='start'){const d=EV_MAP[String(msg.ev||'').slice(0,32)];if(d)startEvent(d,+msg.dur?+msg.dur*1000:0,true);
+    sendTo(p.id,{t:'toast',msg:'Weather started: '+d.n,kind:'good'});}
+   else if(sub==='end'){endEvent(true);sendTo(p.id,{t:'toast',msg:'Weather ended.',kind:'good'});}
+   else if(sub==='random'){const pool=EVENTS.filter(e=>e.w>0);startEvent(pool[rint(0,pool.length-1)]);
+    sendTo(p.id,{t:'toast',msg:'Random weather rolled.',kind:'good'});}
+   break;}
  }}
 function sellFruits(p,uids){const set=new Set(uids);const sold=[];
  p.produce=p.produce.filter(f=>{if(set.has(f.uid)){sold.push(f);return false;}return true;});
@@ -805,6 +818,21 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
     target.bloodDrops=(target.bloodDrops||0)+amt;pushMe(target);
     sendTo(admin.id,{t:'toast',msg:'Gave '+amt+' Blood Drops to '+target.name+'.',kind:'good'});}
    break;}
+  /* ===== ROLES SYSTEM ===== */
+  case 'setRole':{
+   const t2=G.players.get(a.targetId);if(!t2)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
+   const role=String(a.role||'player').slice(0,16);
+   if(!['player','admin','special'].includes(role))return sendTo(admin.id,{t:'toast',msg:'Invalid role.',kind:'err'});
+   t2.role=role;t2.roleGivenBy=admin.name;
+   if(role==='player'){t2.lastRolePay=0;}
+   pushMe(t2);save();
+   broadcast({t:'pRoleUpdate',id:t2.id,role:t2.role},t2.id);
+   sendTo(admin.id,{t:'toast',msg:t2.name+' is now '+role.toUpperCase(),kind:'good'});
+   sendTo(t2.id,{t:'toast',msg:'You are now a '+role.toUpperCase()+'. '+(role==='admin'?'Press N to control weather.':role==='special'?'You receive 1M sheckles/day + 5 benefits.':''),kind:'quest'});
+   log('role:set',t2.id,role);break;}
+  case 'listRoles':{
+   const list=[...G.players.values()].filter(p=>p.role&&p.role!=='player').map(p=>({id:p.id,name:p.name,role:p.role,givenBy:p.roleGivenBy||''}));
+   sendTo(admin.id,{t:'admData',kind:'roles',data:list});break;}
   case 'getDeciderWishes':{
    sendTo(admin.id,{t:'admData',kind:'deciderWishes',data:G.s2.deciderWishes||[]});break;}
   case 'clearDeciderWish':{
@@ -931,10 +959,10 @@ if(WebSocketServer){
      plots:G.plots,plotPos:PLOT_POS,
      players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
       cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
-      ac:x.activeCosmetic||null}))}));
+      ac:x.activeCosmetic||null,role:x.role||'player'}))}));
     broadcast({t:'pJoin',id:p.id,name:p.name,
      cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
-     ac:p.activeCosmetic||null},p.id);pushPlants();return;}
+     ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();return;}
    try{handleMsg(sock,msg);}catch(e){console.error('[FARM] handler:',e.message);}});
   sock.on('close',()=>{if(!sock._id)return;const p=G.players.get(sock._id);if(p)p.online=false;
    broadcast({t:'pLeft',id:sock._id});save();});});
@@ -946,7 +974,16 @@ if(WebSocketServer){
   if(G.maintenance.active&&now()>G.maintenance.until){
    G.maintenance={active:false,until:0,msg:'',fix:'',by:''};G.dirty=true;
    broadcast({t:'maintenance',until:0,msg:'',fix:'',by:''});}
-  if(G.season.status==='scheduled'&&G.season.launchAt&&now()>=G.season.launchAt)launchSeason();},2000);
+  if(G.season.status==='scheduled'&&G.season.launchAt&&now()>=G.season.launchAt)launchSeason();
+  /* ===== DAILY ROLE PAYMENTS (Special role = 1M sheckles/day) ===== */
+  const dayKey=new Date().toDateString();
+  for(const p of G.players.values()){
+   if(p.role==='special'&&p.lastRolePayKey!==dayKey){
+    p.cash=(p.cash||0)+1000000;p.lastRolePayKey=dayKey;G.dirty=true;
+    if(p.online){pushMe(p);sendTo(p.id,{t:'toast',msg:'☕ Daily Special Role bonus: +1,000,000 sheckles!',kind:'quest'});}
+   }
+  }
+ },2000);
  /* ===== TIMER TICK — checks every 250ms for smooth 3-2-1 countdown + fires event on expiry ===== */
  setInterval(()=>{
   if(!G.timer.active)return;
