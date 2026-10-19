@@ -649,6 +649,40 @@ html.touch .seedCfgRow .sname{font-size:12px}
 .petRow .pi .pr{font-size:10px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:5px}
 .petRow button{font-size:12px;padding:6px 12px;border-radius:7px;border:none;cursor:pointer;background:#2d6b45;color:#fff}
 .petRow button.eq{background:#a86fd6}
+/* ============ NPC DIALOGUE BOX ============ */
+#npcDialogue{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:695;display:none;
+ width:min(580px,92vw);background:linear-gradient(180deg,#1a0e2a,#0a0418);border:2px solid #a86fd666;
+ border-radius:16px;box-shadow:0 20px 60px #000a;padding:20px 24px}
+#npcDialogue.on{display:block}
+#npcName{font-family:'Fredoka';font-size:18px;color:#c0a0ff;margin-bottom:8px;font-weight:700}
+#npcText{font-size:15px;color:#d0c0e0;line-height:1.6;margin-bottom:14px}
+#npcResponses{display:flex;flex-direction:column;gap:6px}
+.npcResp{background:#ffffff0d;border:1px solid #a86fd633;color:#c0a0d8;padding:10px 16px;border-radius:10px;
+ cursor:pointer;font-family:'Nunito';font-size:14px;transition:background .15s,border-color .15s}
+.npcResp:hover{background:#a86fd622;border-color:#a86fd6}
+.npcContinue{background:linear-gradient(135deg,#6a3fd6,#a86fd6);color:#fff;border:none;padding:10px 24px;
+ border-radius:10px;font-family:'Fredoka';font-size:15px;cursor:pointer;width:100%;margin-top:4px}
+.npcContinue:hover{filter:brightness(1.15)}
+/* ============ OBJECTIVE TRACKER ============ */
+#objectiveTracker{position:fixed;top:80px;right:20px;z-index:340;display:none;
+ background:rgba(10,4,20,.88);border:2px solid #a86fd644;border-radius:12px;padding:12px 18px;
+ max-width:260px;backdrop-filter:blur(6px)}
+#objectiveTracker.on{display:block}
+#otStep{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#8060a0;font-weight:800;margin-bottom:4px}
+#otTitle{font-family:'Fredoka';font-size:15px;color:#c0a0ff;font-weight:700;margin-bottom:4px;line-height:1.3}
+#otDesc{font-size:12px;color:#a090b0;line-height:1.5}
+#otProgress{font-size:11px;color:#80e890;margin-top:6px;font-weight:700}
+#otSkip{font-size:10px;color:#604060;margin-top:8px;cursor:pointer;text-decoration:underline}
+#otSkip:hover{color:#a86fd6}
+/* ============ WAYPOINT ARROW ============ */
+#waypointArrow{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:330;
+ display:none;pointer-events:none;font-size:40px;color:#ffd24a;text-shadow:0 0 12px #ffd24a88;
+ transition:opacity .3s}
+#waypointArrow.on{display:block}
+#waypointDist{position:fixed;top:calc(50% + 30px);left:50%;transform:translateX(-50%);z-index:331;
+ display:none;pointer-events:none;font-family:Fredoka;font-size:14px;color:#ffd24a;
+ text-shadow:0 0 8px #000,0 2px 4px #000}
+#waypointDist.on{display:block}
 /* ============ FORTNITE-STYLE BATTLE PASS TIER BAR ============ */
 .passTierBar{width:100%}
 .ptbTrack{display:flex;gap:3px;width:100%}
@@ -4654,7 +4688,10 @@ const Portal = {
     switch (m.t) {
       case 'init': if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); } return false;
       case 'me': if (m.me && m.me.portal) { A.portalData = m.me.portal; A.updateRupeeChip(); } return false;
-      case 'portalUpdate': A.portalData = m.portal; A.updateRupeeChip(); A.updateZoneHUD(); return true;
+      case 'portalUpdate': A.portalData = m.portal; A.updateRupeeChip(); A.updateZoneHUD();
+        // Advance tutorial — completed a job (rupees increased)
+        if (A.tutorialStep === 7) A.advanceTutorial();
+        return true;
       case 'portalHatch': A.portalData = m.portal; A.showHatchResult(m.petId); return true;
       case 'portalVisit': A.enterZone(m.portal.zone, m.portal, m.friendName, true); return true;
       default: return false;
@@ -4828,6 +4865,7 @@ const Portal = {
     A.updateZoneHUD(); A.updateRupeeChip();
     A.buildWorld(zone, portalData.houseTier || 0);
     A.startRender();
+    A.startTutorial();
   },
 
   buildWorld(zone, houseTier) {
@@ -4878,6 +4916,8 @@ const Portal = {
     A.buildEggShop(0, -15);
     // Job locations
     A.buildJobLocations(zone);
+    // Bo NPC — near spawn, easy to find
+    A.buildBoNPC(5, 8);
 
     // Player avatar
     A.zonePlayer = { x: 0, z: 8, ry: 0, obj: A.makePlayerAvatar() };
@@ -5212,6 +5252,235 @@ const Portal = {
     A.officePos = { x: -30, z: -20 };
   },
 
+  // ===== BO NPC + DIALOGUE + TUTORIAL + OBJECTIVE TRACKER =====
+  tutorialStep: -1, // -1 = not started, 0-10 = steps, 99 = completed
+  nearBo: false,
+  boModel: null,
+  boPos: null,
+  dialogueOpen: false,
+  dialogueState: 0,
+  waypointTarget: null,
+
+  TUTORIAL_STEPS: [
+    { title: 'Welcome to Portal Life', desc: 'Your new life starts here. Explore the district around you.', progress: '' },
+    { title: 'Learn the Controls', desc: 'WASD = move, Mouse = look, Shift = sprint, E = interact, Esc = pause', progress: '' },
+    { title: 'Meet Bo', desc: 'Walk to Bo (marked with ➤) and press E to talk', progress: '' },
+    { title: 'Choose a District', desc: 'Select Beach or City district to live in', progress: '' },
+    { title: 'Your New Home', desc: 'Walk to your house door and press E to enter', progress: '' },
+    { title: 'Explore Your Home', desc: 'Walk to the bed and press E to sleep', progress: '' },
+    { title: 'Get a Job', desc: 'Walk to the Job Board or Dog Park to start working', progress: '' },
+    { title: 'Complete a Job', desc: 'Finish a job to earn Rupees', progress: '' },
+    { title: 'Upgrade Your Home', desc: 'Talk to Builder Bob to upgrade your house', progress: '' },
+    { title: 'Buy a House Egg', desc: 'Visit the Egg Shop to buy a pet egg', progress: '' },
+    { title: 'Tutorial Complete!', desc: 'You\'re ready to live your new life. Come back anytime!', progress: '' },
+  ],
+
+  buildBoNPC(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    // Body — friendly guy in a blue shirt
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshLambertMaterial({ color: 0x3a6abf }));
+    body.position.y = 1.55; body.castShadow = true; g.add(body);
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshLambertMaterial({ color: 0xe8b48a }));
+    head.position.y = 2.36; head.castShadow = true; g.add(head);
+    // Hat — friendly cap
+    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2a5a9a }));
+    hat.position.y = 2.55; g.add(hat);
+    // Arms
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.68, 0.16), new THREE.MeshLambertMaterial({ color: 0x3a6abf }));
+    armL.position.set(-0.46, 1.9, 0); g.add(armL);
+    const armR = armL.clone(); armR.position.x = 0.46; g.add(armR);
+    // Legs
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x2a2a3a }));
+    legL.position.set(-0.15, 1.14, 0); g.add(legL);
+    const legR = legL.clone(); legR.position.x = 0.15; g.add(legR);
+    // Name tag
+    const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
+    const tc = tagCv.getContext('2d');
+    tc.fillStyle = 'rgba(20,10,40,.85)'; tc.beginPath(); tc.roundRect(4, 4, 248, 56, 14); tc.fill();
+    tc.strokeStyle = '#a86fd6'; tc.lineWidth = 3; tc.stroke();
+    tc.fillStyle = '#c0a0ff'; tc.font = '700 24px Fredoka, sans-serif';
+    tc.textAlign = 'center'; tc.textBaseline = 'middle'; tc.fillText('Bo', 128, 32);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false }));
+    tag.position.y = 3.2; tag.scale.set(2, 0.5, 1); g.add(tag);
+    // Quest indicator — floating exclamation mark
+    const qCv = document.createElement('canvas'); qCv.width = 64; qCv.height = 64;
+    const qc = qCv.getContext('2d');
+    qc.fillStyle = '#ffd24a'; qc.font = '700 48px Fredoka, sans-serif';
+    qc.textAlign = 'center'; qc.textBaseline = 'middle'; qc.fillText('!', 32, 32);
+    A.boQuestMark = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(qCv), depthTest: false }));
+    A.boQuestMark.position.y = 4; A.boQuestMark.scale.set(0.6, 0.6, 1);
+    g.add(A.boQuestMark);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.boModel = g;
+    A.boPos = { x, z };
+  },
+
+  talkToBo() {
+    const A = this;
+    if (A.dialogueOpen) return;
+    A.dialogueOpen = true;
+    // Dialogue depends on tutorial state and game state
+    const hasZone = A.portalData && A.portalData.zone;
+    const hasSlept = A.portalData && A.portalData.lastSleep;
+    const rupees = A.portalData ? A.portalData.rupees || 0 : 0;
+    const houseTier = A.portalData ? A.portalData.houseTier || 0 : 0;
+
+    let lines = [];
+    if (A.tutorialStep <= 2 || !hasZone) {
+      // First meeting — explain the world
+      lines = [
+        { name: 'Bo', text: 'Hey there! Welcome to Portal Life. I\'m Bo, your guide to this world.' },
+        { name: 'Bo', text: 'Here, you earn Rupees by working jobs — dog walking, factory work, shop assistant, office work.' },
+        { name: 'Bo', text: 'You use Rupees to upgrade your house, buy furniture, and even buy House Eggs that hatch into pets!' },
+        { name: 'Bo', text: 'The rarest pet is the Work Work Work Bear — it gives you a 10x Rupee multiplier. Only 1% chance though!' },
+        { name: 'Bo', text: 'First things first — choose a district to live in. Beach is relaxing, City is bustling. Pick what you like!' },
+      ];
+    } else if (A.tutorialStep >= 6 && A.tutorialStep <= 7 && rupees === 0) {
+      // Guide to jobs
+      lines = [
+        { name: 'Bo', text: 'Ready to earn some Rupees? Head to the Job Board or walk to the Dog Park to start working.' },
+        { name: 'Bo', text: 'Dog walking is the easiest — just walk the dog to the glowing markers. Try it!' },
+      ];
+    } else if (rupees > 0 && houseTier === 0) {
+      // Guide to upgrade
+      lines = [
+        { name: 'Bo', text: 'Nice work! You\'ve earned ' + rupees + ' Rupees. Talk to Builder Bob to upgrade your house!' },
+        { name: 'Bo', text: 'A bigger house means more space and better living. Keep working to afford the Grand Mansion!' },
+      ];
+    } else if (houseTier > 0) {
+      // Returning player
+      lines = [
+        { name: 'Bo', text: 'Hey, good to see you again! Your house is looking great.' },
+        { name: 'Bo', text: 'Keep working those jobs to earn more Rupees. Don\'t forget about the House Egg shop!' },
+      ];
+    } else {
+      lines = [
+        { name: 'Bo', text: 'Hey! How\'s it going? Explore the district, work jobs, and build your dream home.' },
+        { name: 'Bo', text: 'If you need help, just come talk to me!' },
+      ];
+    }
+
+    let lineIdx = 0;
+    const dlg = document.getElementById('npcDialogue');
+    const showLine = () => {
+      if (lineIdx >= lines.length) { A.closeDialogue(); return; }
+      const line = lines[lineIdx];
+      document.getElementById('npcName').textContent = line.name;
+      document.getElementById('npcText').textContent = line.text;
+      const respEl = document.getElementById('npcResponses');
+      if (lineIdx < lines.length - 1) {
+        respEl.innerHTML = '<button class="npcContinue" id="dlgNext">Continue ▸</button>';
+        document.getElementById('dlgNext').onclick = () => { lineIdx++; showLine(); };
+      } else {
+        respEl.innerHTML = '<button class="npcContinue" id="dlgClose">Got it!</button>';
+        document.getElementById('dlgClose').onclick = () => A.closeDialogue();
+      }
+    };
+    showLine();
+    dlg.classList.add('on');
+    if (typeof AudioSys !== 'undefined') AudioSys.play('click');
+
+    // Advance tutorial if at "Meet Bo" step
+    if (A.tutorialStep === 2) {
+      setTimeout(() => A.advanceTutorial(), 500);
+    }
+  },
+
+  closeDialogue() {
+    const A = this;
+    A.dialogueOpen = false;
+    document.getElementById('npcDialogue').classList.remove('on');
+  },
+
+  startTutorial() {
+    const A = this;
+    // First-time player = no sleep yet + no rupees = full tutorial
+    const hasSlept = A.portalData && A.portalData.lastSleep;
+    const hasRupees = A.portalData && (A.portalData.rupees || 0) > 0;
+    if (!hasSlept && !hasRupees) {
+      // Brand new player — start tutorial at step 2 (meet Bo, since they already picked a house)
+      A.tutorialStep = 2;
+    } else {
+      // Returning player — tutorial done
+      A.tutorialStep = 99;
+    }
+    A.updateObjective();
+  },
+
+  advanceTutorial() {
+    const A = this;
+    if (A.tutorialStep < 0 || A.tutorialStep >= 10) return;
+    A.tutorialStep++;
+    A.updateObjective();
+    if (A.tutorialStep === 11) {
+      A.tutorialStep = 99;
+      if (typeof toast === 'function') toast('Tutorial complete! Enjoy your new life!', 'quest');
+    }
+  },
+
+  updateObjective() {
+    const A = this;
+    const ot = document.getElementById('objectiveTracker');
+    if (!ot) return;
+    if (A.tutorialStep < 0 || A.tutorialStep >= 99) {
+      ot.classList.remove('on');
+      A.setWaypoint(null);
+      return;
+    }
+    const step = A.TUTORIAL_STEPS[A.tutorialStep];
+    if (!step) { ot.classList.remove('on'); return; }
+    ot.classList.add('on');
+    document.getElementById('otStep').textContent = 'Step ' + (A.tutorialStep + 1) + ' / 11';
+    document.getElementById('otTitle').textContent = step.title;
+    document.getElementById('otDesc').textContent = step.desc;
+    document.getElementById('otProgress').textContent = step.progress || '';
+
+    // Set waypoint based on step
+    if (A.tutorialStep === 2 && A.boPos) A.setWaypoint(A.boPos);
+    else if (A.tutorialStep === 4 && A.doorPos) A.setWaypoint(A.doorPos);
+    else if (A.tutorialStep === 6 && A.jobBoardPos) A.setWaypoint(A.jobBoardPos);
+    else if (A.tutorialStep === 8 && A.upgradeNpcPos) A.setWaypoint(A.upgradeNpcPos);
+    else if (A.tutorialStep === 9 && A.eggShopPos) A.setWaypoint(A.eggShopPos);
+    else A.setWaypoint(null);
+
+    // Skip button
+    const skip = document.getElementById('otSkip');
+    if (skip) skip.onclick = () => {
+      A.tutorialStep = 99;
+      A.updateObjective();
+      if (typeof toast === 'function') toast('Tutorial skipped. Talk to Bo if you need help!', 'info');
+    };
+  },
+
+  setWaypoint(pos) {
+    const A = this;
+    A.waypointTarget = pos;
+    const arrow = document.getElementById('waypointArrow');
+    const dist = document.getElementById('waypointDist');
+    if (!pos) { arrow.classList.remove('on'); dist.classList.remove('on'); return; }
+    arrow.classList.add('on');
+    dist.classList.add('on');
+  },
+
+  updateWaypoint() {
+    const A = this;
+    if (!A.waypointTarget || !A.zonePlayer) return;
+    const dx = A.waypointTarget.x - A.zonePlayer.x;
+    const dz = A.waypointTarget.z - A.zonePlayer.z;
+    const d = Math.hypot(dx, dz);
+    const arrow = document.getElementById('waypointArrow');
+    const dist = document.getElementById('waypointDist');
+    if (d < 3) { arrow.classList.remove('on'); dist.classList.remove('on'); return; }
+    arrow.classList.add('on'); dist.classList.add('on');
+    // Point arrow towards target (simplified — just show distance)
+    dist.textContent = Math.round(d) + 'm';
+    // Hide if in interior
+    if (A.inInterior) { arrow.classList.remove('on'); dist.classList.remove('on'); }
+  },
+
   makePlayerAvatar() {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: 0x4f8a5c });
@@ -5267,6 +5536,7 @@ const Portal = {
 
   interact() {
     const A = this;
+    if (A.nearBo) { A.talkToBo(); return; }
     if (A.nearDoor) { A.enterInterior(); return; }
     if (A.nearReturn) { A.exitZone(); return; }
     if (A.nearJobBoard) { A.openJobBoard(); return; }
@@ -5297,15 +5567,15 @@ const Portal = {
     A.interiorScene.add(new THREE.AmbientLight(0xfff0d0, 0.6));
     const ceil = new THREE.PointLight(0xffe8a0, 1.5, 20); ceil.position.set(0, 4, 0); A.interiorScene.add(ceil);
     // Floor
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; A.interiorScene.add(floor);
-    // Walls
+    // Walls — bigger interior (16x16)
     const wallMat = new THREE.MeshLambertMaterial({ color: 0xe0d0b0 });
     const walls = [
-      { p: [0, 2, -6], s: [12, 4, 0.2] }, // back
-      { p: [0, 2, 6], s: [12, 4, 0.2] },  // front
-      { p: [-6, 2, 0], s: [0.2, 4, 12] }, // left
-      { p: [6, 2, 0], s: [0.2, 4, 12] },  // right
+      { p: [0, 2.5, -8], s: [16, 5, 0.2] }, // back
+      { p: [0, 2.5, 8], s: [16, 5, 0.2] },  // front
+      { p: [-8, 2.5, 0], s: [0.2, 5, 16] }, // left
+      { p: [8, 2.5, 0], s: [0.2, 5, 16] },  // right
     ];
     walls.forEach(w => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(...w.s), wallMat);
@@ -5342,6 +5612,9 @@ const Portal = {
     // Start interior render
     A.startInteriorRender();
     if (typeof toast === 'function') toast('Entered your home. Walk to the bed to sleep.', 'info');
+    // Advance tutorial — entered house
+    if (A.tutorialStep === 4) A.advanceTutorial();
+    if (A.tutorialStep === 3) { A.tutorialStep = 5; A.updateObjective(); }
   },
 
   startInteriorRender() {
@@ -5366,8 +5639,8 @@ const Portal = {
           const wz = -mx * Math.sin(cy) + mz * Math.cos(cy);
           let nx = A.interiorPlayer.x + wx * sp * dt;
           let nz = A.interiorPlayer.z + wz * sp * dt;
-          // Wall collision
-          nx = Math.max(-5, Math.min(5, nx)); nz = Math.max(-5, Math.min(5, nz));
+          // Wall collision — bigger interior
+          nx = Math.max(-7, Math.min(7, nx)); nz = Math.max(-7, Math.min(7, nz));
           A.interiorPlayer.x = nx; A.interiorPlayer.z = nz;
           A.interiorPlayer.ry = Math.atan2(wx, wz);
         }
@@ -5393,7 +5666,7 @@ const Portal = {
       const nearBedInt = A.interiorBedPos && Math.hypot(px - A.interiorBedPos.x, pz - A.interiorBedPos.z) < 2.5;
       const el = document.getElementById('portalZonePrompt');
       // Check near door (front wall center)
-      const nearDoorInt = pz > 4.5 && Math.abs(px) < 1.5;
+      const nearDoorInt = pz > 6.5 && Math.abs(px) < 1.5;
       if (nearBedInt) { el.innerHTML = '<b>[E]</b> Sleep (+50 Rupees)'; el.classList.add('on'); A._interactTarget = 'sleep'; }
       else if (nearDoorInt) { el.innerHTML = '<b>[E]</b> Exit house'; el.classList.add('on'); A._interactTarget = 'exit'; }
       else { el.classList.remove('on'); A._interactTarget = null; }
@@ -5472,6 +5745,8 @@ const Portal = {
         }
       }
       A.checkProximity();
+      A.updateWaypoint();
+      if (A.boQuestMark) A.boQuestMark.position.y = 4 + Math.sin(t * 3) * 0.2;
       if (A.zoneOcean) A.zoneOcean.position.y = 0.005 + Math.sin(t * 1.5) * 0.05;
       A.zoneRenderer.render(A.zoneScene, A.zoneCamera);
       A.zoneRAF = requestAnimationFrame(loop);
@@ -5489,13 +5764,15 @@ const Portal = {
     A.nearJobBoard = dist(A.jobBoardPos) < 3;
     A.nearUpgrade = dist(A.upgradeNpcPos) < 3;
     A.nearEggShop = dist(A.eggShopPos) < 3;
+    A.nearBo = dist(A.boPos) < 3;
     A.nearDogPark = dist(A.dogParkPos) < 6;
     A.nearFactory = dist(A.factoryPos) < 5;
     A.nearShop = dist(A.shopPos) < 5;
     A.nearOffice = dist(A.officePos) < 5;
     const el = document.getElementById('portalZonePrompt');
     let txt = '';
-    if (A.nearDoor) txt = '<b>[E]</b> Enter your house';
+    if (A.nearBo) txt = '<b>[E]</b> Talk to Bo';
+    else if (A.nearDoor) txt = '<b>[E]</b> Enter your house';
     else if (A.nearReturn) txt = '<b>[E]</b> Return to Farm World';
     else if (A.nearJobBoard) txt = '<b>[E]</b> View Job Board';
     else if (A.nearUpgrade) txt = '<b>[E]</b> Talk to Builder Bob';
@@ -5516,6 +5793,8 @@ const Portal = {
     setTimeout(() => { fade.style.opacity = '1'; }, 50);
     setTimeout(() => { fade.style.opacity = '0'; setTimeout(() => fade.remove(), 1000); }, 2500);
     if (typeof AudioSys !== 'undefined') AudioSys.play('emote');
+    // Advance tutorial — slept
+    if (A.tutorialStep === 6) A.advanceTutorial();
   },
 
   exitZone() {
@@ -5526,9 +5805,14 @@ const Portal = {
     A.disposeWorld();
     document.getElementById('portalZone').classList.remove('on');
     document.getElementById('portalZonePrompt').classList.remove('on');
+    document.getElementById('objectiveTracker').classList.remove('on');
+    document.getElementById('waypointArrow').classList.remove('on');
+    document.getElementById('waypointDist').classList.remove('on');
+    document.getElementById('npcDialogue').classList.remove('on');
     document.getElementById('hud').style.display = '';
     document.getElementById('topnav').style.display = '';
     A.isVisiting = false;
+    A.dialogueOpen = false;
     if (typeof player !== 'undefined') { player.x = A.portalPos.x + 4; player.z = A.portalPos.z + 4; player.y = 0; player.vy = 0; }
   },
 
@@ -6347,6 +6631,21 @@ window.TimerCtrl={
  <button class="hoOk" id="hoOk">Collect</button>
 </div>
 <div id="petPanel"><div id="petPanelCard"></div></div>
+<!-- NPC Dialogue + Objective Tracker + Waypoint -->
+<div id="npcDialogue">
+ <div id="npcName"></div>
+ <div id="npcText"></div>
+ <div id="npcResponses"></div>
+</div>
+<div id="objectiveTracker">
+ <div id="otStep"></div>
+ <div id="otTitle"></div>
+ <div id="otDesc"></div>
+ <div id="otProgress"></div>
+ <div id="otSkip">Skip tutorial</div>
+</div>
+<div id="waypointArrow">➤</div>
+<div id="waypointDist"></div>
 <!-- ============ RESTOCK BANNER ============ -->
 <div id="restockBanner">
  <div class="rbIcon">🌱</div>
