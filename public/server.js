@@ -822,11 +822,8 @@ const server=http.createServer((req,res)=>{
   fs.readFile(path.join(__dirname,'index.html'),(e,buf)=>{
    if(e){res.writeHead(500);return res.end('index.html missing');}
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(buf);});return;}
- const isModel=path.extname(url).toLowerCase()==='.glb';
- const fp=isModel
-  ?path.join(path.dirname(__dirname),path.basename(url))
-  :path.join(__dirname,path.normalize(url).replace(/^([/\\]|\.\.)+/g,''));
- if((isModel?path.dirname(fp)===path.dirname(__dirname):fp.startsWith(__dirname))&&fs.existsSync(fp)&&fs.statSync(fp).isFile()){
+ const fp=path.join(__dirname,path.normalize(url).replace(/^([/\\]|\.\.)+/g,''));
+ if(fp.startsWith(__dirname)&&fs.existsSync(fp)&&fs.statSync(fp).isFile()){
   const ext=path.extname(fp).toLowerCase();
   const mime={'.js':'text/javascript','.html':'text/html; charset=utf-8','.css':'text/css',
    '.ico':'image/x-icon','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'}[ext]||'application/octet-stream';

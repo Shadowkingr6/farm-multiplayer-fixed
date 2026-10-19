@@ -474,6 +474,65 @@ input[type=color]{padding:2px;width:52px;height:38px;cursor:pointer}
  animation:spookyFlick 3s infinite}
 #act2Banner .a2sub{font-family:'Fredoka';font-size:14px;letter-spacing:.4em;color:#d86040;
  text-transform:uppercase;margin-top:8px}
+/* ============ MOBILE TOUCH CONTROLS ============ */
+/* Only show on touch devices — JS toggles the .touch class on <html> */
+#mobileControls{display:none}
+html.touch #mobileControls{display:block}
+html.touch #c3d{cursor:default}
+html.touch #topnav{top:auto;bottom:0;padding:4px 5px}
+html.touch #topnav button{padding:10px 18px;font-size:13px}
+html.touch #bottomLeft{left:8px;bottom:60px}
+html.touch #hotbar{bottom:70px;transform:translateX(-50%) scale(.9);transform-origin:bottom center}
+html.touch .hbSlot{width:52px;height:52px}
+html.touch #passBtn{width:170px;padding:8px 12px}
+html.touch #passBtn .t b{font-size:15px}
+html.touch #gameShopBtn{padding:8px 12px}
+html.touch #questHint{display:none}
+html.touch #introCard .logo{font-size:64px}
+html.touch .iKeys{display:none}
+html.touch #introCard .iField{padding:18px 22px}
+html.touch #introCard .iField label{font-size:16px}
+html.touch #nameIn{font-size:17px;padding:10px}
+html.touch #startBtn{font-size:18px;padding:11px}
+html.touch #win{width:96vw;max-height:92vh}
+html.touch .winBody{padding:14px}
+html.touch .grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+html.touch .card{padding:10px}
+html.touch .card .rname{font-size:14px}
+html.touch #adminDash{width:96vw;height:94vh}
+html.touch .admTabs button{padding:8px 10px;font-size:11px}
+html.touch .seedCfgRow{grid-template-columns:1fr;gap:6px}
+html.touch .seedCfgRow .sname{font-size:12px}
+/* Joystick */
+#mJoy{position:fixed;left:20px;bottom:90px;width:130px;height:130px;z-index:75;
+ border-radius:50%;background:radial-gradient(circle,#00000044,#00000022);
+ border:2px solid #ffffff33;touch-action:none;user-select:none;-webkit-user-select:none}
+#mJoyKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;
+ border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9a9a9a 60%,#5a5a5a);
+ border:2px solid #ffffff66;box-shadow:0 4px 12px #0007;pointer-events:none;
+ transition:transform .05s linear}
+#mJoyKnob.active{transition:none}
+/* Action buttons (right side) */
+#mActions{position:fixed;right:20px;bottom:90px;z-index:75;display:flex;flex-direction:column;gap:12px;align-items:flex-end}
+.mBtn{width:72px;height:72px;border-radius:50%;border:2px solid #ffffff44;
+ background:radial-gradient(circle at 35% 30%,#000000aa,#00000066);
+ color:#fff;font-family:'Fredoka';font-size:13px;font-weight:700;
+ display:flex;align-items:center;justify-content:center;text-align:center;
+ touch-action:none;user-select:none;-webkit-user-select:none;
+ box-shadow:0 4px 12px #0007;backdrop-filter:blur(4px)}
+.mBtn:active{transform:scale(.92);background:radial-gradient(circle at 35% 30%,#000000cc,#00000088)}
+.mBtn.interact{background:radial-gradient(circle at 35% 30%,#e8a33d,#8a5a10);color:#fff}
+.mBtn.interact:active{background:radial-gradient(circle at 35% 30%,#ffd060,#a06a10)}
+.mBtn.jump{background:radial-gradient(circle at 35% 30%,#4f9a5c,#1e3d26);color:#fff}
+.mBtn.jump:active{background:radial-gradient(circle at 35% 30%,#6fc07c,#2a5a36)}
+.mBtn.menu{width:54px;height:54px;font-size:11px;background:radial-gradient(circle at 35% 30%,#44335e,#1a0e2a)}
+.mBtn.menu:active{background:radial-gradient(circle at 35% 30%,#5a4378,#241038)}
+#mActionRow{display:flex;gap:10px;align-items:center}
+/* Camera drag hint zone (right half of screen, above the buttons) */
+#mCamZone{position:fixed;right:0;top:0;width:50%;height:70%;z-index:70;touch-action:none}
+/* Top-right menu buttons (inventory, map, admin) */
+#mMenu{position:fixed;right:12px;top:12px;z-index:76;display:flex;gap:8px}
+#mMenu .mBtn{width:50px;height:50px;font-size:18px}
 </style>
 </head>
 <body>
@@ -3570,6 +3629,9 @@ function animate(){
  if(ST.me&&!UI.anyOpen()&&!typing&&!inputLocked){
   let mx=0,mz=0;
   if(keys.KeyW)mz-=1;if(keys.KeyS)mz+=1;if(keys.KeyA)mx-=1;if(keys.KeyD)mx+=1;
+  /* merge mobile joystick input (analog) — clamps to [-1,1] */
+  if(window.mobileInput&&(mobileInput.mx||mobileInput.mz)){mx+=mobileInput.mx;mz+=mobileInput.mz;
+   mx=Math.max(-1,Math.min(1,mx));mz=Math.max(-1,Math.min(1,mz));}
   const sp=keys.ShiftLeft||keys.ShiftRight?player.sprint:player.speed;
   if(mx||mz){
    const len=Math.hypot(mx,mz);mx/=len;mz/=len;
@@ -3585,7 +3647,7 @@ function animate(){
    player.ry=Math.atan2(wx,wz);
    player.walkT+=dt*(sp/6)*9;
   }else player.walkT*=.8;
-  if(keys.Space&&player.y<=((typeof Act2!=='undefined'&&Act2.groundHeightAt)?Act2.groundHeightAt(player.x,player.z,player.y):0)+.05)player.vy=6.5;}
+  if((keys.Space||(window.mobileInput&&mobileInput.jump))&&player.y<=((typeof Act2!=='undefined'&&Act2.groundHeightAt)?Act2.groundHeightAt(player.x,player.z,player.y):0)+.05)player.vy=6.5;}
  player.vy-=18*dt;
  const _groundY=(typeof Act2!=='undefined'&&Act2.groundHeightAt)?Act2.groundHeightAt(player.x,player.z,player.y):0;
  player.y=Math.max(_groundY,player.y+player.vy*dt);if(player.y<=_groundY+.001)player.vy=Math.max(0,player.vy);
@@ -3756,6 +3818,199 @@ function animate(){
 const savedName=localStorage.getItem('farm_name');
 if(savedName)$('#nameIn').value=savedName;
 animate();
+/* ============================================================
+   MOBILE TOUCH CONTROLS — self-initializing
+   Only activates on touch devices. Mirrors keyboard input.
+   ============================================================ */
+(function(){
+ 'use strict';
+ /* Detect touch device — only show controls if the primary input is touch */
+ const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+ if(!isTouch)return;
+ /* Also check pointer: coarse means touch is primary (phone/tablet) */
+ const coarse=window.matchMedia&&window.matchMedia('(pointer: coarse)').matches;
+ if(!coarse)return;
+ document.documentElement.classList.add('touch');
+ /* Wait for the mobile control HTML elements to be in the DOM (they're added after this script) */
+ function init(){
+  const joyCheck=document.getElementById('mJoy');
+  if(!joyCheck){setTimeout(init,50);return;}
+  run();
+ }
+ function run(){
+
+ /* mobileInput mirrors keyboard state for movement + jump */
+ window.mobileInput={mx:0,mz:0,jump:false};
+
+ const joy=document.getElementById('mJoy');
+ const knob=document.getElementById('mJoyKnob');
+ const joyR=50; /* max knob travel radius (px) from center */
+ let joyActive=false,joyId=null,joyCX=0,joyCY=0;
+
+ function joyStart(e){
+  e.preventDefault();
+  const t=e.changedTouches?e.changedTouches[0]:e;
+  joyId=t.identifier!==undefined?t.identifier:'mouse';
+  const rect=joy.getBoundingClientRect();
+  joyCX=rect.left+rect.width/2;
+  joyCY=rect.top+rect.height/2;
+  joyActive=true;
+  knob.classList.add('active');
+  joyMove(e);
+ }
+ function joyMove(e){
+  if(!joyActive)return;
+  e.preventDefault();
+  let t=null;
+  if(e.changedTouches){for(const ct of e.changedTouches){if(ct.identifier===joyId){t=ct;break;}}}
+  else t=e;
+  if(!t)return;
+  let dx=t.clientX-joyCX,dy=t.clientY-joyCY;
+  const d=Math.hypot(dx,dy);
+  if(d>joyR){dx=dx/d*joyR;dy=dy/d*joyR;}
+  knob.style.transform='translate('+(dx-0)+'px,'+(dy-0)+'px)';
+  /* convert to normalized -1..1, invert Y so up = forward (mz negative) */
+  mobileInput.mx=dx/joyR;
+  mobileInput.mz=dy/joyR;
+ }
+ function joyEnd(e){
+  if(!joyActive)return;
+  if(e.changedTouches){let match=false;
+   for(const ct of e.changedTouches){if(ct.identifier===joyId){match=true;break;}}
+   if(!match)return;}
+  joyActive=false;joyId=null;
+  knob.classList.remove('active');
+  knob.style.transform='translate(0,0)';
+  mobileInput.mx=0;mobileInput.mz=0;
+ }
+ joy.addEventListener('touchstart',joyStart,{passive:false});
+ joy.addEventListener('touchmove',joyMove,{passive:false});
+ joy.addEventListener('touchend',joyEnd,{passive:false});
+ joy.addEventListener('touchcancel',joyEnd,{passive:false});
+ /* mouse fallback for testing */
+ joy.addEventListener('mousedown',joyStart);
+ addEventListener('mousemove',e=>{if(joyActive&&joyId==='mouse')joyMove(e);});
+ addEventListener('mouseup',e=>{if(joyActive&&joyId==='mouse')joyEnd(e);});
+
+ /* Jump button — press = jump, release = stop */
+ const btnJump=document.getElementById('mBtnJump');
+ if(btnJump){
+  const jumpDown=e=>{e.preventDefault();mobileInput.jump=true;};
+  const jumpUp=e=>{e.preventDefault();mobileInput.jump=false;};
+  btnJump.addEventListener('touchstart',jumpDown,{passive:false});
+  btnJump.addEventListener('touchend',jumpUp,{passive:false});
+  btnJump.addEventListener('touchcancel',jumpUp,{passive:false});
+  btnJump.addEventListener('mousedown',jumpDown);
+  btnJump.addEventListener('mouseup',jumpUp);
+  btnJump.addEventListener('mouseleave',jumpUp);
+ }
+
+ /* Interact button — triggers tryInteract() once per tap */
+ const btnInteract=document.getElementById('mBtnInteract');
+ if(btnInteract){
+  const tap=e=>{
+   e.preventDefault();
+   if(typeof tryInteract==='function')tryInteract();
+  };
+  btnInteract.addEventListener('touchstart',tap,{passive:false});
+  btnInteract.addEventListener('mousedown',tap);
+ }
+
+ /* Menu buttons — open inventory + map */
+ const btnInv=document.getElementById('mBtnInv');
+ if(btnInv){
+  const tap=e=>{e.preventDefault();if(typeof UI!=='undefined'&&UI.toggle)UI.toggle('inv');};
+  btnInv.addEventListener('touchstart',tap,{passive:false});
+  btnInv.addEventListener('mousedown',tap);
+ }
+ const btnMap=document.getElementById('mBtnMap');
+ if(btnMap){
+  const tap=e=>{e.preventDefault();if(typeof UI!=='undefined'&&UI.toggleMap)UI.toggleMap();};
+  btnMap.addEventListener('touchstart',tap,{passive:false});
+  btnMap.addEventListener('mousedown',tap);
+ }
+
+ /* Camera drag — touch on the right half of the screen rotates the camera */
+ const camZone=document.getElementById('mCamZone');
+ let camDrag=false,camId=null,camLX=0,camLY=0;
+ function camStart(e){
+  e.preventDefault();
+  const t=e.changedTouches?e.changedTouches[0]:e;
+  camId=t.identifier!==undefined?t.identifier:'mouse';
+  camLX=t.clientX;camLY=t.clientY;
+  camDrag=true;
+ }
+ function camMove(e){
+  if(!camDrag)return;
+  e.preventDefault();
+  let t=null;
+  if(e.changedTouches){for(const ct of e.changedTouches){if(ct.identifier===camId){t=ct;break;}}}
+  else t=e;
+  if(!t)return;
+  if(typeof Cin==='undefined'||Cin.active||IntroSeq.active)return;
+  cam.yaw-=(t.clientX-camLX)*.005;
+  cam.pitch=Math.max(-.62,Math.min(1.52,cam.pitch+(t.clientY-camLY)*.004));
+  camLX=t.clientX;camLY=t.clientY;
+ }
+ function camEnd(e){
+  if(!camDrag)return;
+  if(e.changedTouches){let match=false;
+   for(const ct of e.changedTouches){if(ct.identifier===camId){match=true;break;}}
+   if(!match)return;}
+  camDrag=false;camId=null;
+ }
+ if(camZone){
+  camZone.addEventListener('touchstart',camStart,{passive:false});
+  camZone.addEventListener('touchmove',camMove,{passive:false});
+  camZone.addEventListener('touchend',camEnd,{passive:false});
+  camZone.addEventListener('touchcancel',camEnd,{passive:false});
+ }
+
+ /* Pinch-to-zoom — two-finger gesture anywhere on the canvas */
+ let pinchInitDist=0,pinchInitCamDist=0;
+ const canvas3d=document.getElementById('c3d');
+ canvas3d.addEventListener('touchstart',e=>{
+  if(e.touches.length===2){
+   e.preventDefault();
+   const dx=e.touches[0].clientX-e.touches[1].clientX;
+   const dy=e.touches[0].clientY-e.touches[1].clientY;
+   pinchInitDist=Math.hypot(dx,dy);
+   pinchInitCamDist=cam.dist;
+  }
+ },{passive:false});
+ canvas3d.addEventListener('touchmove',e=>{
+  if(e.touches.length===2&&pinchInitDist>0){
+   e.preventDefault();
+   const dx=e.touches[0].clientX-e.touches[1].clientX;
+   const dy=e.touches[0].clientY-e.touches[1].clientY;
+   const d=Math.hypot(dx,dy);
+   const ratio=pinchInitDist/d;
+   cam.dist=Math.max(3,Math.min(22,pinchInitCamDist*ratio));
+  }
+ },{passive:false});
+ canvas3d.addEventListener('touchend',e=>{
+  if(e.touches.length<2){pinchInitDist=0;}
+ },{passive:false});
+
+ /* Prevent the page from scrolling/bouncing when touching the canvas */
+ canvas3d.addEventListener('touchmove',e=>{
+  if(e.touches.length<2)e.preventDefault();
+ },{passive:false});
+
+ /* Prevent double-tap zoom on buttons */
+ document.querySelectorAll('.mBtn,#mJoy').forEach(el=>{
+  let lastTap=0;
+  el.addEventListener('touchend',e=>{
+   const now=Date.now();
+   if(now-lastTap<300){e.preventDefault();}
+   lastTap=now;
+  },{passive:false});
+ });
+
+ console.log('[Mobile] Touch controls initialized (coarse pointer detected).');
+ } /* end run() */
+ init();
+})();
 </script>
 <!-- ============ ACT 2: THE DESCENT — HTML OVERLAYS ============ -->
 <div id="maintOv"><div id="maintCard">
@@ -3804,6 +4059,21 @@ animate();
  <div class="a2s1">Season 1</div>
  <div class="a2sp">THE DESCENT</div>
  <div class="a2sub">act 2 begins</div>
+</div>
+<!-- ============ MOBILE TOUCH CONTROLS ============ -->
+<div id="mobileControls">
+ <div id="mCamZone"></div>
+ <div id="mMenu">
+  <button class="mBtn menu" id="mBtnInv" title="Inventory">🎒</button>
+  <button class="mBtn menu" id="mBtnMap" title="Map">🗺</button>
+ </div>
+ <div id="mJoy"><div id="mJoyKnob"></div></div>
+ <div id="mActions">
+  <div id="mActionRow">
+   <button class="mBtn jump" id="mBtnJump">JUMP</button>
+   <button class="mBtn interact" id="mBtnInteract">[E]<br>USE</button>
+  </div>
+ </div>
 </div>
 <script>
 /* ============================================================
