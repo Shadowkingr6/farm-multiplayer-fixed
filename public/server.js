@@ -220,8 +220,18 @@ const SKINS={spooky:{n:'Spooky Farmer'},wraith:{n:'Wraith Farmer'},bonelord:{n:'
  pumpkinking:{n:'Pumpkin King'},plague:{n:'Plague Doctor'},voidreaper:{n:'Void Reaper'},eternalnight:{n:'Eternal Night'}};
 const COSMETICS=[
  {id:'pumpkin_head',n:'Pumpkin Head',rar:'Rare',pr:50000},{id:'witch_hat',n:'Witch Hat',rar:'Epic',pr:75000},
- {id:'skull_mask',n:'Skull Mask',rar:'Epic',pr:100000},{id:'spectral_aura',n:'Spectral Aura',rar:'Legendary',pr:200000}];
+ {id:'skull_mask',n:'Skull Mask',rar:'Epic',pr:100000},{id:'spectral_aura',n:'Spectral Aura',rar:'Legendary',pr:200000},
+ {id:'crown',n:'Golden Crown',rar:'Legendary',pr:150000},{id:'top_hat',n:'Top Hat',rar:'Epic',pr:80000},
+ {id:'halo',n:'Holy Halo',rar:'Mythical',pr:300000},{id:'demon_horns',n:'Demon Horns',rar:'Demon',pr:250000}];
 const COS_MAP=Object.fromEntries(COSMETICS.map(c=>[c.id,c]));
+/* ===== CHARACTER BODY SKINS (full model replacements) ===== */
+const CHAR_BODIES=[
+ {id:'farmer',n:'Farmer',rar:'Common',pr:0},
+ {id:'skeleton',n:'Spooky Skeleton',rar:'Rare',pr:50000},
+ {id:'ghost',n:'Ghost',rar:'Epic',pr:80000},
+ {id:'vampire',n:'Vampire',rar:'Epic',pr:100000},
+ {id:'mummy',n:'Mummy',rar:'Rare',pr:60000}];
+const CHAR_BODY_MAP=Object.fromEntries(CHAR_BODIES.map(b=>[b.id,b]));
 const FREE_REWARDS={1:{cash:500},2:{emote:'pass_salute'},3:{cash:1000},4:{cash:2500},5:{relics:1},
  6:{emote:'pass_drift'},7:{cash:5000},8:{cash:7500},9:{cash:10000},10:{pet:'demoneye'},
  11:{cash:25000},12:{relics:1},13:{emote:'pass_curse'},14:{cash:50000},15:{skin:'spooky'},
@@ -265,6 +275,9 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  passXP:p.passXP||0,passLevel:p.passLevel||1,freeClaimed:p.freeClaimed||[],goldOwned:!!p.goldOwned,goldClaimed:p.goldClaimed||[],
  emotes:p.emotes||{},skins:p.skins||{},activeSkin:p.activeSkin||null,
  cosmetics:p.cosmetics||{},activeCosmetic:p.activeCosmetic||null,
+ charBody:p.charBody||'farmer',charHat:p.charHat||null,
+ charShirt:p.charShirt||0x4f8a5c,charPants:p.charPants||0x4a5a7a,charSkinCol:p.charSkinCol||0xe8b48a,
+ ownedCharBodies:p.ownedCharBodies||['farmer'],
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
@@ -304,6 +317,10 @@ function load(){let raw=null;
   for(const p of d.players||[]){
    if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
    if(p.lastAlienTry===undefined)p.lastAlienTry=0;if(p.deciderBought===undefined)p.deciderBought=false;
+   if(!p.charBody)p.charBody='farmer';if(!p.charHat)p.charHat=null;
+   if(p.charShirt===undefined)p.charShirt=0x4f8a5c;if(p.charPants===undefined)p.charPants=0x4a5a7a;
+   if(p.charSkinCol===undefined)p.charSkinCol=0xe8b48a;
+   if(!p.ownedCharBodies)p.ownedCharBodies=['farmer'];
    if(!p.gear.includes('shovel'))p.gear.push('shovel');
    G.players.set(p.id,p);if(p.plot>=0&&p.plot<6)G.plots[p.plot]=p.id;}
   const el=Math.min(Date.now()-(d.savedAt||Date.now()),12*3600*1000);
@@ -316,6 +333,7 @@ function newPlayer(id,name){let plot=G.plots.findIndex(o=>o===null);if(plot<0)pl
  quests:[],daily:{last:'',streak:0},discovered:{seeds:['carrot'],muts:[],pets:[]},
  passXP:0,passLevel:1,freeClaimed:[],goldOwned:false,goldClaimed:[],
  emotes:{},skins:{},activeSkin:null,cosmetics:{},activeCosmetic:null,
+ charBody:'farmer',charHat:null,charShirt:0x4f8a5c,charPants:0x4a5a7a,charSkinCol:0xe8b48a,ownedCharBodies:['farmer'],
  lastAbility:0,relicDay:'',relicDrops:0,
  bloodDrops:0,lastAlienTry:0,deciderBought:false,
  x:0,z:26,ry:0,online:false};}
@@ -574,6 +592,34 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
   case 'equipSkin':{const id=msg.skinId||null;
    if(id&&!(p.skins||{})[id])return;
    p.activeSkin=id;pushMe(p);G.dirty=true;break;}
+  /* ===== CHARACTER CUSTOMIZATION (free colors + equip body/hat) ===== */
+  case 'customizeChar':{
+   if(msg.shirt!==undefined)p.charShirt=Math.max(0,Math.min(0xffffff,+msg.shirt|0));
+   if(msg.pants!==undefined)p.charPants=Math.max(0,Math.min(0xffffff,+msg.pants|0));
+   if(msg.skinCol!==undefined)p.charSkinCol=Math.max(0,Math.min(0xffffff,+msg.skinCol|0));
+   if(msg.body!==undefined){
+    const b=String(msg.body).slice(0,20);
+    if(CHAR_BODY_MAP[b]&&(p.ownedCharBodies||['farmer']).includes(b))p.charBody=b;
+   }
+   if(msg.hat!==undefined){
+    const h=msg.hat?String(msg.hat).slice(0,30):null;
+    if(!h||(p.cosmetics||{})[h])p.charHat=h;
+   }
+   pushMe(p);G.dirty=true;
+   /* Broadcast the char update to all other players so they see the new model */
+   broadcast({t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
+   break;}
+  case 'buyCharBody':{
+   const b=CHAR_BODY_MAP[msg.bodyId];if(!b)return;
+   if((p.ownedCharBodies||['farmer']).includes(b.id))return sendTo(p.id,{t:'toast',msg:'Already owned.',kind:'err'});
+   if(p.cash<b.pr)return sendTo(p.id,{t:'toast',msg:'Not enough sheckles.',kind:'err'});
+   p.cash-=b.pr;
+   if(!p.ownedCharBodies)p.ownedCharBodies=['farmer'];
+   p.ownedCharBodies.push(b.id);
+   p.charBody=b.id;
+   pushMe(p);save();
+   broadcast({t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
+   sendTo(p.id,{t:'toast',msg:'Unlocked '+b.n+'! Equipped.',kind:'quest'});break;}
   /* ================= EXISTING GAMEPLAY ================= */
   case 'buySeed':{const sd=SEED_MAP[msg.seedId];if(!sd)return;
    const cfg=G.shopConfig[sd.id];
@@ -883,8 +929,12 @@ if(WebSocketServer){
      emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
      event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
      plots:G.plots,plotPos:PLOT_POS,
-     players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0}))}));
-    broadcast({t:'pJoin',id:p.id,name:p.name},p.id);pushPlants();return;}
+     players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
+      cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
+      ac:x.activeCosmetic||null}))}));
+    broadcast({t:'pJoin',id:p.id,name:p.name,
+     cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
+     ac:p.activeCosmetic||null},p.id);pushPlants();return;}
    try{handleMsg(sock,msg);}catch(e){console.error('[FARM] handler:',e.message);}});
   sock.on('close',()=>{if(!sock._id)return;const p=G.players.get(sock._id);if(p)p.online=false;
    broadcast({t:'pLeft',id:sock._id});save();});});

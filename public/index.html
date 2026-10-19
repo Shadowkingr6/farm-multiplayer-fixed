@@ -806,7 +806,17 @@ const COSMETICS=[
  {id:'pumpkin_head',n:'Pumpkin Head',rar:'Rare',pr:50000},
  {id:'witch_hat',n:'Witch Hat',rar:'Epic',pr:75000},
  {id:'skull_mask',n:'Skull Mask',rar:'Epic',pr:100000},
- {id:'spectral_aura',n:'Spectral Aura',rar:'Legendary',pr:200000}];
+ {id:'spectral_aura',n:'Spectral Aura',rar:'Legendary',pr:200000},
+ {id:'crown',n:'Golden Crown',rar:'Legendary',pr:150000},
+ {id:'top_hat',n:'Top Hat',rar:'Epic',pr:80000},
+ {id:'halo',n:'Holy Halo',rar:'Mythical',pr:300000},
+ {id:'demon_horns',n:'Demon Horns',rar:'Demon',pr:250000}];
+const CHAR_BODIES=[
+ {id:'farmer',n:'Farmer',rar:'Common',pr:0},
+ {id:'skeleton',n:'Spooky Skeleton',rar:'Rare',pr:50000},
+ {id:'ghost',n:'Ghost',rar:'Epic',pr:80000},
+ {id:'vampire',n:'Vampire',rar:'Epic',pr:100000},
+ {id:'mummy',n:'Mummy',rar:'Rare',pr:60000}];
 const FREE_REWARDS={1:{cash:500},2:{emote:'pass_salute'},3:{cash:1000},4:{cash:2500},5:{relics:1},
  6:{emote:'pass_drift'},7:{cash:5000},8:{cash:7500},9:{cash:10000},10:{pet:'demoneye'},
  11:{cash:25000},12:{relics:1},13:{emote:'pass_curse'},14:{cash:50000},15:{skin:'spooky'},
@@ -1439,13 +1449,146 @@ function rebuildPlayerVisual(){
  if(hi&&hi.parent)hi.parent.remove(hi);
  if(myTag&&myTag.parent)myTag.parent.remove(myTag);
  scene.remove(player.obj);disposeGroup(player.obj);
+ /* Select model based on charBody */
+ const body=ST.me.charBody||'farmer';
+ const shirt=ST.me.charShirt!==undefined?ST.me.charShirt:0x4f8a5c;
+ const pants=ST.me.charPants!==undefined?ST.me.charPants:0x4a5a7a;
+ const skinC=ST.me.charSkinCol!==undefined?ST.me.charSkinCol:0xe8b48a;
  const sk=ST.me.activeSkin&&SKINS[ST.me.activeSkin]?SKINS[ST.me.activeSkin]:null;
- player.obj=makeFarmer(sk?sk.shirt:0x4f8a5c,sk?sk.skin:0xe8b48a,sk?sk.hat:0xd8a55a,sk?sk.hair:0x6a4a2a,sk?sk.pants:0x4a5a7a);
+ if(body==='skeleton')player.obj=makeSkeleton();
+ else if(body==='ghost')player.obj=makeGhost();
+ else if(body==='vampire')player.obj=makeVampire();
+ else if(body==='mummy')player.obj=makeMummy();
+ else player.obj=makeFarmer(sk?sk.shirt:shirt,sk?sk.skin:skinC,sk?sk.hat:0xd8a55a,sk?sk.hair:0x6a4a2a,sk?sk.pants:pants);
  scene.add(player.obj);
  const P=player.obj.userData.parts;
  if(hi)P.armR.add(hi);
  if(myTag){if(myTag.parent)myTag.parent.remove(myTag);player.obj.add(myTag);}
  attachCosmetic(P);}
+/* ===== FULL BODY SKIN MODELS ===== */
+function makeSkeleton(){
+ const g=new THREE.Group(),P={};
+ const boneMat=new THREE.MeshLambertMaterial({color:0xe8e2d4});
+ const darkMat=new THREE.MeshLambertMaterial({color:0x9a9080});
+ const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat);m.castShadow=true;return m;};
+ /* Spine + ribcage torso */
+ P.torso=new THREE.Group();
+ const spine=cyl(.08,.08,1.4,0xe8e2d4,0,0,0,8);spine.castShadow=true;P.torso.add(spine);
+ for(let i=0;i<4;i++){const rib=mk(new THREE.TorusGeometry(.28,0.04,6,12,Math.PI),boneMat);
+  rib.position.y=.3-i*.22;rib.rotation.x=Math.PI/2;P.torso.add(rib);}
+ P.torso.add(mk(new THREE.SphereGeometry(.15,8,6),boneMat)).position.y=.7; /* neck top */
+ P.torso.position.y=1.55;g.add(P.torso);
+ /* Skull head */
+ P.head=mk(new THREE.SphereGeometry(.28,12,10),boneMat);P.head.position.y=2.3;
+ P.head.add(mk(new THREE.SphereGeometry(.07,6,5),darkMat)).position.set(-.1,.02,.22); /* L eye socket */
+ P.head.add(mk(new THREE.SphereGeometry(.07,6,5),darkMat)).position.set(.1,.02,.22); /* R eye socket */
+ const jaw=mk(new THREE.BoxGeometry(.22,.06,.16),boneMat);jaw.position.set(0,-.15,.18);P.head.add(jaw);
+ g.add(P.head);
+ /* Arms — thin bone cylinders */
+ P.armL=new THREE.Group();P.armL.position.set(-.35,1.9,0);
+ const armLU=mk(new THREE.CylinderGeometry(.06,.05,.5,8),boneMat);armLU.position.y=-.25;P.armL.add(armLU);
+ const armLL=mk(new THREE.CylinderGeometry(.05,.04,.5,8),boneMat);armLL.position.y=-.7;P.armL.add(armLL);
+ g.add(P.armL);
+ P.armR=P.armL.clone();P.armR.position.x=.35;g.add(P.armR);
+ /* Legs — thin bone cylinders */
+ P.legL=new THREE.Group();P.legL.position.set(-.12,1.15,0);
+ const legLU=mk(new THREE.CylinderGeometry(.07,.06,.55,8),boneMat);legLU.position.y=-.28;P.legL.add(legLU);
+ const legLL=mk(new THREE.CylinderGeometry(.06,.05,.55,8),boneMat);legLL.position.y=-.8;P.legL.add(legLL);
+ g.add(P.legL);
+ P.legR=P.legL.clone();P.legR.position.x=.12;g.add(P.legR);
+ for(const k in P){g.add(P[k]);}
+ g.userData.parts=P;return g;}
+function makeGhost(){
+ const g=new THREE.Group(),P={};
+ const ghostMat=new THREE.MeshLambertMaterial({color:0xc0d0e8,transparent:true,opacity:.65,
+  emissive:new THREE.Color(0x4060a0),emissiveIntensity:.25});
+ const mk=(geom)=>{const m=new THREE.Mesh(geom,ghostMat);m.castShadow=true;return m;};
+ /* Tapered body (no legs — ghost tail) */
+ P.legL=new THREE.Group();P.legL.position.y=.8;g.add(P.legL);
+ P.legR=P.legL.clone();g.add(P.legR);
+ /* Torso — rounded top, tapering bottom like a sheet */
+ const bodyGeom=new THREE.CylinderGeometry(.35,.55,1.8,16,4);
+ P.torso=mk(bodyGeom);P.torso.position.y=1.4;
+ /* Wavy bottom edge */
+ const wavy=new THREE.Mesh(new THREE.CylinderGeometry(.55,.45,.4,16,1,true),ghostMat);
+ wavy.position.y=.6;P.torso.add(wavy);
+ g.add(P.torso);
+ /* Head — rounded */
+ P.head=mk(new THREE.SphereGeometry(.35,14,12));P.head.position.y=2.4;
+ /* Glowing eyes */
+ const eyeMat=new THREE.MeshBasicMaterial({color:0x60a0ff});
+ const e1=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),eyeMat);e1.position.set(-.12,.02,.28);P.head.add(e1);
+ const e2=e1.clone();e2.position.x=.12;P.head.add(e2);
+ /* Dark mouth */
+ const mouth=new THREE.Mesh(new THREE.SphereGeometry(.08,6,4),new THREE.MeshBasicMaterial({color:0x101030}));
+ mouth.position.set(0,-.12,.28);mouth.scale.set(1,.6,.3);P.head.add(mouth);
+ g.add(P.head);
+ /* Arms — tapering */
+ P.armL=new THREE.Group();P.armL.position.set(-.38,1.8,0);
+ const armL1=mk(new THREE.CylinderGeometry(.07,.04,.55,8));armL1.position.y=-.28;P.armL.add(armL1);
+ g.add(P.armL);
+ P.armR=P.armL.clone();P.armR.position.x=.38;g.add(P.armR);
+ for(const k in P){g.add(P[k]);}
+ g.userData.parts=P;return g;}
+function makeVampire(){
+ const g=new THREE.Group(),P={};
+ const suitMat=new THREE.MeshLambertMaterial({color:0x1a0a1a});
+ const capeMat=new THREE.MeshLambertMaterial({color:0x3a0a0a,side:THREE.DoubleSide});
+ const skinMat=new THREE.MeshLambertMaterial({color:0xe8e0d0});
+ const shirtMat=new THREE.MeshLambertMaterial({color:0xf0f0e8});
+ const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat);m.castShadow=true;return m;};
+ P.torso=mk(new THREE.BoxGeometry(.7,.95,.42),suitMat);P.torso.position.y=1.55;g.add(P.torso);
+ /* Cape draping down the back */
+ const cape=mk(new THREE.BoxGeometry(.8,1.2,.08),capeMat);cape.position.set(0,-.1,-.26);P.torso.add(cape);
+ /* White shirt V-neck */
+ const collar=mk(new THREE.BoxGeometry(.3,.4,.08),shirtMat);collar.position.set(0,-.1,.22);P.torso.add(collar);
+ /* Head — pale */
+ P.head=mk(new THREE.BoxGeometry(.5,.5,.5),skinMat);P.head.position.y=2.36;g.add(P.head);
+ /* Red eyes */
+ P.head.add(mk(new THREE.SphereGeometry(.05,6,5),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(-.12,.04,.26);
+ P.head.add(mk(new THREE.SphereGeometry(.05,6,5),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(.12,.04,.26);
+ /* Fangs */
+ P.head.add(mk(new THREE.ConeGeometry(.03,.08,4),shirtMat)).position.set(-.06,-.12,.26);
+ P.head.add(mk(new THREE.ConeGeometry(.03,.08,4),shirtMat)).position.set(.06,-.12,.26);
+ /* Slicked-back hair */
+ P.head.add(mk(new THREE.BoxGeometry(.54,.14,.5),new THREE.MeshLambertMaterial({color:0x1a1a1a}))).position.set(0,.26,0);
+ /* Arms */
+ P.armL=mk(new THREE.BoxGeometry(.16,.68,.16),suitMat);P.armL.position.set(-.46,1.9,0);g.add(P.armL);
+ P.armR=P.armL.clone();P.armR.position.x=.46;g.add(P.armR);
+ /* Legs */
+ P.legL=mk(new THREE.BoxGeometry(.19,.75,.22),new THREE.MeshLambertMaterial({color:0x0a0a0a}));P.legL.position.set(-.15,1.14,0);g.add(P.legL);
+ P.legR=P.legL.clone();P.legR.position.x=.15;g.add(P.legR);
+ g.userData.parts=P;return g;}
+function makeMummy(){
+ const g=new THREE.Group(),P={};
+ const bandMat=new THREE.MeshLambertMaterial({color:0xd8c8a0});
+ const darkMat=new THREE.MeshLambertMaterial({color:0x6a5a40});
+ const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat||bandMat);m.castShadow=true;return m;};
+ P.torso=mk(new THREE.BoxGeometry(.7,.95,.44));P.torso.position.y=1.55;g.add(P.torso);
+ /* Bandage strips wrapping the torso */
+ for(let i=0;i<5;i++){const strip=mk(new THREE.BoxGeometry(.72,.12,.46),i%2?darkMat:bandMat);
+  strip.position.y=1.15+i*.2;g.add(strip);}
+ /* Head — wrapped */
+ P.head=mk(new THREE.BoxGeometry(.5,.5,.5));P.head.position.y=2.36;g.add(P.head);
+ for(let i=0;i<4;i++){const strip=mk(new THREE.BoxGeometry(.52,.08,.52),i%2?darkMat:bandMat);
+  strip.position.y=2.16+i*.13;g.add(strip);}
+ /* Glowing eyes through gaps */
+ P.head.add(mk(new THREE.SphereGeometry(.06,6,5),new THREE.MeshBasicMaterial({color:0xffe060}))).position.set(-.12,.02,.26);
+ P.head.add(mk(new THREE.SphereGeometry(.06,6,5),new THREE.MeshBasicMaterial({color:0xffe060}))).position.set(.12,.02,.26);
+ /* Arms — wrapped, held slightly forward */
+ P.armL=new THREE.Group();P.armL.position.set(-.46,1.9,0);
+ const armLU=mk(new THREE.BoxGeometry(.17,.4,.17));armLU.position.y=-.2;P.armL.add(armLU);
+ const armLL=mk(new THREE.BoxGeometry(.15,.4,.15));armLL.position.y=-.6;P.armL.add(armLL);
+ for(let i=0;i<3;i++){const s=mk(new THREE.BoxGeometry(.19,.05,.19),i%2?darkMat:bandMat);s.position.y=-.05-i*.25;P.armL.add(s);}
+ g.add(P.armL);
+ P.armR=P.armL.clone();P.armR.position.x=.46;g.add(P.armR);
+ /* Legs — wrapped */
+ P.legL=new THREE.Group();P.legL.position.set(-.15,1.14,0);
+ const legLU=mk(new THREE.BoxGeometry(.2,.4,.23));legLU.position.y=-.2;P.legL.add(legLU);
+ const legLL=mk(new THREE.BoxGeometry(.18,.4,.21));legLL.position.y=-.6;P.legL.add(legLL);
+ g.add(P.legL);
+ P.legR=P.legL.clone();P.legR.position.x=.15;g.add(P.legR);
+ g.userData.parts=P;return g;}
 function attachCosmetic(P){
  P.head.traverse(o=>{if(o.userData&&o.userData.isHat)o.visible=true;});
  const c=ST.me?ST.me.activeCosmetic:null;
@@ -1463,30 +1606,212 @@ function attachCosmetic(P){
  else if(c==='skull_mask'){
   const m=new THREE.Mesh(new THREE.BoxGeometry(.42,.44,.1),um(0xe8e2d4));m.position.set(0,0,.26);
   const e1=sph(.05,0x0a0a0a,-.1,.02,.3,5);const e2=sph(.05,0x0a0a0a,.1,.02,.3,5);
-  P.head.add(m);P.head.add(e1);P.head.add(e2);}}
+  P.head.add(m);P.head.add(e1);P.head.add(e2);}
+ else if(c==='crown'){
+  const base=ubox(.5,.15,.5,0xffd24a,0,.38,0);
+  for(let i=0;i<5;i++){const spike=new THREE.Mesh(new THREE.ConeGeometry(.05,.18,4),um(0xffd24a));
+   spike.position.set(-.2+i*.1,.5,0);base.add(spike);}
+  P.head.add(base);}
+ else if(c==='top_hat'){
+  const brim=ubox(.6,.06,.6,0x1a1a1a,0,.34,0);
+  const top=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,.55,16),um(0x1a1a1a));top.position.y=.65;
+  const band=ubox(.52,.08,.52,0x8a0000,0,.5,0);
+  P.head.add(brim);P.head.add(top);P.head.add(band);}
+ else if(c==='halo'){
+  const halo=new THREE.Mesh(new THREE.TorusGeometry(.35,.05,8,24),
+   new THREE.MeshBasicMaterial({color:0xffe060}));
+  halo.rotation.x=-Math.PI/2;halo.position.y=.55;
+  const haloLight=new THREE.PointLight(0xffe060,.5,3);haloLight.position.y=.55;
+  P.head.add(halo);P.head.add(haloLight);}
+ else if(c==='demon_horns'){
+  for(const sx of[-1,1]){const horn=new THREE.Mesh(new THREE.ConeGeometry(.08,.35,8),
+   new THREE.MeshLambertMaterial({color:0x8a0000}));
+   horn.position.set(sx*.18,.4,0);horn.rotation.z=sx*.4;P.head.add(horn);}}
+ else if(c==='spectral_aura'){
+  const aura=new THREE.Mesh(new THREE.SphereGeometry(.7,16,12),
+   new THREE.MeshBasicMaterial({color:0x80ff80,transparent:true,opacity:.15,depthWrite:false}));
+  P.head.add(aura);}}
 /* ============ EMOTE SYSTEM — 21 real character animations ============ */
+/* ============ KEYFRAME EMOTE ENGINE ============
+   Each emote defines `keys` — an array of keyframe poses at progress t=0..1.
+   The player interpolates smoothly between surrounding keyframes.
+   Optional `fx(s,t,k)` for special effects (lift, yaw, particles). */
+const EMOTE_BONES=['armL_x','armL_y','armL_z','armR_x','armR_y','armR_z',
+ 'legL_x','legL_y','legL_z','legR_x','legR_y','legR_z',
+ 'torso_x','torso_y','torso_z','head_x','head_y','head_z'];
+function applyKeyframes(P,def,k,t,s){
+ const keys=def.keys;if(!keys||!keys.length)return;
+ if(keys.length===1){applyPose(P,keys[0]);if(def.fx)def.fx(s,t,k);return;}
+ let i=0;while(i<keys.length-1&&keys[i+1].t<k)i++;
+ const k0=keys[i],k1=keys[Math.min(i+1,keys.length-1)];
+ let lk=0;if(k1.t>k0.t)lk=(k-k0.t)/(k1.t-k0.t);
+ lk=Math.max(0,Math.min(1,lk));lk=lk*lk*(3-2*lk); /* smoothstep */
+ for(const b of EMOTE_BONES){
+  const v0=k0[b]||0,v1=k1[b]||0,v=v0+(v1-v0)*lk;
+  const parts=b.split('_');if(P[parts[0]])P[parts[0]].rotation[parts[1]]=v;
+ }
+ if(k0.torso_sy!==undefined||k1.torso_sy!==undefined){
+  const v0=k0.torso_sy||1,v1=k1.torso_sy||1;
+  P.torso.scale.y=v0+(v1-v0)*lk;
+ }
+ if(def.fx)def.fx(s,t,k);
+}
 const EMOTE_DEFS={
- eerie_wave:{d:2.5,f:(P,s,t)=>{P.armR.rotation.x=-2.7;P.armR.rotation.z=.2+Math.sin(t*9)*.4;P.head.rotation.z=Math.sin(t*2.5)*.07;}},
- ghost_nod:{d:1.8,f:(P,s,t)=>{P.head.rotation.x=Math.max(0,Math.sin(t*5))*.35;}},
- cackle:{d:2.6,f:(P,s,t)=>{P.torso.rotation.x=.12;P.head.rotation.x=-.25+Math.sin(t*10)*.06;P.armR.rotation.x=-1.6;P.armR.rotation.z=.4+Math.sin(t*16)*.15;P.armL.rotation.x=-1.3;}},
- pumpkin_spin:{d:2.2,f:(P,s,t,k)=>{s.yaw=k*Math.PI*4;P.armL.rotation.z=.9;P.armR.rotation.z=-.9;}},
- zombie_walk:{d:3,f:(P,s,t)=>{P.armL.rotation.x=-1.2;P.armR.rotation.x=-1.1;P.legL.rotation.x=Math.sin(t*3)*.4;P.legR.rotation.x=-Math.sin(t*3)*.4;P.torso.rotation.x=.15;P.head.rotation.z=.12;}},
- moon_bow:{d:2.4,f:(P,s,t,k)=>{const b=Math.sin(Math.min(k,1)*Math.PI);P.torso.rotation.x=.7*b;P.head.rotation.x=.3*b;P.armR.rotation.x=-.5*b;P.armL.rotation.x=-.5*b;}},
- haunt_dance:{d:3.2,f:(P,s,t)=>{P.torso.rotation.z=Math.sin(t*5)*.18;P.armL.rotation.x=-1.8+Math.sin(t*5)*.5;P.armR.rotation.x=-1.8-Math.sin(t*5)*.5;P.head.rotation.z=Math.sin(t*5)*.12;s.lift=Math.abs(Math.sin(t*5))*.12;}},
- scare:{d:1.4,f:(P,s,t,k)=>{const j=k<.12?k/.12:1;P.armL.rotation.x=-2.9*j;P.armR.rotation.x=-2.9*j;P.armL.rotation.z=.5*j;P.armR.rotation.z=-.5*j;P.head.rotation.x=-.4*j;}},
- reaper_spin:{d:3,f:(P,s,t,k)=>{s.yaw=k*Math.PI*6;P.armL.rotation.x=-1.5;P.armR.rotation.x=-1.5;P.torso.rotation.x=.1;s.lift=Math.sin(k*Math.PI)*.4;}},
- phantom_rise:{d:2.8,f:(P,s,t,k)=>{s.lift=Math.sin(Math.min(k*1.15,1)*Math.PI)*1.2;P.armL.rotation.x=-2.9;P.armR.rotation.x=-2.9;P.head.rotation.x=-.3;}},
- pass_salute:{d:2,f:(P,s,t)=>{P.armR.rotation.x=-2.9;P.armR.rotation.z=-.2;P.head.rotation.x=-.1;}},
- pass_drift:{d:3,f:(P,s,t)=>{s.lift=.3+Math.sin(t*2)*.15;P.legL.rotation.x=.3;P.legR.rotation.x=.3;P.armL.rotation.z=.7;P.armR.rotation.z=-.7;P.head.rotation.z=Math.sin(t*1.5)*.1;}},
- pass_curse:{d:3,f:(P,s,t)=>{P.armL.rotation.x=-1.2;P.armR.rotation.x=-1.1;P.legL.rotation.x=Math.sin(t*2.5)*.35;P.legR.rotation.x=-Math.sin(t*2.5)*.35;P.torso.rotation.x=.2;P.head.rotation.z=-.15;}},
- pass_gaze:{d:2.6,f:(P,s,t)=>{P.head.rotation.x=-.45;P.torso.rotation.x=-.08;P.armL.rotation.x=-.2;P.armR.rotation.x=-.2;}},
- pass_mimic:{d:2.8,f:(P,s,t)=>{P.torso.rotation.y=Math.sin(t*4)*.3;P.armL.rotation.x=-.5+Math.sin(t*4)*.4;P.armR.rotation.x=-.5-Math.sin(t*4)*.4;}},
- pass_waltz:{d:3.4,f:(P,s,t)=>{P.torso.rotation.z=Math.sin(t*4)*.2;P.armL.rotation.x=-1.6+Math.sin(t*4)*.6;P.armR.rotation.x=-.8;P.head.rotation.z=Math.sin(t*4)*.15;}},
- pass_shriek:{d:1.8,f:(P,s,t)=>{P.armL.rotation.x=-2.8;P.armR.rotation.x=-2.8;P.armL.rotation.z=.6;P.armR.rotation.z=-.6;P.head.rotation.x=-.5;P.torso.scale.y=1+Math.sin(t*25)*.03;}},
- pass_reap:{d:2.6,f:(P,s,t,k)=>{const b=Math.sin(Math.min(k,1)*Math.PI);P.torso.rotation.x=.85*b;P.armR.rotation.x=-1.2*b;P.head.rotation.x=.4*b;}},
- pass_soul:{d:2.6,f:(P,s,t)=>{P.torso.rotation.x=.12+Math.sin(t*12)*.04;P.head.rotation.x=-.3;P.armL.rotation.x=-2.5;P.armR.rotation.x=-2.5;P.armL.rotation.z=.5+Math.sin(t*12)*.2;P.armR.rotation.z=-.5-Math.sin(t*12)*.2;}},
- pass_rise:{d:3,f:(P,s,t,k)=>{s.lift=Math.sin(Math.min(k*1.1,1)*Math.PI)*1.6;P.armL.rotation.x=-3;P.armR.rotation.x=-3;P.head.rotation.x=-.4;}},
- pass_spin:{d:3.2,f:(P,s,t,k)=>{s.yaw=k*Math.PI*8;s.lift=Math.sin(k*Math.PI)*.8;P.armL.rotation.z=1.1;P.armR.rotation.z=-1.1;}}};
+ /* === REWRITTEN 21 EMOTES — full multi-stage keyframes === */
+ eerie_wave:{d:3.0,keys:[
+  {t:0,   armR_x:0,   armR_z:0,  head_z:0},
+  {t:0.12,armR_x:-2.7,armR_z:0.2,head_z:0.06},
+  {t:0.30,armR_x:-2.7,armR_z:0.65,head_z:-0.06},
+  {t:0.50,armR_x:-2.7,armR_z:0.2,head_z:0.06},
+  {t:0.70,armR_x:-2.7,armR_z:0.65,head_z:-0.06},
+  {t:0.88,armR_x:-2.7,armR_z:0.2,head_z:0.04},
+  {t:1,   armR_x:0,   armR_z:0,  head_z:0}
+ ]},
+ ghost_nod:{d:2.2,keys:[
+  {t:0,   head_x:0},
+  {t:0.20,head_x:0.38},
+  {t:0.40,head_x:0},
+  {t:0.60,head_x:0.38},
+  {t:0.80,head_x:0},
+  {t:1,   head_x:0}
+ ],fx:(s,t)=>{s.lift=Math.abs(Math.sin(t*2))*0.08;}},
+ cackle:{d:2.8,keys:[
+  {t:0,    torso_x:0,   head_x:0,    armR_x:0,   armR_z:0,  armL_x:0},
+  {t:0.10, torso_x:-0.15,head_x:-0.3,armR_x:-1.6,armR_z:0.4,armL_x:-0.8},
+  {t:0.25, torso_x:-0.10,head_x:-0.25,armR_z:0.55},
+  {t:0.40, torso_x:-0.15,head_x:-0.30,armR_z:0.3},
+  {t:0.55, torso_x:-0.10,head_x:-0.25,armR_z:0.55},
+  {t:0.70, torso_x:-0.15,head_x:-0.30,armR_z:0.3},
+  {t:0.88, torso_x:-0.08,head_x:-0.20,armR_x:-1.0},
+  {t:1,    torso_x:0,   head_x:0,    armR_x:0,   armR_z:0,  armL_x:0}
+ ],fx:(s,t)=>{s.lift=Math.abs(Math.sin(t*14))*0.04;}},
+ pumpkin_spin:{d:2.4,keys:[
+  {t:0,    armL_z:0,   armR_z:0,   torso_x:0},
+  {t:0.10, armL_z:0.9, armR_z:-0.9,torso_x:0.05},
+  {t:0.90, armL_z:0.9, armR_z:-0.9,torso_x:0.05},
+  {t:1,    armL_z:0,   armR_z:0,   torso_x:0}
+ ],fx:(s,t,k)=>{s.yaw=k*Math.PI*4;s.lift=Math.sin(k*Math.PI)*0.15;}},
+ zombie_walk:{d:3.2,keys:[
+  {t:0,    armL_x:-1.2,armR_x:-1.1,torso_x:0.15,head_z:0.12,legL_x:0,   legR_x:0},
+  {t:0.20, legL_x:0.4,legR_x:-0.4},
+  {t:0.40, legL_x:-0.4,legR_x:0.4},
+  {t:0.60, legL_x:0.4,legR_x:-0.4},
+  {t:0.80, legL_x:-0.4,legR_x:0.4},
+  {t:1,    armL_x:0,   armR_x:0,   torso_x:0,   head_z:0,   legL_x:0,   legR_x:0}
+ ],fx:(s,t)=>{s.yaw=Math.sin(t*2)*0.04;}},
+ moon_bow:{d:2.6,keys:[
+  {t:0,    torso_x:0,   head_x:-0.1,armL_x:0,   armR_x:0},
+  {t:0.20, torso_x:0.3, head_x:0.1},
+  {t:0.50, torso_x:0.75,head_x:0.35,armL_x:-0.5,armR_x:-0.5},
+  {t:0.75, torso_x:0.3, head_x:0.1},
+  {t:1,    torso_x:0,   head_x:0,   armL_x:0,   armR_x:0}
+ ]},
+ haunt_dance:{d:3.4,keys:[
+  {t:0,    torso_z:0,   armL_x:0,   armR_x:0,   head_z:0},
+  {t:0.15, torso_z:0.20,armL_x:-1.3,armR_x:-2.3,head_z:0.10},
+  {t:0.35, torso_z:-0.20,armL_x:-2.3,armR_x:-1.3,head_z:-0.10},
+  {t:0.55, torso_z:0.20,armL_x:-1.3,armR_x:-2.3,head_z:0.10},
+  {t:0.75, torso_z:-0.20,armL_x:-2.3,armR_x:-1.3,head_z:-0.10},
+  {t:1,    torso_z:0,   armL_x:0,   armR_x:0,   head_z:0}
+ ],fx:(s,t)=>{s.lift=Math.abs(Math.sin(t*5))*0.15;}},
+ scare:{d:1.8,keys:[
+  {t:0,    torso_x:0,   armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0,   head_x:0,   legL_x:0,legR_x:0},
+  {t:0.08, torso_x:0.4, legL_x:0.3, legR_x:0.3},
+  {t:0.15, torso_x:-0.1,armL_x:-2.9,armR_x:-2.9,armL_z:0.5,armR_z:-0.5,head_x:-0.45,legL_x:0,legR_x:0},
+  {t:0.40, torso_x:-0.05,armL_x:-2.7,armR_x:-2.7,armL_z:0.4,armR_z:-0.4,head_x:-0.40},
+  {t:0.65, torso_x:0,   armL_x:-1.5,armR_x:-1.5,armL_z:0.2,armR_z:-0.2,head_x:-0.20},
+  {t:1,    torso_x:0,   armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0,   head_x:0,   legL_x:0,legR_x:0}
+ ],fx:(s,t,k)=>{if(k>0.12&&k<0.35)s.lift=Math.sin((k-0.12)/0.23*Math.PI)*0.4;}},
+ reaper_spin:{d:3.2,keys:[
+  {t:0,    armL_x:0,   armR_x:0,   torso_x:0},
+  {t:0.15, armL_x:-1.5,armR_x:-1.5,torso_x:0.05},
+  {t:0.50, armL_x:-1.5,armR_x:-1.5,torso_x:0.35},
+  {t:0.85, armL_x:-1.5,armR_x:-1.5,torso_x:0.10},
+  {t:1,    armL_x:0,   armR_x:0,   torso_x:0}
+ ],fx:(s,t,k)=>{s.yaw=k*Math.PI*6;s.lift=Math.sin(k*Math.PI)*0.4;}},
+ phantom_rise:{d:3.0,keys:[
+  {t:0,    armL_x:0,   armR_x:0,   head_x:0},
+  {t:0.20, armL_x:-1.5,armR_x:-1.5},
+  {t:0.45, armL_x:-2.9,armR_x:-2.9,head_x:-0.3},
+  {t:0.80, armL_x:-2.9,armR_x:-2.9,head_x:-0.3},
+  {t:1,    armL_x:0,   armR_x:0,   head_x:0}
+ ],fx:(s,t,k)=>{s.lift=Math.sin(Math.min(k*1.15,1)*Math.PI)*1.2;}},
+ pass_salute:{d:2.2,keys:[
+  {t:0,    armR_x:0,   armR_z:0,   head_x:0},
+  {t:0.15, armR_x:-2.9,armR_z:-0.2,head_x:-0.1},
+  {t:0.85, armR_x:-2.9,armR_z:-0.2,head_x:-0.1},
+  {t:1,    armR_x:0,   armR_z:0,   head_x:0}
+ ]},
+ pass_drift:{d:3.2,keys:[
+  {t:0,    legL_x:0,   legR_x:0,   armL_z:0,   armR_z:0,   head_z:0},
+  {t:0.15, legL_x:0.3,legR_x:0.3,armL_z:0.7,armR_z:-0.7,head_z:0.08},
+  {t:0.50, legL_x:0.3,legR_x:0.3,armL_z:0.7,armR_z:-0.7,head_z:-0.08},
+  {t:0.85, legL_x:0.3,legR_x:0.3,armL_z:0.7,armR_z:-0.7,head_z:0.06},
+  {t:1,    legL_x:0,   legR_x:0,   armL_z:0,   armR_z:0,   head_z:0}
+ ],fx:(s,t)=>{s.lift=0.3+Math.sin(t*2)*0.15;}},
+ pass_curse:{d:3.2,keys:[
+  {t:0,    armL_x:0,   armR_x:0,   legL_x:0,   legR_x:0,   torso_x:0,   head_z:0},
+  {t:0.15, armL_x:-1.2,armR_x:-1.1,torso_x:0.2,head_z:-0.15},
+  {t:0.35, legL_x:0.35,legR_x:-0.35},
+  {t:0.55, legL_x:-0.35,legR_x:0.35},
+  {t:0.75, legL_x:0.35,legR_x:-0.35},
+  {t:1,    armL_x:0,   armR_x:0,   legL_x:0,   legR_x:0,   torso_x:0,   head_z:0}
+ ]},
+ pass_gaze:{d:2.8,keys:[
+  {t:0,    head_x:0,   torso_x:0,   armL_x:0,   armR_x:0},
+  {t:0.20, head_x:-0.45,torso_x:-0.08,armL_x:-0.2,armR_x:-0.2},
+  {t:0.80, head_x:-0.45,torso_x:-0.08,armL_x:-0.2,armR_x:-0.2},
+  {t:1,    head_x:0,   torso_x:0,   armL_x:0,   armR_x:0}
+ ]},
+ pass_mimic:{d:3.0,keys:[
+  {t:0,    torso_y:0,  armL_x:0,   armR_x:0},
+  {t:0.25, torso_y:0.3,armL_x:-0.1,armR_x:-0.9},
+  {t:0.50, torso_y:0,  armL_x:-0.9,armR_x:-0.1},
+  {t:0.75, torso_y:-0.3,armL_x:-0.1,armR_x:-0.9},
+  {t:1,    torso_y:0,  armL_x:0,   armR_x:0}
+ ]},
+ pass_waltz:{d:3.6,keys:[
+  {t:0,    torso_z:0,  armL_x:0,   armR_x:0,   head_z:0},
+  {t:0.20, torso_z:0.2,armL_x:-1.0,armR_x:-0.8,head_z:0.12},
+  {t:0.40, torso_z:0,  armL_x:-2.2,armR_x:-0.8,head_z:0},
+  {t:0.60, torso_z:-0.2,armL_x:-1.0,armR_x:-0.8,head_z:-0.12},
+  {t:0.80, torso_z:0,  armL_x:-2.2,armR_x:-0.8,head_z:0},
+  {t:1,    torso_z:0,  armL_x:0,   armR_x:0,   head_z:0}
+ ]},
+ pass_shriek:{d:2.2,keys:[
+  {t:0,    armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0,   head_x:0,   torso_sy:1},
+  {t:0.12, armL_x:-2.8,armR_x:-2.8,armL_z:0.6,armR_z:-0.6,head_x:-0.5,torso_sy:1.03},
+  {t:0.40, armL_x:-2.6,armR_x:-2.6,armL_z:0.5,armR_z:-0.5,head_x:-0.45,torso_sy:1.02},
+  {t:0.70, armL_x:-1.5,armR_x:-1.5,armL_z:0.3,armR_z:-0.3,head_x:-0.25,torso_sy:1.01},
+  {t:1,    armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0,   head_x:0,   torso_sy:1}
+ ],fx:(s,t)=>{s.lift=Math.abs(Math.sin(t*20))*0.03;}},
+ pass_reap:{d:2.8,keys:[
+  {t:0,    torso_x:0,  armR_x:0,   head_x:0},
+  {t:0.15, torso_x:0.3,armR_x:-0.5,head_x:0.15},
+  {t:0.50, torso_x:0.85,armR_x:-1.2,head_x:0.4},
+  {t:0.80, torso_x:0.3,armR_x:-0.5,head_x:0.15},
+  {t:1,    torso_x:0,  armR_x:0,   head_x:0}
+ ]},
+ pass_soul:{d:2.8,keys:[
+  {t:0,    torso_x:0,  head_x:0,   armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0},
+  {t:0.15, torso_x:0.12,head_x:-0.3,armL_x:-2.5,armR_x:-2.5,armL_z:0.5,armR_z:-0.5},
+  {t:0.85, torso_x:0.12,head_x:-0.3,armL_x:-2.5,armR_x:-2.5,armL_z:0.5,armR_z:-0.5},
+  {t:1,    torso_x:0,  head_x:0,   armL_x:0,   armR_x:0,   armL_z:0,   armR_z:0}
+ ],fx:(s,t)=>{s.lift=Math.abs(Math.sin(t*6))*0.05;}},
+ pass_rise:{d:3.2,keys:[
+  {t:0,    armL_x:0,   armR_x:0,   head_x:0},
+  {t:0.20, armL_x:-1.5,armR_x:-1.5},
+  {t:0.50, armL_x:-3.0,armR_x:-3.0,head_x:-0.4},
+  {t:0.80, armL_x:-3.0,armR_x:-3.0,head_x:-0.4},
+  {t:1,    armL_x:0,   armR_x:0,   head_x:0}
+ ],fx:(s,t,k)=>{s.lift=Math.sin(Math.min(k*1.1,1)*Math.PI)*1.6;}},
+ pass_spin:{d:3.4,keys:[
+  {t:0,    armL_z:0,   armR_z:0,   torso_x:0},
+  {t:0.10, armL_z:1.1,armR_z:-1.1,torso_x:0.05},
+  {t:0.90, armL_z:1.1,armR_z:-1.1,torso_x:0.05},
+  {t:1,    armL_z:0,   armR_z:0,   torso_x:0}
+ ],fx:(s,t,k)=>{s.yaw=k*Math.PI*8;s.lift=Math.sin(k*Math.PI)*0.8;}}
+};
 let myEmote=null;
 function playEmote(id){
  if(!EMOTE_DEFS[id]||!ST.me||!ST.me.emotes||!ST.me.emotes[id])return;
@@ -1684,6 +2009,7 @@ addEventListener('keydown',e=>{
  if(k==='m')UI.toggleMap();
  if(k==='p')UI.toggleAdminLogin();
  if(k==='b')toggleEmoteWheel();
+ if(k==='c')UI.openCustomize();
  if(k==='escape'){if($('#emoteWheel').classList.contains('on'))$('#emoteWheel').classList.remove('on');else UI.closeTop();}
  if(k==='h')UI.openControls();
  if(/^[1-8]$/.test(k))selectHotbar(+k-1);});
@@ -2415,15 +2741,21 @@ function actOnPlant(pid){
  else toast(SEEDS[pl.s].n+': '+Math.round(prog*100)+'% grown','info');}
 /* other players + pets */
 const otherObjs=new Map();
+function makeCharForBody(body,shirt,pants,skinC){
+ if(body==='skeleton')return makeSkeleton();
+ if(body==='ghost')return makeGhost();
+ if(body==='vampire')return makeVampire();
+ if(body==='mummy')return makeMummy();
+ return makeFarmer(shirt||0x8a5a33,skinC||0xe8b48a,0xb0885a,0x6a4a2a,pants||0x4a4050);}
 function updateOthers(list){
  const seen=new Set();
  for(const o of list){
   if(o.id===ST.me?.id)continue;
   seen.add(o.id);
   let rec=otherObjs.get(o.id);
-  if(!rec){const g=makeFarmer(0x8a5a33,0xe8b48a,0xb0885a,0x6a4a2a,0x4a4050);
+  if(!rec){const g=makeCharForBody(o.cb,o.cs,o.cp,o.ck);
    const tag=nameTag(o.name);tag.position.y=3.25;tag.scale.set(2.2,.55,1);g.add(tag);
-   scene.add(g);rec={g,tx:o.x,tz:o.z,ry:o.ry||0};otherObjs.set(o.id,rec);}
+   scene.add(g);rec={g,tx:o.x,tz:o.z,ry:o.ry||0,charBody:o.cb||'farmer',charHat:o.ch||null,activeCosmetic:o.ac||null};otherObjs.set(o.id,rec);}
   rec.tx=o.x;rec.tz=o.z;rec.ry=o.ry||0;}
  for(const[id,rec]of otherObjs){if(!seen.has(id)){scene.remove(rec.g);disposeGroup(rec.g);otherObjs.delete(id);}}}
 const petObjs=new Map();
@@ -2883,9 +3215,11 @@ function handleNet(m){
    $('#nameErr').textContent='The server rejected that name — choose a friendly one.';break;
   case 'me':{const expChanged=ST.me.expansion!==m.me.expansion;
    const skinChanged=ST.me.activeSkin!==m.me.activeSkin||ST.me.activeCosmetic!==m.me.activeCosmetic;
+   const charChanged=ST.me.charBody!==m.me.charBody||ST.me.charHat!==m.me.charHat||
+    ST.me.charShirt!==m.me.charShirt||ST.me.charPants!==m.me.charPants||ST.me.charSkinCol!==m.me.charSkinCol;
    ST.me=m.me;UI.refreshHUD();rebuildHotbar();updateMyPets();
    if(expChanged||ST.lastExpansion!==m.me.expansion)rebuildPlots();
-   if(skinChanged)rebuildPlayerVisual();break;}
+   if(skinChanged||charChanged)rebuildPlayerVisual();break;}
   case 'plants':refreshPlants(m.plants);break;
   case 'stock':ST.stock=m.stock;ST.restockAt=m.restockAt;
    if(m.prices)ST.prices=m.prices;if(m.cfg)ST.shopCfg=m.cfg;break;
@@ -2898,19 +3232,46 @@ function handleNet(m){
   case 'expanded':toast('Plot expanded!','good');break;
   case 'pJoin':{
    toast(m.name+' joined the garden','info');
-   /* Create the other player's farmer mesh so we can see them.
-      The pJoin message only has {id, name} — no position yet, so spawn them at 0,26
-      (the default spawn). The first ppos broadcast will move them to their real position. */
+   /* Create the other player's mesh using their char body type */
    if(ST.me&&m.id!==ST.me.id&&!otherObjs.has(m.id)){
-    const g=makeFarmer(0x8a5a33,0xe8b48a,0xb0885a,0x6a4a2a,0x4a4050);
+    const g=makeCharForBody(m.cb,m.cs,m.cp,m.ck);
     const tag=nameTag(m.name||'Farmer');tag.position.y=3.25;tag.scale.set(2.2,.55,1);g.add(tag);
     scene.add(g);
-    otherObjs.set(m.id,{g,tx:0,tz:26,ry:0});
+    const rec={g,tx:0,tz:26,ry:0,charBody:m.cb||'farmer',charHat:m.ch||null,activeCosmetic:m.ac||null};
+    /* Apply hat/cosmetic if they have one */
+    if(m.ch||m.ac){ST.me=ST.me||{};const _save=ST.me.activeCosmetic;ST.me.activeCosmetic=m.ch||m.ac;attachCosmetic(g.userData.parts);ST.me.activeCosmetic=_save;}
+    otherObjs.set(m.id,rec);
    }
    break;}
   case 'pLeft':{const r=otherObjs.get(m.id);
    if(r){scene.remove(r.g);disposeGroup(r.g);otherObjs.delete(m.id);}break;}
   case 'ppos':{const r=otherObjs.get(m.id);if(r){r.tx=m.x;r.tz=m.z;r.ry=m.ry;}break;}
+  case 'pCharUpdate':{
+   /* Another player changed their character — rebuild their model */
+   const r=otherObjs.get(m.id);
+   if(r){
+    const needsRebuild=r.charBody!==(m.cb||'farmer');
+    if(needsRebuild){
+     /* Rebuild the entire model */
+     const oldY=r.g.position.y,oldRY=r.g.rotation.y;
+     scene.remove(r.g);disposeGroup(r.g);
+     const g=makeCharForBody(m.cb,m.cs,m.cp,m.ck);
+     g.position.y=oldY;g.rotation.y=oldRY;
+     /* Re-add the name tag */
+     const p=ST.players.get(m.id);
+     const tag=nameTag(p?p.name:'Farmer');tag.position.y=3.25;tag.scale.set(2.2,.55,1);g.add(tag);
+     scene.add(g);r.g=g;r.charBody=m.cb||'farmer';
+     /* Apply hat */
+     if(m.ch||m.ac){ST.me=ST.me||{};const _save=ST.me.activeCosmetic;ST.me.activeCosmetic=m.ch||m.ac;attachCosmetic(g.userData.parts);ST.me.activeCosmetic=_save;}
+    }else{
+     /* Just update the hat */
+     if(r.charHat!==(m.ch||null)||r.activeCosmetic!==(m.ac||null)){
+      r.charHat=m.ch||null;r.activeCosmetic=m.ac||null;
+      if(m.ch||m.ac){ST.me=ST.me||{};const _save=ST.me.activeCosmetic;ST.me.activeCosmetic=m.ch||m.ac;attachCosmetic(r.g.userData.parts);ST.me.activeCosmetic=_save;}
+     }
+    }
+   }
+   break;}
   case 'toast':
    if(String(m.msg).startsWith('[Admin]'))showAnnounce(String(m.msg).replace('[Admin] ',''),{targeted:true});
    else toast(m.msg,m.kind);break;
@@ -3370,6 +3731,79 @@ const UI={openWins:[],
    <div class="row">${Object.keys(EMOTE_INFO).map(id=>me.emotes&&me.emotes[id]
     ?`<span class="mutBadge" style="background:#3a2a4a;color:#ffd0f0">${EMOTE_INFO[id].n}</span>`
     :'<span class="mutBadge" style="opacity:.25">???</span>').join(' ')}</div>`);},
+ openCustomize(){
+  const me=ST.me;
+  const toHex=n=>'#'+(n||0).toString(16).padStart(6,'0');
+  /* Body skin cards */
+  const bodyHtml=CHAR_BODIES.map(b=>{
+   const owned=(me.ownedCharBodies||['farmer']).includes(b.id);
+   const active=(me.charBody||'farmer')===b.id;
+   return `<div class="card" style="animation-delay:0s">
+    <div class="seedSw" style="background:${b.id==='farmer'?'#4f8a5c':b.id==='skeleton'?'#e8e2d4':b.id==='ghost'?'#c0d0e8':b.id==='vampire'?'#1a0a1a':'#d8c8a0'}"></div>
+    <div class="rname">${b.n}</div>
+    <span class="rar" style="background:${RARCOL[b.rar]}">${b.rar}</span>
+    ${active?'<div class="meta" style="color:#4fae68;font-weight:800">✓ Equipped</div>':
+      owned?`<button class="btnG" data-body="${b.id}">Equip</button>`:
+      `<button class="btnA" data-buybody="${b.id}">Buy — ${fmt(b.pr)}</button>`}
+   </div>`;}).join('');
+  /* Hat cards */
+  const hatHtml=COSMETICS.map(c=>{
+   const owned=me.cosmetics&&me.cosmetics[c.id];
+   const active=(me.charHat||me.activeCosmetic)===c.id;
+   return `<div class="card" style="animation-delay:0s">
+    <div class="seedSw" style="background:${RARCOL[c.rar]}"></div>
+    <div class="rname">${c.n}</div>
+    <span class="rar" style="background:${RARCOL[c.rar]}">${c.rar}</span>
+    ${active?'<div class="meta" style="color:#4fae68;font-weight:800">✓ Equipped</div>':
+      owned?`<button class="btnG" data-hat="${c.id}">Equip</button> <button class="btnGhost" data-hatoff="1" style="font-size:11px;padding:5px 8px">Remove</button>`:
+      `<button class="btnA" data-buyhat="${c.id}">Buy — ${fmt(c.pr)}</button>`}
+   </div>`;}).join('');
+  this.show('Character Customization',`
+   <div class="spkSec"><div class="spkSecH">Body Skin</div>
+    <div class="spkSecS">full model replacement — skeleton, ghost, vampire, mummy</div>
+    <div class="grid">${bodyHtml}</div></div>
+   <div class="spkSec"><div class="spkSecH">Colors (free)</div>
+    <div class="spkSecS">only applies to the Farmer body</div>
+    <div class="row" style="gap:20px;margin:10px 0">
+     <div><label style="display:block;font-size:12px;margin-bottom:4px">Shirt</label>
+      <input type="color" id="custShirt" value="${toHex(me.charShirt)}" style="width:60px;height:40px"></div>
+     <div><label style="display:block;font-size:12px;margin-bottom:4px">Pants</label>
+      <input type="color" id="custPants" value="${toHex(me.charPants)}" style="width:60px;height:40px"></div>
+     <div><label style="display:block;font-size:12px;margin-bottom:4px">Skin</label>
+      <input type="color" id="custSkin" value="${toHex(me.charSkinCol)}" style="width:60px;height:40px"></div>
+     <button class="btnG" id="custApplyColors" style="align-self:flex-end">Apply Colors</button>
+    </div></div>
+   <div class="spkSec"><div class="spkSecH">Hats & Headwear</div>
+    <div class="spkSecS">equipped on top of your body skin</div>
+    <div class="grid">${hatHtml}</div></div>
+  `);
+  const winBody=document.getElementById('winBody');
+  winBody.querySelectorAll('[data-body]').forEach(b=>b.onclick=()=>{
+   send({t:'customizeChar',body:b.dataset.body});AudioSys.play('click');
+   setTimeout(()=>this.openCustomize(),300);});
+  winBody.querySelectorAll('[data-buybody]').forEach(b=>b.onclick=()=>{
+   send({t:'buyCharBody',bodyId:b.dataset.buybody});AudioSys.play('click');
+   setTimeout(()=>this.openCustomize(),400);});
+  winBody.querySelectorAll('[data-hat]').forEach(b=>b.onclick=()=>{
+   send({t:'customizeChar',hat:b.dataset.hat});AudioSys.play('click');
+   setTimeout(()=>this.openCustomize(),300);});
+  winBody.querySelectorAll('[data-hatoff]').forEach(b=>b.onclick=()=>{
+   send({t:'customizeChar',hat:null});AudioSys.play('click');
+   setTimeout(()=>this.openCustomize(),300);});
+  winBody.querySelectorAll('[data-buyhat]').forEach(b=>b.onclick=()=>{
+   send({t:'buyCosmetic',cosId:b.dataset.buyhat});AudioSys.play('click');
+   setTimeout(()=>this.openCustomize(),400);});
+  const apply=document.getElementById('custApplyColors');
+  if(apply)apply.onclick=()=>{
+   const s=document.getElementById('custShirt').value;
+   const p=document.getElementById('custPants').value;
+   const sk=document.getElementById('custSkin').value;
+   send({t:'customizeChar',
+    shirt:parseInt(s.slice(1),16),
+    pants:parseInt(p.slice(1),16),
+    skinCol:parseInt(sk.slice(1),16)});
+   AudioSys.play('click');
+   toast('Colors applied!','good');};},
  openControls(){
   this.show('Controls',`<table><tr><td><span class="kbd">WASD</span></td><td>Move</td></tr>
    <tr><td><span class="kbd">Shift</span></td><td>Sprint</td></tr><tr><td><span class="kbd">Space</span></td><td>Jump</td></tr>
@@ -3705,7 +4139,7 @@ function animate(){
   const save=[P.armR.rotation.x,P.armR.rotation.y,P.armR.rotation.z];
   resetFarmerPose(P);
   if(handBusy)P.armR.rotation.set(save[0],save[1],save[2]);
-  myEmote.def.f(P,myEmote,t,k);
+  applyKeyframes(P,myEmote.def,k,t,myEmote);
   myLift=myEmote.lift||0;myYaw=myEmote.yaw||0;
   if(el>=myEmote.def.d){myEmote=null;resetFarmerPose(P);}
  }else{
@@ -3776,7 +4210,7 @@ function animate(){
     const eEm=(performance.now()-rec.emote.t0)/1000;
     const ek=Math.min(1,eEm/rec.emote.def.d);
     resetFarmerPose(pp);
-    rec.emote.def.f(pp,rec.emote,t,ek);
+    applyKeyframes(pp,rec.emote.def,ek,t,rec.emote);
     rec.g.position.y=rec.emote.lift||0;
     rec.g.rotation.y=(rec.ry||0)+(rec.emote.yaw||0);
     if(eEm>=rec.emote.def.d){rec.emote=null;resetFarmerPose(pp);}
@@ -3972,6 +4406,13 @@ animate();
   const tap=e=>{e.preventDefault();if(typeof UI!=='undefined'&&UI.toggleMap)UI.toggleMap();};
   btnMap.addEventListener('touchstart',tap,{passive:false});
   btnMap.addEventListener('mousedown',tap);
+ }
+ /* Emote button — opens the emote wheel */
+ const btnEmote=document.getElementById('mBtnEmote');
+ if(btnEmote){
+  const tap=e=>{e.preventDefault();if(typeof toggleEmoteWheel==='function')toggleEmoteWheel();};
+  btnEmote.addEventListener('touchstart',tap,{passive:false});
+  btnEmote.addEventListener('mousedown',tap);
  }
 
  /* Camera drag — touch on the right half of the screen rotates the camera */
@@ -4236,6 +4677,7 @@ window.TimerCtrl={
  <div id="mMenu">
   <button class="mBtn menu" id="mBtnInv" title="Inventory">🎒</button>
   <button class="mBtn menu" id="mBtnMap" title="Map">🗺</button>
+  <button class="mBtn menu" id="mBtnEmote" title="Emotes">😀</button>
  </div>
  <div id="mJoy"><div id="mJoyKnob"></div></div>
  <div id="mActions">
