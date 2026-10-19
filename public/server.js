@@ -232,6 +232,27 @@ const CHAR_BODIES=[
  {id:'vampire',n:'Vampire',rar:'Epic',pr:100000},
  {id:'mummy',n:'Mummy',rar:'Rare',pr:60000}];
 const CHAR_BODY_MAP=Object.fromEntries(CHAR_BODIES.map(b=>[b.id,b]));
+/* ===== PORTAL WORLD — life-sim with Rupees, houses, jobs ===== */
+const HOUSE_TIERS=[
+ {id:0,n:'Shack',cost:0},
+ {id:1,n:'House',cost:5000},
+ {id:2,n:'Mansion',cost:50000}];
+const JOB_DEFS=[
+ {id:'dogwalk',n:'Dog Walking',payout:100,cd:120000},
+ {id:'factory',n:'Factory Work',payout:150,cd:120000},
+ {id:'pizza',n:'Pizza Delivery',payout:120,cd:120000},
+ {id:'farmhand',n:'Farm Hand',payout:80,cd:120000}];
+const HOUSE_EGG_COST=2000;
+const HOUSE_EGG_PETS=[
+ {id:'puppy',n:'Puppy',rar:'Common',ch:30,boost:0},
+ {id:'kitten',n:'Kitten',rar:'Common',ch:25,boost:0},
+ {id:'hamster',n:'Hamster',rar:'Uncommon',ch:20,boost:0.05},
+ {id:'parrot',n:'Parrot',rar:'Rare',ch:15,boost:0.10},
+ {id:'minidragon',n:'Mini Dragon',rar:'Epic',ch:9,boost:0.25},
+ {id:'workbear',n:'Work Work Work Bear',rar:'Mythical',ch:1,boost:9} /* 10x = +900% */
+];
+function defaultPortal(){return{zone:null,houseTier:0,rupees:0,lastSleep:'',
+ jobCd:{},pets:[],activePet:null,visited:''};}
 const FREE_REWARDS={1:{cash:500},2:{emote:'pass_salute'},3:{cash:1000},4:{cash:2500},5:{relics:1},
  6:{emote:'pass_drift'},7:{cash:5000},8:{cash:7500},9:{cash:10000},10:{pet:'demoneye'},
  11:{cash:25000},12:{relics:1},13:{emote:'pass_curse'},14:{cash:50000},15:{skin:'spooky'},
@@ -280,7 +301,8 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  ownedCharBodies:p.ownedCharBodies||['farmer'],
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
- role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||''};}
+ role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
+ portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,
@@ -323,6 +345,7 @@ function load(){let raw=null;
    if(p.charSkinCol===undefined)p.charSkinCol=0xe8b48a;
    if(!p.ownedCharBodies)p.ownedCharBodies=['farmer'];
    if(!p.role)p.role='player';if(p.lastRolePay===undefined)p.lastRolePay=0;
+   if(!p.portal)p.portal=defaultPortal();
    if(!p.gear.includes('shovel'))p.gear.push('shovel');
    G.players.set(p.id,p);if(p.plot>=0&&p.plot<6)G.plots[p.plot]=p.id;}
   const el=Math.min(Date.now()-(d.savedAt||Date.now()),12*3600*1000);
@@ -744,7 +767,90 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    else if(sub==='random'){const pool=EVENTS.filter(e=>e.w>0);startEvent(pool[rint(0,pool.length-1)]);
     sendTo(p.id,{t:'toast',msg:'Random weather rolled.',kind:'good'});}
    break;}
- }}
+  /* ================= PORTAL WORLD ================= */
+  case 'portalSelectHouse':{
+   if(!p.portal)p.portal=defaultPortal();
+   const zone=String(msg.zone||'').slice(0,10);
+   if(!['beach','city'].includes(zone))return;
+   if(p.portal.zone)return sendTo(p.id,{t:'toast',msg:'You already chose a zone.',kind:'err'});
+   p.portal.zone=zone;p.portal.houseTier=0;p.portal.rupees=0;
+   pushMe(p);save();
+   sendTo(p.id,{t:'toast',msg:'Welcome home! Your '+zone+' shack is ready.',kind:'quest'});
+   break;}
+  case 'portalSleep':{
+   if(!p.portal||!p.portal.zone)return sendTo(p.id,{t:'toast',msg:'Choose a house first.',kind:'err'});
+   const today=new Date().toDateString();
+   if(p.portal.lastSleep===today)return sendTo(p.id,{t:'toast',msg:'You already slept today. Come back tomorrow!',kind:'err'});
+   p.portal.lastSleep=today;
+   p.portal.rupees=(p.portal.rupees||0)+50;
+   pushMe(p);save();
+   sendTo(p.id,{t:'toast',msg:'You slept well. +50 Rupees!',kind:'quest'});
+   sendTo(p.id,{t:'portalUpdate',portal:p.portal});
+   break;}
+  case 'portalJobComplete':{
+   if(!p.portal||!p.portal.zone)return;
+   const jobId=String(msg.jobId||'').slice(0,16);
+   const job=JOB_DEFS.find(j=>j.id===jobId);
+   if(!job)return;
+   /* Check cooldown */
+   const lastCd=p.portal.jobCd&&p.portal.jobCd[jobId]||0;
+   if(now()<lastCd+job.cd)return sendTo(p.id,{t:'toast',msg:'Job still on cooldown.',kind:'err'});
+   /* Calculate payout with pet boost */
+   let payout=job.payout;
+   if(p.portal.activePet){
+    const pet=HOUSE_EGG_PETS.find(pp=>pp.id===p.portal.activePet);
+    if(pet)payout=Math.round(payout*(1+pet.boost));
+   }
+   p.portal.rupees=(p.portal.rupees||0)+payout;
+   if(!p.portal.jobCd)p.portal.jobCd={};
+   p.portal.jobCd[jobId]=now();
+   pushMe(p);save();
+   sendTo(p.id,{t:'toast',msg:'Job done! +'+payout+' Rupees',kind:'good'});
+   sendTo(p.id,{t:'portalUpdate',portal:p.portal});
+   break;}
+  case 'portalUpgradeHouse':{
+   if(!p.portal||!p.portal.zone)return;
+   const tier=p.portal.houseTier||0;
+   if(tier>=2)return sendTo(p.id,{t:'toast',msg:'Already at max tier!',kind:'err'});
+   const next=HOUSE_TIERS[tier+1];
+   if(p.portal.rupees<next.cost)return sendTo(p.id,{t:'toast',msg:'Need '+next.cost+' Rupees.',kind:'err'});
+   p.portal.rupees-=next.cost;
+   p.portal.houseTier=tier+1;
+   pushMe(p);save();
+   sendTo(p.id,{t:'toast',msg:'Upgraded to '+next.n+'!',kind:'quest'});
+   sendTo(p.id,{t:'portalUpdate',portal:p.portal});
+   break;}
+  case 'portalBuyEgg':{
+   if(!p.portal||!p.portal.zone)return;
+   if(p.portal.rupees<HOUSE_EGG_COST)return sendTo(p.id,{t:'toast',msg:'Need '+HOUSE_EGG_COST+' Rupees.',kind:'err'});
+   p.portal.rupees-=HOUSE_EGG_COST;
+   /* Roll a pet */
+   let roll=Math.random()*100,petId=HOUSE_EGG_PETS[0].id;
+   for(const pet of HOUSE_EGG_PETS){roll-=pet.ch;if(roll<=0){petId=pet.id;break;}}
+   p.portal.pets=p.portal.pets||[];
+   p.portal.pets.push({uid:'HP'+(G.nextId++),pid:petId});
+   if(!p.portal.activePet)p.portal.activePet=petId;
+   pushMe(p);save();
+   const petDef=HOUSE_EGG_PETS.find(pp=>pp.id===petId);
+   sendTo(p.id,{t:'toast',msg:'You hatched: '+petDef.n+' ('+petDef.rar+')!',kind:petDef.rar==='Mythical'?'quest':'good'});
+   sendTo(p.id,{t:'portalHatch',petId:petId,portal:p.portal});
+   break;}
+  case 'portalEquipPet':{
+   if(!p.portal)return;
+   const pid=String(msg.pid||'').slice(0,20);
+   if(!p.portal.pets.some(pp=>pp.pid===pid))return;
+   p.portal.activePet=pid;
+   pushMe(p);save();
+   sendTo(p.id,{t:'portalUpdate',portal:p.portal});
+   break;}
+  case 'portalVisitFriend':{
+   const friendId=String(msg.friendId||'').slice(0,32);
+   const friend=G.players.get(friendId);
+   if(!friend||!friend.portal||!friend.portal.zone)return sendTo(p.id,{t:'toast',msg:'Friend has no house.',kind:'err'});
+   sendTo(p.id,{t:'portalVisit',friendId:friendId,friendName:friend.name,portal:friend.portal});
+   break;}
+ }
+}
 function sellFruits(p,uids){const set=new Set(uids);const sold=[];
  p.produce=p.produce.filter(f=>{if(set.has(f.uid)){sold.push(f);return false;}return true;});
  if(!sold.length)return sendTo(p.id,{t:'toast',msg:'Nothing to sell.',kind:'err'});

@@ -533,6 +533,122 @@ html.touch .seedCfgRow .sname{font-size:12px}
 /* Top-right menu buttons (inventory, map, admin) */
 #mMenu{position:fixed;right:12px;top:12px;z-index:76;display:flex;gap:8px}
 #mMenu .mBtn{width:50px;height:50px;font-size:18px}
+/* ============ PORTAL WORLD ============ */
+#portalPrompt{position:absolute;bottom:200px;left:50%;transform:translateX(-50%);display:none;
+ background:radial-gradient(ellipse at 50% 0%,#2a0a3a,#0a0210);border:2px solid #a86fd688;border-radius:12px;
+ padding:10px 22px;color:#e8d8ff;font-family:'Fredoka';font-size:15px;box-shadow:0 0 20px #a86fd633;z-index:55}
+#portalPrompt.on{display:block}
+#portalPrompt b{color:#c0a0ff}
+/* Welcome screen */
+#portalWelcome{position:fixed;inset:0;z-index:695;display:none;align-items:center;justify-content:center;
+ background:radial-gradient(ellipse at 50% 50%,#1a0a2a 0%,#0a0210 60%,#000 100%);opacity:0;transition:opacity 1.5s}
+#portalWelcome.on{display:flex;opacity:1}
+#portalWelcome .pwTitle{font-family:'Creepster',cursive;font-size:min(12vw,120px);color:#a86fd6;
+ text-shadow:0 0 30px #a86fd688,0 0 80px #a86fd644;letter-spacing:.06em;animation:portalFlick 3s infinite}
+@keyframes portalFlick{0%,100%{opacity:1}8%{opacity:.4}10%{opacity:1}50%{opacity:.9}}
+#portalWelcome .pwSub{font-family:'Fredoka';font-size:18px;color:#8060a0;letter-spacing:.4em;
+ text-transform:uppercase;margin-top:14px;animation:pwPulse 2s infinite}
+@keyframes pwPulse{50%{opacity:.5}}
+/* House selection */
+#portalSelect{position:fixed;inset:0;z-index:696;display:none;flex-direction:column;align-items:center;
+ background:radial-gradient(ellipse at 50% 50%,#1a0a2a 0%,#0a0210 60%,#000 100%)}
+#portalSelect.on{display:flex}
+#portalSelect .psTitle{font-family:'Fredoka';font-size:36px;color:#e8d8ff;margin:30px 0 10px;font-weight:700}
+#portalSelect .psSub{font-size:14px;color:#8060a0;letter-spacing:.3em;text-transform:uppercase;margin-bottom:30px}
+#portalSelect .psCards{display:flex;gap:30px}
+#portalSelect .psCard{width:320px;cursor:pointer;border-radius:18px;overflow:hidden;
+ background:linear-gradient(180deg,#1a0e2a,#0a0418);border:3px solid #a86fd633;
+ transition:transform .25s cubic-bezier(.2,1.3,.4,1),border-color .25s,box-shadow .25s}
+#portalSelect .psCard:hover{transform:translateY(-8px) scale(1.03);border-color:#a86fd6;box-shadow:0 20px 50px #a86fd644}
+#portalSelect .psPrev{height:200px;background-size:cover;background-position:center;position:relative}
+#portalSelect .psInfo{padding:18px;text-align:center}
+#portalSelect .psInfo h3{font-family:'Fredoka';font-size:24px;color:#e8d8ff;margin-bottom:6px}
+#portalSelect .psInfo p{font-size:13px;color:#8060a0;line-height:1.5}
+/* Portal world HUD */
+#rupeeChip{display:none;align-items:center;gap:8px;background:linear-gradient(135deg,#1a4a2a,#2a6a3a);
+ border:2px solid #4fae68;border-radius:12px;padding:8px 14px;box-shadow:0 0 14px #4fae6833;pointer-events:auto}
+#rupeeChip.on{display:flex}
+#rupeeChip .rd{font-family:'Fredoka';font-size:18px;color:#80e890;line-height:1}
+#rupeeChip .rl{font-size:9px;letter-spacing:.2em;color:#60a070;text-transform:uppercase;font-weight:800}
+/* Portal world overlays */
+#portalZone{position:fixed;inset:0;z-index:680;display:none;flex-direction:column;
+ background:radial-gradient(ellipse at 50% 0%,#1a2a3a 0%,#0a1018 60%,#000 100%)}
+#portalZone.on{display:flex}
+#portalZoneHead{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:14px 22px}
+#portalZoneHead .pzTitle{font-family:'Fredoka';font-size:22px;color:#e8e8ff;font-weight:700}
+#portalZoneHead .pzRupees{font-family:'Fredoka';font-size:18px;color:#80e890}
+#portalZoneBody{flex:1;position:relative}
+#portalZoneBody canvas{width:100%;height:100%}
+#portalZonePrompt{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);display:none;
+ background:rgba(10,4,20,.9);border:2px solid #a86fd688;border-radius:12px;padding:10px 22px;color:#e8d8ff;
+ font-family:'Fredoka';font-size:15px;z-index:3}
+#portalZonePrompt.on{display:block}
+#portalZonePrompt b{color:#c0a0ff}
+/* Job board */
+#jobBoard{position:fixed;inset:0;z-index:690;display:none;align-items:center;justify-content:center;
+ background:rgba(10,4,20,.85)}
+#jobBoard.on{display:flex}
+#jobBoardCard{background:linear-gradient(180deg,#1a0e2a,#0a0418);border:2px solid #a86fd644;border-radius:18px;
+ padding:30px;max-width:560px;width:90vw;max-height:85vh;overflow-y:auto}
+#jobBoardCard h2{font-family:'Fredoka';font-size:28px;color:#e8d8ff;text-align:center;margin-bottom:18px}
+.jobRow{display:flex;justify-content:space-between;align-items:center;background:#0a0418;border:1px solid #a86fd622;
+ border-radius:12px;padding:14px 18px;margin-bottom:10px;transition:border-color .15s}
+.jobRow:hover{border-color:#a86fd6}
+.jobRow .ji{display:flex;align-items:center;gap:14px}
+.jobRow .ji .jIcon{font-size:36px}
+.jobRow .ji .jn{font-family:'Fredoka';font-size:17px;color:#e8d8ff}
+.jobRow .ji .jp{font-size:13px;color:#80e890}
+.jobRow .ji .jcd{font-size:11px;color:#a06080}
+.jobRow button{font-family:'Fredoka';padding:8px 18px;border-radius:9px;border:none;cursor:pointer;font-size:14px}
+.jobRow button.work{background:#2d6b45;color:#fff}
+.jobRow button.work:hover{filter:brightness(1.15)}
+.jobRow button:disabled{opacity:.4;cursor:default}
+/* House egg shop */
+#eggShop{position:fixed;inset:0;z-index:690;display:none;align-items:center;justify-content:center;
+ background:rgba(10,4,20,.85)}
+#eggShop.on{display:flex}
+#eggShopCard{background:linear-gradient(180deg,#1a0e2a,#0a0418);border:2px solid #a86fd644;border-radius:18px;
+ padding:30px;max-width:520px;width:90vw;text-align:center}
+#eggShopCard h2{font-family:'Fredoka';font-size:26px;color:#e8d8ff;margin-bottom:6px}
+#eggShopCard .esSub{font-size:12px;color:#8060a0;letter-spacing:.2em;text-transform:uppercase;margin-bottom:18px}
+#eggShopCard .esEgg{width:120px;height:150px;margin:0 auto 18px;border-radius:50% 50% 45% 45%;
+ background:radial-gradient(circle at 35% 30%,#d8b0ff,#7a3fd6);border:4px solid #b06aff;
+ box-shadow:0 0 30px #a86fd688;animation:eggBob 2s ease-in-out infinite}
+@keyframes eggBob{50%{transform:translateY(-8px)}}
+#eggShopCard .esPets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}
+#eggShopCard .esPet{background:#0a0418;border:1px solid #a86fd622;border-radius:8px;padding:10px;font-size:12px;color:#c0a0d8}
+#eggShopCard .esPet b{display:block;color:#e8d8ff;font-size:13px}
+#eggShopCard .esPet small{color:#8060a0}
+#eggShopCard .esBuy{width:100%;background:linear-gradient(135deg,#7a3fd6,#a86fd6);color:#fff;
+ font-family:'Fredoka';font-size:18px;padding:14px;border-radius:12px;border:none;cursor:pointer;margin-top:10px}
+#eggShopCard .esBuy:hover{filter:brightness(1.15)}
+#eggShopCard .esClose{background:#ffffff14;color:#c0a0d8;padding:8px 16px;border-radius:8px;border:none;cursor:pointer;margin-top:8px}
+/* Hatch overlay */
+#hatchOverlay{position:fixed;inset:0;z-index:700;display:none;align-items:center;justify-content:center;
+ background:radial-gradient(ellipse at 50% 50%,#2a0a3a,#000);flex-direction:column;gap:24px}
+#hatchOverlay.on{display:flex}
+#hatchOverlay .hoEgg{width:140px;height:180px;border-radius:50% 50% 45% 45%;
+ background:radial-gradient(circle at 35% 30%,#d8b0ff,#7a3fd6);border:4px solid #b06aff;
+ box-shadow:0 0 40px #a86fd6aa;animation:eggShake .3s infinite}
+@keyframes eggShake{0%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}100%{transform:rotate(-8deg)}}
+#hatchOverlay .hoName{font-family:'Fredoka';font-size:36px;color:#e8d8ff;display:none}
+#hatchOverlay .hoRar{font-size:14px;letter-spacing:.2em;text-transform:uppercase;font-weight:800;display:none}
+#hatchOverlay .hoOk{background:linear-gradient(135deg,#7a3fd6,#a86fd6);color:#fff;font-family:'Fredoka';
+ font-size:16px;padding:12px 28px;border-radius:10px;border:none;cursor:pointer;display:none}
+/* Pet panel */
+#petPanel{position:fixed;inset:0;z-index:690;display:none;align-items:center;justify-content:center;
+ background:rgba(10,4,20,.85)}
+#petPanel.on{display:flex}
+#petPanelCard{background:linear-gradient(180deg,#1a0e2a,#0a0418);border:2px solid #a86fd644;border-radius:18px;
+ padding:24px;max-width:480px;width:90vw;max-height:80vh;overflow-y:auto}
+#petPanelCard h2{font-family:'Fredoka';font-size:24px;color:#e8d8ff;text-align:center;margin-bottom:16px}
+.petRow{display:flex;justify-content:space-between;align-items:center;background:#0a0418;border:1px solid #a86fd622;
+ border-radius:10px;padding:12px;margin-bottom:8px}
+.petRow .pi{display:flex;align-items:center;gap:10px}
+.petRow .pi .pn{font-family:'Fredoka';color:#e8d8ff;font-size:15px}
+.petRow .pi .pr{font-size:10px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:5px}
+.petRow button{font-size:12px;padding:6px 12px;border-radius:7px;border:none;cursor:pointer;background:#2d6b45;color:#fff}
+.petRow button.eq{background:#a86fd6}
 /* ============ FORTNITE-STYLE BATTLE PASS TIER BAR ============ */
 .passTierBar{width:100%}
 .ptbTrack{display:flex;gap:3px;width:100%}
@@ -4485,6 +4601,1037 @@ function startPassBgAnim(){
  frame();
 }
 /* ============================================================
+   PORTAL WORLD — life-sim with Rupees, houses, jobs, pets
+   ============================================================ */
+const Portal = {
+  // State
+  inPortal: false,
+  portalData: null,
+  nearPortal: false,
+  portalModel: null,
+  zoneScene: null,
+  zoneRenderer: null,
+  zoneCamera: null,
+  zoneRAF: null,
+  zoneType: null,
+  nearBed: false,
+  nearJobBoard: false,
+  nearUpgrade: false,
+  nearEggShop: false,
+  nearReturn: false,
+  activeJob: null,
+
+  // Portal position in farm world
+  portalPos: { x: 22, z: 22 },
+
+  // Job definitions (mirror server)
+  JOBS: [
+    { id: 'dogwalk', n: 'Dog Walking', icon: '🐕', payout: 100, cd: 120000 },
+    { id: 'factory', n: 'Factory Work', icon: '🏭', payout: 150, cd: 120000 },
+    { id: 'pizza', n: 'Pizza Delivery', icon: '🍕', payout: 120, cd: 120000 },
+    { id: 'farmhand', n: 'Farm Hand', icon: '🌾', payout: 80, cd: 120000 },
+  ],
+  HOUSE_PETS: [
+    { id: 'puppy', n: 'Puppy', rar: 'Common', ch: 30, boost: 0, col: '#e8a060' },
+    { id: 'kitten', n: 'Kitten', rar: 'Common', ch: 25, boost: 0, col: '#a0a0a0' },
+    { id: 'hamster', n: 'Hamster', rar: 'Uncommon', ch: 20, boost: 0.05, col: '#e8c060' },
+    { id: 'parrot', n: 'Parrot', rar: 'Rare', ch: 15, boost: 0.10, col: '#40e060' },
+    { id: 'minidragon', n: 'Mini Dragon', rar: 'Epic', ch: 9, boost: 0.25, col: '#ff4040' },
+    { id: 'workbear', n: 'Work Work Work Bear', rar: 'Mythical', ch: 1, boost: 9, col: '#ffd060' },
+  ],
+
+  init() {
+    const A = this;
+    // Hook into handleNet
+    if (typeof handleNet === 'function') {
+      const orig = handleNet;
+      window.handleNet = function (m) {
+        if (A.handleNet(m)) return;
+        orig(m);
+      };
+    }
+    // Build portal model in farm world
+    A.buildPortalModel();
+    // House selection cards
+    document.querySelectorAll('#portalSelect .psCard').forEach(c => {
+      c.onclick = () => A.selectHouse(c.dataset.zone);
+    });
+    // Tick loop for proximity checks
+    A.tickLoop();
+    console.log('[Portal] initialized.');
+  },
+
+  handleNet(m) {
+    const A = this;
+    switch (m.t) {
+      case 'init':
+        if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); }
+        return false;
+      case 'me':
+        if (m.me && m.me.portal) { A.portalData = m.me.portal; A.updateRupeeChip(); }
+        return false;
+      case 'portalUpdate':
+        A.portalData = m.portal;
+        A.updateRupeeChip();
+        A.updateZoneHUD();
+        return true;
+      case 'portalHatch':
+        A.portalData = m.portal;
+        A.showHatchResult(m.petId);
+        return true;
+      case 'portalVisit':
+        A.enterZone(m.portal.zone, m.portal, m.friendName, true);
+        return true;
+      default:
+        return false;
+    }
+  },
+
+  // ===== PORTAL MODEL in farm world =====
+  buildPortalModel() {
+    const A = this;
+    const g = new THREE.Group();
+    const pos = A.portalPos;
+
+    // Outer ring — torus
+    const ringGeom = new THREE.TorusGeometry(2, 0.3, 16, 32);
+    const ringMat = new THREE.MeshLambertMaterial({
+      color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.6
+    });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.position.set(pos.x, 2.5, pos.z);
+    ring.rotation.y = Math.PI / 2;
+    ring.castShadow = true;
+    g.add(ring);
+
+    // Vortex — a swirling canvas texture on a plane inside the ring
+    const vortexCv = document.createElement('canvas');
+    vortexCv.width = 256; vortexCv.height = 256;
+    const vctx = vortexCv.getContext('2d');
+    A.vortexCtx = vctx; A.vortexCv = vortexCv;
+    const vortexTex = new THREE.CanvasTexture(vortexCv);
+    A.vortexTex = vortexTex;
+    const vortexMat = new THREE.MeshBasicMaterial({ map: vortexTex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    const vortex = new THREE.Mesh(new THREE.CircleGeometry(1.8, 32), vortexMat);
+    vortex.position.set(pos.x, 2.5, pos.z);
+    vortex.rotation.y = Math.PI / 2;
+    g.add(vortex);
+    A.vortex = vortex;
+
+    // Point light
+    const light = new THREE.PointLight(0xa86fd6, 2, 12);
+    light.position.set(pos.x, 2.5, pos.z);
+    g.add(light);
+    A.portalLight = light;
+
+    // Floating particles spiraling inward
+    const pN = 30;
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(pN * 3);
+    A.portalParticles = [];
+    for (let i = 0; i < pN; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 1 + Math.random() * 1.5;
+      pPos[i * 3] = pos.x + Math.cos(a) * r;
+      pPos[i * 3 + 1] = 2.5 + (Math.random() - 0.5) * 2;
+      pPos[i * 3 + 2] = pos.z + Math.sin(a) * r;
+      A.portalParticles.push({ a, r, y: pPos[i * 3 + 1], speed: 0.5 + Math.random() });
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const pMat = new THREE.PointsMaterial({ color: 0xc0a0ff, size: 0.15, transparent: true, opacity: 0.8, depthWrite: false });
+    const particles = new THREE.Points(pGeo, pMat);
+    g.add(particles);
+    A.portalParticleObj = particles;
+
+    // Down arrow
+    const arrow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.6, 1.5, 6),
+      new THREE.MeshBasicMaterial({ color: 0xa86fd6 })
+    );
+    arrow.position.set(pos.x, 5, pos.z);
+    arrow.rotation.x = Math.PI;
+    g.add(arrow);
+    A.portalArrow = arrow;
+
+    scene.add(g);
+    A.portalModel = g;
+  },
+
+  tickPortal(t) {
+    const A = this;
+    if (!A.portalModel) return;
+    // Animate vortex texture
+    if (A.vortexCtx) {
+      const cv = A.vortexCv, ctx = A.vortexCtx;
+      ctx.fillStyle = 'rgba(20,5,40,0.3)';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      for (let i = 0; i < 5; i++) {
+        const a = t * 2 + i * 1.2;
+        const r = 40 + Math.sin(t + i) * 30;
+        ctx.fillStyle = `hsla(${270 + i * 15},80%,60%,0.3)`;
+        ctx.beginPath();
+        ctx.arc(128 + Math.cos(a) * r, 128 + Math.sin(a) * r, 30 + Math.sin(t * 2 + i) * 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      A.vortexTex.needsUpdate = true;
+    }
+    // Pulsing light
+    if (A.portalLight) A.portalLight.intensity = 1.5 + Math.sin(t * 2) * 0.5;
+    // Bobbing arrow
+    if (A.portalArrow) { A.portalArrow.position.y = 5 + Math.sin(t * 2) * 0.3; A.portalArrow.rotation.y = t * 0.5; }
+    // Spiral particles
+    if (A.portalParticleObj) {
+      const pos = A.portalParticleObj.geometry.attributes.position.array;
+      for (let i = 0; i < A.portalParticles.length; i++) {
+        const p = A.portalParticles[i];
+        p.a += 0.02 * p.speed;
+        p.r -= 0.01 * p.speed;
+        if (p.r < 0.3) p.r = 2.5;
+        pos[i * 3] = A.portalPos.x + Math.cos(p.a) * p.r;
+        pos[i * 3 + 1] = p.y + Math.sin(t * 2 + i) * 0.1;
+        pos[i * 3 + 2] = A.portalPos.z + Math.sin(p.a) * p.r;
+      }
+      A.portalParticleObj.geometry.attributes.position.needsUpdate = true;
+    }
+  },
+
+  // ===== ENTER PORTAL =====
+  enterPortal() {
+    const A = this;
+    if (!A.portalData || !A.portalData.zone) {
+      // Show welcome screen, then house selection
+      A.showWelcome();
+      return;
+    }
+    // Already has a house — go directly to zone
+    A.enterZone(A.portalData.zone, A.portalData);
+  },
+
+  showWelcome() {
+    const A = this;
+    const w = document.getElementById('portalWelcome');
+    w.classList.add('on');
+    if (typeof AudioSys !== 'undefined') AudioSys.play('emote');
+    setTimeout(() => {
+      w.classList.remove('on');
+      setTimeout(() => A.showHouseSelect(), 500);
+    }, 3500);
+  },
+
+  showHouseSelect() {
+    document.getElementById('portalSelect').classList.add('on');
+  },
+
+  selectHouse(zone) {
+    const A = this;
+    document.getElementById('portalSelect').classList.remove('on');
+    if (typeof send === 'function') send({ t: 'portalSelectHouse', zone });
+    // Wait for server response, then enter zone
+    setTimeout(() => {
+      if (A.portalData && A.portalData.zone) A.enterZone(A.portalData.zone, A.portalData);
+    }, 800);
+  },
+
+  // ===== ZONE SCENE (3D) =====
+  enterZone(zone, portalData, friendName, isVisit) {
+    const A = this;
+    A.inPortal = true;
+    A.zoneType = zone;
+    A.portalData = portalData;
+    A.isVisiting = !!isVisit;
+    A.visitingName = friendName || '';
+
+    // Hide farm HUD, show portal zone
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('topnav').style.display = 'none';
+    const pz = document.getElementById('portalZone');
+    pz.classList.add('on');
+    A.updateZoneHUD();
+    A.updateRupeeChip();
+
+    // Build the 3D scene
+    A.buildZoneScene(zone, portalData.houseTier || 0);
+    A.startZoneRender();
+  },
+
+  buildZoneScene(zone, houseTier) {
+    const A = this;
+    // Clean up old scene
+    if (A.zoneScene) { A.disposeZoneScene(); }
+
+    const canvas = document.getElementById('portalCanvas');
+    A.zoneRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    A.zoneRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    A.zoneRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+    A.zoneRenderer.shadowMap.enabled = true;
+    A.zoneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    A.zoneScene = new THREE.Scene();
+    A.zoneScene.background = new THREE.Color(zone === 'beach' ? 0x4a8abf : 0x4a4a5a);
+    A.zoneScene.fog = new THREE.Fog(zone === 'beach' ? 0x4a8abf : 0x4a4a5a, 30, 100);
+
+    A.zoneCamera = new THREE.PerspectiveCamera(60, canvas.offsetWidth / canvas.offsetHeight, 0.1, 200);
+    A.zoneCamera.position.set(0, 5, 12);
+    A.zoneCamera.lookAt(0, 2, 0);
+
+    // Lights
+    const amb = new THREE.AmbientLight(0xffffff, 0.5);
+    A.zoneScene.add(amb);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    sun.position.set(10, 20, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+    sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+    A.zoneScene.add(sun);
+
+    // Ground
+    const groundColor = zone === 'beach' ? 0xe8c890 : 0x6a6a7a;
+    const ground = new THREE.Mesh(
+      new THREE.CylinderGeometry(40, 40, 1, 48),
+      new THREE.MeshLambertMaterial({ color: groundColor })
+    );
+    ground.position.y = -0.5;
+    ground.receiveShadow = true;
+    A.zoneScene.add(ground);
+
+    if (zone === 'beach') {
+      // Ocean
+      const ocean = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 50),
+        new THREE.MeshLambertMaterial({ color: 0x2a6a9a, transparent: true, opacity: 0.7 })
+      );
+      ocean.rotation.x = -Math.PI / 2;
+      ocean.position.set(0, -0.3, -25);
+      A.zoneScene.add(ocean);
+      A.zoneOcean = ocean;
+      // Palm trees
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const r = 15 + Math.random() * 8;
+        A.makePalmTree(Math.cos(a) * r, Math.sin(a) * r);
+      }
+    } else {
+      // City — cobblestone path + lampposts
+      for (let i = 0; i < 6; i++) {
+        A.makeLamppost(-8 + i * 3, 8);
+        A.makeLamppost(-8 + i * 3, -8);
+      }
+      // NPC townhouses
+      for (let i = 0; i < 4; i++) {
+        A.makeTownhouse(-12 + i * 8, -15, 0).rotation.y = Math.PI;
+      }
+    }
+
+    // Your house (center)
+    A.makeHouse(0, 0, houseTier, true);
+    A.playerHouseTier = houseTier;
+
+    // Return portal (in front of house)
+    A.makeReturnPortal(0, 8);
+
+    // Job board (to the right)
+    A.makeJobBoard(10, 0);
+
+    // Upgrade NPC (to the left)
+    A.makeUpgradeNPC(-10, 0);
+
+    // Egg shop (behind house)
+    A.makeEggShop(0, -10);
+
+    // Simple player avatar in zone
+    A.zonePlayer = { x: 0, z: 6, ry: 0, obj: A.makeZonePlayerModel() };
+    A.zoneScene.add(A.zonePlayer.obj);
+
+    // Zone movement state
+    A.zoneKeys = {};
+    A.zoneYaw = 0;
+    A.zonePitch = 0.4;
+    A.zoneDist = 10;
+
+    // Input handlers
+    A.bindZoneInput();
+  },
+
+  makeZonePlayerModel() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0x4f8a5c });
+    const skinMat = new THREE.MeshLambertMaterial({ color: 0xe8b48a });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), mat);
+    torso.position.y = 1.55; torso.castShadow = true; g.add(torso);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
+    head.position.y = 2.36; head.castShadow = true; g.add(head);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.68, 0.16), mat);
+    armL.position.set(-0.46, 1.9, 0); g.add(armL);
+    const armR = armL.clone(); armR.position.x = 0.46; g.add(armR);
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x4a5a7a }));
+    legL.position.set(-0.15, 1.14, 0); g.add(legL);
+    const legR = legL.clone(); legR.position.x = 0.15; g.add(legR);
+    g.userData.parts = { torso, head, armL, armR, legL, legR };
+    return g;
+  },
+
+  makePalmTree(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.4, 5, 8),
+      new THREE.MeshLambertMaterial({ color: 0x8a6a3a })
+    );
+    trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
+    for (let i = 0; i < 5; i++) {
+      const leaf = new THREE.Mesh(
+        new THREE.ConeGeometry(0.4, 2.5, 4),
+        new THREE.MeshLambertMaterial({ color: 0x2f8a3a })
+      );
+      leaf.position.y = 5;
+      leaf.rotation.z = (i / 5) * Math.PI * 2;
+      leaf.rotation.x = 0.8;
+      leaf.position.x = Math.cos(i / 5 * Math.PI * 2) * 1;
+      leaf.position.z = Math.sin(i / 5 * Math.PI * 2) * 1;
+      g.add(leaf);
+    }
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+  },
+
+  makeLamppost(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.12, 4, 8),
+      new THREE.MeshLambertMaterial({ color: 0x2a2a2a })
+    );
+    post.position.y = 2; post.castShadow = true; g.add(post);
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 12, 10),
+      new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 })
+    );
+    lamp.position.y = 4; g.add(lamp);
+    const light = new THREE.PointLight(0xffd070, 0.5, 8);
+    light.position.y = 4; g.add(light);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+  },
+
+  makeTownhouse(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(5, 4, 5),
+      new THREE.MeshLambertMaterial({ color: 0x8a7a6a })
+    );
+    body.position.y = 2; body.castShadow = true; g.add(body);
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(3.8, 2, 4),
+      new THREE.MeshLambertMaterial({ color: 0x3a2a1a })
+    );
+    roof.position.y = 5; roof.rotation.y = Math.PI / 4; g.add(roof);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    return g;
+  },
+
+  makeHouse(x, z, tier, isMine) {
+    const A = this;
+    const g = new THREE.Group();
+    if (tier === 0) {
+      // Shack
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 3, 4),
+        new THREE.MeshLambertMaterial({ color: 0x8a6a3a })
+      );
+      body.position.y = 1.5; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(3.2, 1.5, 4),
+        new THREE.MeshLambertMaterial({ color: 0x4a3a20 })
+      );
+      roof.position.y = 3.75; roof.rotation.y = Math.PI / 4; g.add(roof);
+      // Door
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1.8, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x3a2a1a })
+      );
+      door.position.set(0, 0.9, 2.05); g.add(door);
+    } else if (tier === 1) {
+      // House (two-story)
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(6, 5, 5),
+        new THREE.MeshLambertMaterial({ color: 0xe0d0b0 })
+      );
+      body.position.y = 2.5; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(4.5, 2, 4),
+        new THREE.MeshLambertMaterial({ color: 0x8a3a2a })
+      );
+      roof.position.y = 6; roof.rotation.y = Math.PI / 4; g.add(roof);
+      // Door
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 2.2, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x4a2a1a })
+      );
+      door.position.set(0, 1.1, 2.55); g.add(door);
+      // Windows
+      for (const wx of [-1.8, 1.8]) {
+        const w1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+        w1.position.set(wx, 1.5, 2.55); g.add(w1);
+        const w2 = w1.clone(); w2.position.y = 3.5; g.add(w2);
+      }
+      // Chimney
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), new THREE.MeshLambertMaterial({ color: 0x5a4a3a }));
+      chim.position.set(1.5, 5.5, 0); g.add(chim);
+    } else {
+      // Mansion
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(10, 6, 7),
+        new THREE.MeshLambertMaterial({ color: 0xf0e8d8 })
+      );
+      body.position.y = 3; body.castShadow = true; g.add(body);
+      const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(7, 3, 4),
+        new THREE.MeshLambertMaterial({ color: 0x6a3a2a })
+      );
+      roof.position.y = 7.5; roof.rotation.y = Math.PI / 4; g.add(roof);
+      // Columns
+      for (const cx of [-2.5, 2.5]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+        col.position.set(cx, 2, 3.6); g.add(col);
+      }
+      // Grand door
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 3, 0.1),
+        new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.2 })
+      );
+      door.position.set(0, 1.5, 3.55); g.add(door);
+      // Windows
+      for (const wx of [-3, 3]) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+        w.position.set(wx, 2, 3.55); g.add(w);
+        const w2 = w.clone(); w2.position.y = 4; g.add(w2);
+      }
+    }
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.playerHouse = g;
+    A.bedPos = { x: x, z: z - 1 }; // bed is inside, but interaction point is at the door
+    return g;
+  },
+
+  makeReturnPortal(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.5, 0.2, 12, 24),
+      new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 })
+    );
+    ring.position.y = 2; ring.rotation.y = 0; g.add(ring);
+    const light = new THREE.PointLight(0xa86fd6, 1.5, 8);
+    light.position.y = 2; g.add(light);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.returnPortal = g;
+    A.returnPortalPos = { x, z };
+  },
+
+  makeJobBoard(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    // Post
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.15, 3, 8),
+      new THREE.MeshLambertMaterial({ color: 0x6a4a2a })
+    );
+    post.position.y = 1.5; post.castShadow = true; g.add(post);
+    // Board
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 2, 0.2),
+      new THREE.MeshLambertMaterial({ color: 0x8a6a4a })
+    );
+    board.position.y = 2.5; board.castShadow = true; g.add(board);
+    // Sign text (canvas)
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#f0e8d0'; cx.fillRect(0, 0, 256, 64);
+    cx.fillStyle = '#3a2a1a'; cx.font = '700 28px Fredoka, sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('JOB BOARD', 128, 32);
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.5, 0.6),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })
+    );
+    sign.position.set(0, 2.5, 0.11); g.add(sign);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.jobBoardPos = { x, z };
+  },
+
+  makeUpgradeNPC(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    // Body
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.95, 0.42),
+      new THREE.MeshLambertMaterial({ color: 0xe8a33d })
+    );
+    body.position.y = 1.55; body.castShadow = true; g.add(body);
+    // Hard hat
+    const hat = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0xe8c030 })
+    );
+    hat.position.y = 2.4; g.add(hat);
+    // Name tag
+    const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
+    const tc = tagCv.getContext('2d');
+    tc.fillStyle = 'rgba(30,40,25,.8)'; tc.beginPath(); tc.roundRect(4, 4, 248, 56, 14); tc.fill();
+    tc.fillStyle = '#ffd24a'; tc.font = '700 24px Fredoka, sans-serif';
+    tc.textAlign = 'center'; tc.textBaseline = 'middle'; tc.fillText('Builder Bob', 128, 32);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagCv), depthTest: false }));
+    tag.position.y = 3.1; tag.scale.set(2, 0.5, 1); g.add(tag);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.upgradeNpcPos = { x, z };
+  },
+
+  makeEggShop(x, z) {
+    const A = this;
+    const g = new THREE.Group();
+    // Stall
+    const stall = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 1, 2),
+      new THREE.MeshLambertMaterial({ color: 0x6a4a8a })
+    );
+    stall.position.y = 0.5; stall.castShadow = true; g.add(stall);
+    // Egg display
+    const egg = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 16, 12),
+      new THREE.MeshLambertMaterial({ color: 0xd8b0ff, emissive: new THREE.Color(0x7a3fd6), emissiveIntensity: 0.4 })
+    );
+    egg.scale.y = 1.3; egg.position.y = 1.5; g.add(egg);
+    // Light
+    const light = new THREE.PointLight(0xa86fd6, 1, 6);
+    light.position.y = 2; g.add(light);
+    // Sign
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = 'rgba(20,5,40,.85)'; cx.beginPath(); cx.roundRect(4, 4, 248, 56, 14); cx.fill();
+    cx.fillStyle = '#d8b0ff'; cx.font = '700 22px Fredoka, sans-serif';
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('🥚 HOUSE EGG SHOP', 128, 32);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+    sign.position.y = 2.8; sign.scale.set(2.5, 0.6, 1); g.add(sign);
+    g.position.set(x, 0, z);
+    A.zoneScene.add(g);
+    A.eggShopPos = { x, z };
+  },
+
+  // ===== ZONE INPUT =====
+  bindZoneInput() {
+    const A = this;
+    A._zoneKeydown = (e) => {
+      if (!A.inPortal) return;
+      A.zoneKeys[e.code] = true;
+      if (e.key === 'e' || e.key === 'E') A.zoneInteract();
+      if (e.key === 'Escape') A.exitZone();
+    };
+    A._zoneKeyup = (e) => { A.zoneKeys[e.code] = false; };
+    addEventListener('keydown', A._zoneKeydown);
+    addEventListener('keyup', A._zoneKeyup);
+
+    // Mouse drag for camera
+    const canvas = document.getElementById('portalCanvas');
+    A._zoneMouseDown = (e) => { A._zoneDrag = true; A._zoneMX = e.clientX; A._zoneMY = e.clientY; };
+    A._zoneMouseUp = () => { A._zoneDrag = false; };
+    A._zoneMouseMove = (e) => {
+      if (!A._zoneDrag) return;
+      A.zoneYaw -= (e.clientX - A._zoneMX) * 0.005;
+      A.zonePitch = Math.max(-0.3, Math.min(1.2, A.zonePitch + (e.clientY - A._zoneMY) * 0.004));
+      A._zoneMX = e.clientX; A._zoneMY = e.clientY;
+    };
+    canvas.addEventListener('mousedown', A._zoneMouseDown);
+    addEventListener('mouseup', A._zoneMouseUp);
+    addEventListener('mousemove', A._zoneMouseMove);
+  },
+
+  unbindZoneInput() {
+    const A = this;
+    if (A._zoneKeydown) removeEventListener('keydown', A._zoneKeydown);
+    if (A._zoneKeyup) removeEventListener('keyup', A._zoneKeyup);
+    if (A._zoneMouseDown) document.getElementById('portalCanvas').removeEventListener('mousedown', A._zoneMouseDown);
+    if (A._zoneMouseUp) removeEventListener('mouseup', A._zoneMouseUp);
+    if (A._zoneMouseMove) removeEventListener('mousemove', A._zoneMouseMove);
+  },
+
+  zoneInteract() {
+    const A = this;
+    if (A.nearBed) A.sleep();
+    else if (A.nearReturn) A.exitZone();
+    else if (A.nearJobBoard) A.openJobBoard();
+    else if (A.nearUpgrade) A.openUpgrade();
+    else if (A.nearEggShop) A.openEggShop();
+  },
+
+  // ===== ZONE RENDER LOOP =====
+  startZoneRender() {
+    const A = this;
+    let lastT = performance.now();
+    function loop() {
+      if (!A.inPortal) { A.zoneRAF = null; return; }
+      const t = performance.now() / 1000;
+      const dt = Math.min(0.05, (t * 1000 - lastT) / 1000); lastT = t * 1000;
+
+      // Movement (WASD)
+      if (A.zonePlayer) {
+        let mx = 0, mz = 0;
+        if (A.zoneKeys.KeyW) mz -= 1;
+        if (A.zoneKeys.KeyS) mz += 1;
+        if (A.zoneKeys.KeyA) mx -= 1;
+        if (A.zoneKeys.KeyD) mx += 1;
+        const sp = 6;
+        if (mx || mz) {
+          const len = Math.hypot(mx, mz); mx /= len; mz /= len;
+          const cy = A.zoneYaw;
+          const wx = mx * Math.cos(cy) + mz * Math.sin(cy);
+          const wz = -mx * Math.sin(cy) + mz * Math.cos(cy);
+          let nx = A.zonePlayer.x + wx * sp * dt;
+          let nz = A.zonePlayer.z + wz * sp * dt;
+          const r = Math.hypot(nx, nz); if (r > 35) { nx *= 35 / r; nz *= 35 / r; }
+          A.zonePlayer.x = nx; A.zonePlayer.z = nz;
+          A.zonePlayer.ry = Math.atan2(wx, wz);
+        }
+        A.zonePlayer.obj.position.set(A.zonePlayer.x, 0, A.zonePlayer.z);
+        A.zonePlayer.obj.rotation.y = A.zonePlayer.ry;
+      }
+
+      // Camera follows player
+      if (A.zoneCamera && A.zonePlayer) {
+        A.zoneCamera.position.set(
+          A.zonePlayer.x + Math.sin(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist,
+          2.5 + Math.sin(A.zonePitch) * A.zoneDist,
+          A.zonePlayer.z + Math.cos(A.zoneYaw) * Math.cos(A.zonePitch) * A.zoneDist
+        );
+        A.zoneCamera.lookAt(A.zonePlayer.x, 1.8, A.zonePlayer.z);
+      }
+
+      // Proximity checks
+      A.checkZoneProximity();
+
+      // Ocean waves
+      if (A.zoneOcean) A.zoneOcean.position.y = -0.3 + Math.sin(t * 1.5) * 0.1;
+
+      A.zoneRenderer.render(A.zoneScene, A.zoneCamera);
+      A.zoneRAF = requestAnimationFrame(loop);
+    }
+    loop();
+  },
+
+  checkZoneProximity() {
+    const A = this;
+    if (!A.zonePlayer) return;
+    const px = A.zonePlayer.x, pz = A.zonePlayer.z;
+    A.nearBed = A.bedPos && Math.hypot(px - A.bedPos.x, pz - A.bedPos.z) < 3;
+    A.nearReturn = A.returnPortalPos && Math.hypot(px - A.returnPortalPos.x, pz - A.returnPortalPos.z) < 3;
+    A.nearJobBoard = A.jobBoardPos && Math.hypot(px - A.jobBoardPos.x, pz - A.jobBoardPos.z) < 3;
+    A.nearUpgrade = A.upgradeNpcPos && Math.hypot(px - A.upgradeNpcPos.x, pz - A.upgradeNpcPos.z) < 3;
+    A.nearEggShop = A.eggShopPos && Math.hypot(px - A.eggShopPos.x, pz - A.eggShopPos.z) < 3;
+
+    const el = document.getElementById('portalZonePrompt');
+    let txt = '';
+    if (A.nearBed) txt = '<b>[E]</b> Sleep (+50 Rupees)';
+    else if (A.nearReturn) txt = '<b>[E]</b> Return to Farm World';
+    else if (A.nearJobBoard) txt = '<b>[E]</b> View Job Board';
+    else if (A.nearUpgrade) txt = '<b>[E]</b> Talk to Builder Bob (Upgrade House)';
+    else if (A.nearEggShop) txt = '<b>[E]</b> Buy House Egg (2000 Rupees)';
+    if (txt) { el.innerHTML = txt; el.classList.add('on'); }
+    else el.classList.remove('on');
+  },
+
+  // ===== SLEEP =====
+  sleep() {
+    const A = this;
+    if (typeof send === 'function') send({ t: 'portalSleep' });
+    // Fade effect
+    const fade = document.createElement('div');
+    fade.style.cssText = 'position:fixed;inset:0;background:#000;z-index:698;opacity:0;transition:opacity 1s;pointer-events:none';
+    document.body.appendChild(fade);
+    setTimeout(() => { fade.style.opacity = '1'; }, 50);
+    setTimeout(() => {
+      fade.style.opacity = '0';
+      setTimeout(() => fade.remove(), 1000);
+    }, 2000);
+    if (typeof AudioSys !== 'undefined') AudioSys.play('emote');
+  },
+
+  // ===== EXIT ZONE =====
+  exitZone() {
+    const A = this;
+    A.inPortal = false;
+    A.unbindZoneInput();
+    if (A.zoneRAF) { cancelAnimationFrame(A.zoneRAF); A.zoneRAF = null; }
+    A.disposeZoneScene();
+    document.getElementById('portalZone').classList.remove('on');
+    document.getElementById('portalZonePrompt').classList.remove('on');
+    document.getElementById('hud').style.display = '';
+    document.getElementById('topnav').style.display = '';
+    A.isVisiting = false;
+    // Teleport farm player back to near the portal
+    if (typeof player !== 'undefined') {
+      player.x = A.portalPos.x + 4; player.z = A.portalPos.z + 4; player.y = 0; player.vy = 0;
+    }
+  },
+
+  disposeZoneScene() {
+    const A = this;
+    if (A.zoneScene) {
+      A.zoneScene.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m => m.dispose()); else o.material.dispose(); }
+      });
+      A.zoneScene = null;
+    }
+    if (A.zoneRenderer) { A.zoneRenderer.dispose(); A.zoneRenderer = null; }
+    A.zoneOcean = null; A.playerHouse = null; A.returnPortal = null;
+  },
+
+  // ===== JOB BOARD =====
+  openJobBoard() {
+    const A = this;
+    const el = document.getElementById('jobBoardCard');
+    const now = Date.now();
+    let rows = A.JOBS.map(j => {
+      const cd = A.portalData && A.portalData.jobCd && A.portalData.jobCd[j.id] || 0;
+      const cdRem = Math.max(0, Math.ceil((cd + j.cd - now) / 1000));
+      const onCd = cdRem > 0;
+      return `<div class="jobRow">
+        <div class="ji">
+          <div class="jIcon">${j.icon}</div>
+          <div>
+            <div class="jn">${j.n}</div>
+            <div class="jp">🪙 ${j.payout} Rupees</div>
+            ${onCd ? `<div class="jcd">Cooldown: ${cdRem}s</div>` : ''}
+          </div>
+        </div>
+        <button class="work" data-job="${j.id}" ${onCd ? 'disabled' : ''}>${onCd ? 'Wait' : 'WORK'}</button>
+      </div>`;
+    }).join('');
+    el.innerHTML = `<h2>Job Board</h2><p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Work to earn Rupees. 2-min cooldown per job.</p>${rows}
+      <button class="esClose" id="jbClose" style="width:100%;margin-top:8px">Close</button>`;
+    document.getElementById('jobBoard').classList.add('on');
+    el.querySelectorAll('[data-job]').forEach(b => {
+      b.onclick = () => {
+        const jobId = b.dataset.job;
+        document.getElementById('jobBoard').classList.remove('on');
+        A.startJob(jobId);
+      };
+    });
+    document.getElementById('jbClose').onclick = () => document.getElementById('jobBoard').classList.remove('on');
+  },
+
+  startJob(jobId) {
+    const A = this;
+    A.activeJob = jobId;
+    // Simple job mini-game: press the right key sequence
+    const job = A.JOBS.find(j => j.id === jobId);
+    if (!job) return;
+    // Generate a sequence of 5 keys
+    const keys = ['Q', 'W', 'E', 'A', 'S', 'D'];
+    const seq = [];
+    for (let i = 0; i < 5; i++) seq.push(keys[Math.floor(Math.random() * keys.length)]);
+
+    // Show mini-game overlay
+    const ov = document.createElement('div');
+    ov.id = 'jobMinigame';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:699;display:flex;align-items:center;justify-content:center;background:rgba(10,4,20,.9);flex-direction:column;gap:20px';
+    ov.innerHTML = `
+      <h2 style="font-family:Fredoka;color:#e8d8ff;font-size:28px">${job.icon} ${job.n}</h2>
+      <p style="color:#8060a0;font-size:14px">Press the keys in order!</p>
+      <div id="mgSeq" style="display:flex;gap:10px">${seq.map((k, i) => `<div class="mgKey" data-i="${i}" style="width:50px;height:50px;border-radius:10px;background:#1a0e2a;border:2px solid #a86fd644;display:flex;align-items:center;justify-content:center;font-family:Fredoka;font-size:24px;color:#a86fd688">${k}</div>`).join('')}</div>
+      <div id="mgStatus" style="color:#80e890;font-size:16px;font-family:Fredoka">Press the first key...</div>
+    `;
+    document.body.appendChild(ov);
+
+    let idx = 0;
+    const handler = (e) => {
+      const key = e.key.toUpperCase();
+      if (!['Q', 'W', 'E', 'A', 'S', 'D'].includes(key)) return;
+      const expected = seq[idx];
+      const keyEls = ov.querySelectorAll('.mgKey');
+      if (key === expected) {
+        keyEls[idx].style.background = '#2d6b45'; keyEls[idx].style.color = '#fff';
+        idx++;
+        if (idx >= seq.length) {
+          // Job complete!
+          removeEventListener('keydown', handler);
+          ov.remove();
+          if (typeof send === 'function') send({ t: 'portalJobComplete', jobId });
+          if (typeof toast === 'function') toast('Job complete! Collecting Rupees...', 'good');
+        } else {
+          document.getElementById('mgStatus').textContent = 'Next: ' + seq[idx];
+        }
+      } else {
+        // Wrong key — flash red
+        document.getElementById('mgStatus').textContent = 'Wrong! Try again.';
+        document.getElementById('mgStatus').style.color = '#ff4040';
+        setTimeout(() => { document.getElementById('mgStatus').style.color = '#80e890'; document.getElementById('mgStatus').textContent = 'Next: ' + seq[idx]; }, 500);
+      }
+    };
+    addEventListener('keydown', handler);
+    // Cancel button
+    ov.addEventListener('click', (e) => {
+      if (e.target === ov) { removeEventListener('keydown', handler); ov.remove(); }
+    });
+  },
+
+  // ===== UPGRADE NPC =====
+  openUpgrade() {
+    const A = this;
+    if (A.isVisiting) { if (typeof toast === 'function') toast("You can't upgrade someone else's house!", 'err'); return; }
+    const tier = A.portalData ? A.portalData.houseTier || 0 : 0;
+    const tiers = [
+      { n: 'Shack', cost: 0 },
+      { n: 'House', cost: 5000 },
+      { n: 'Mansion', cost: 50000 },
+    ];
+    const next = tier < 2 ? tiers[tier + 1] : null;
+    const body = document.getElementById('jobBoardCard');
+    body.innerHTML = `<h2>Builder Bob</h2>
+      <p style="color:#8060a0;text-align:center;margin-bottom:18px;font-size:13px">Your current house: <b style="color:#e8d8ff">${tiers[tier].n}</b></p>
+      ${next ? `<div style="background:#0a0418;border:1px solid #a86fd622;border-radius:12px;padding:18px;text-align:center;margin-bottom:14px">
+        <h3 style="font-family:Fredoka;color:#e8d8ff;font-size:22px">Upgrade to ${next.n}</h3>
+        <p style="color:#80e890;font-size:18px;margin:8px 0">🪙 ${next.cost} Rupees</p>
+        <button class="btnA" id="upgBtn" style="width:100%;padding:12px;font-size:16px"${(A.portalData.rupees || 0) < next.cost ? ' disabled' : ''}>UPGRADE</button>
+      </div>` : '<p style="color:#80e890;text-align:center">You\'re at the max tier — Mansion! 🏛</p>'}
+      <button class="esClose" id="upgClose" style="width:100%">Close</button>`;
+    document.getElementById('jobBoard').classList.add('on');
+    const upgBtn = document.getElementById('upgBtn');
+    if (upgBtn) upgBtn.onclick = () => {
+      if (typeof send === 'function') send({ t: 'portalUpgradeHouse' });
+      document.getElementById('jobBoard').classList.remove('on');
+      // Rebuild the house model after a delay
+      setTimeout(() => { if (A.portalData && A.playerHouse) { A.zoneScene.remove(A.playerHouse); A.makeHouse(0, 0, A.portalData.houseTier, true); } }, 500);
+    };
+    document.getElementById('upgClose').onclick = () => document.getElementById('jobBoard').classList.remove('off');
+    document.getElementById('upgClose').onclick = () => document.getElementById('jobBoard').classList.remove('on');
+  },
+
+  // ===== EGG SHOP =====
+  openEggShop() {
+    const A = this;
+    const body = document.getElementById('eggShopCard');
+    const rupees = A.portalData ? A.portalData.rupees || 0 : 0;
+    body.innerHTML = `<h2>House Egg</h2>
+      <div class="esSub">limited time · 6 pets · 1% mythical bear</div>
+      <div class="esEgg"></div>
+      <p style="color:#80e890;font-size:16px">🪙 2,000 Rupees</p>
+      <p style="color:#8060a0;font-size:12px">You have: ${rupees} Rupees</p>
+      <div class="esPets">
+        ${A.HOUSE_PETS.map(p => `<div class="esPet"><b>${p.n}</b><small style="color:${p.rar === 'Mythical' ? '#ffd060' : '#a86fd6'}">${p.rar} · ${p.ch}%</small></div>`).join('')}
+      </div>
+      <button class="esBuy" id="esBuy" ${rupees < 2000 ? 'disabled style="opacity:.5"' : ''}>BUY EGG</button>
+      <button class="esClose" id="esClose">Close</button>`;
+    document.getElementById('eggShop').classList.add('on');
+    document.getElementById('esBuy').onclick = () => {
+      document.getElementById('eggShop').classList.remove('on');
+      A.showHatchAnimation();
+      if (typeof send === 'function') send({ t: 'portalBuyEgg' });
+    };
+    document.getElementById('esClose').onclick = () => document.getElementById('eggShop').classList.remove('on');
+  },
+
+  showHatchAnimation() {
+    const A = this;
+    const ov = document.getElementById('hatchOverlay');
+    document.getElementById('hoEgg').style.display = '';
+    document.getElementById('hoName').style.display = 'none';
+    document.getElementById('hoRar').style.display = 'none';
+    document.getElementById('hoOk').style.display = 'none';
+    ov.classList.add('on');
+    // The actual result comes from the server via portalHatch message
+    // But we'll also auto-hide after 5s as fallback
+    A._hatchTimeout = setTimeout(() => { if (ov.classList.contains('on')) A.showHatchResult('puppy'); }, 5000);
+  },
+
+  showHatchResult(petId) {
+    const A = this;
+    if (A._hatchTimeout) { clearTimeout(A._hatchTimeout); A._hatchTimeout = null; }
+    const pet = A.HOUSE_PETS.find(p => p.id === petId) || A.HOUSE_PETS[0];
+    const ov = document.getElementById('hatchOverlay');
+    document.getElementById('hoEgg').style.display = 'none';
+    const nameEl = document.getElementById('hoName');
+    nameEl.textContent = pet.n; nameEl.style.display = 'block';
+    nameEl.style.color = pet.rar === 'Mythical' ? '#ffd060' : '#e8d8ff';
+    const rarEl = document.getElementById('hoRar');
+    rarEl.textContent = pet.rar; rarEl.style.display = 'block';
+    rarEl.style.color = pet.rar === 'Mythical' ? '#ffd060' : '#a86fd6';
+    document.getElementById('hoOk').style.display = 'block';
+    if (typeof AudioSys !== 'undefined') {
+      AudioSys.play('hatch');
+      if (pet.rar === 'Mythical') setTimeout(() => AudioSys.play('mut'), 300);
+    }
+    document.getElementById('hoOk').onclick = () => ov.classList.remove('on');
+    // Auto-close after 4s
+    setTimeout(() => ov.classList.remove('on'), 4000);
+  },
+
+  // ===== HUD UPDATES =====
+  updateRupeeChip() {
+    const A = this;
+    const chip = document.getElementById('rupeeChip');
+    if (!chip) return;
+    if (A.inPortal || (A.portalData && A.portalData.rupees > 0)) {
+      chip.classList.add('on');
+      document.getElementById('rupeeDrops').textContent = A.fmtR(A.portalData ? A.portalData.rupees : 0);
+    } else chip.classList.remove('on');
+  },
+
+  updateZoneHUD() {
+    const A = this;
+    if (!A.inPortal) return;
+    const zone = A.zoneType === 'beach' ? '🏖 Beach' : '🏙 City';
+    const title = A.isVisiting ? `${zone} — Visiting ${A.visitingName}` : `${zone} — Your Home`;
+    document.getElementById('pzTitle').textContent = title;
+    document.getElementById('pzRupees').textContent = '🪙 ' + (A.portalData ? A.portalData.rupees : 0) + ' Rupees';
+  },
+
+  fmtR(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return String(Math.floor(n));
+  },
+
+  // ===== TICK LOOP (proximity check in farm world) =====
+  tickLoop() {
+    const A = this;
+    const tick = (t_ms) => {
+      const t = t_ms / 1000;
+      A.tickPortal(t);
+      // Check proximity to portal in farm world
+      if (!A.inPortal && typeof player !== 'undefined' && A.portalModel) {
+        const d = Math.hypot(player.x - A.portalPos.x, player.z - A.portalPos.z);
+        A.nearPortal = d < 4;
+        const el = document.getElementById('portalPrompt');
+        if (A.nearPortal) {
+          el.innerHTML = '<b>[E]</b> Enter the Portal';
+          el.classList.add('on');
+        } else el.classList.remove('on');
+      } else {
+        document.getElementById('portalPrompt').classList.remove('on');
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  },
+};
+/* Boot Portal module */
+(function () {
+  function boot() {
+    if (typeof THREE === 'undefined' || typeof handleNet !== 'function' || typeof ST === 'undefined') {
+      setTimeout(boot, 50); return;
+    }
+    Portal.init();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+/* ============================================================
    MOBILE TOUCH CONTROLS — self-initializing
    Only activates on touch devices. Mirrors keyboard input.
    ============================================================ */
@@ -4852,6 +5999,44 @@ window.TimerCtrl={
  <div class="a2sp">THE DESCENT</div>
  <div class="a2sub">act 2 begins</div>
 </div>
+<!-- ============ PORTAL WORLD ============ -->
+<div id="portalPrompt"></div>
+<div id="portalWelcome"><div style="text-align:center"><div class="pwTitle">WELCOME</div><div class="pwSub">to a new world</div></div></div>
+<div id="portalSelect">
+ <div class="psTitle">Choose Your Home</div>
+ <div class="psSub">pick a zone to live in</div>
+ <div class="psCards">
+  <div class="psCard" data-zone="beach">
+   <div class="psPrev" style="background:linear-gradient(180deg,#4a8abf 0%,#f0e8a0 60%,#e8c890 100%)"></div>
+   <div class="psInfo"><h3>🏖 Beach House</h3><p>Sandy shores, ocean views, palm trees. Relaxing coastal living.</p></div>
+  </div>
+  <div class="psCard" data-zone="city">
+   <div class="psPrev" style="background:linear-gradient(180deg,#4a4a5a 0%,#6a6a7a 40%,#8a8a9a 100%)"></div>
+   <div class="psInfo"><h3>🏙 City House</h3><p>Cobblestone streets, lampposts, urban energy. Downtown living.</p></div>
+  </div>
+ </div>
+</div>
+<div id="rupeeChip">
+ <div>🪙</div>
+ <div><b class="rd" id="rupeeDrops">0</b><span class="rl">Rupees</span></div>
+</div>
+<div id="portalZone">
+ <div id="portalZoneHead">
+  <div class="pzTitle" id="pzTitle">Portal World</div>
+  <div class="pzRupees" id="pzRupees">🪙 0 Rupees</div>
+ </div>
+ <div id="portalZoneBody"><canvas id="portalCanvas"></canvas></div>
+ <div id="portalZonePrompt"></div>
+</div>
+<div id="jobBoard"><div id="jobBoardCard"></div></div>
+<div id="eggShop"><div id="eggShopCard"></div></div>
+<div id="hatchOverlay">
+ <div class="hoEgg" id="hoEgg"></div>
+ <div class="hoName" id="hoName"></div>
+ <div class="hoRar" id="hoRar"></div>
+ <button class="hoOk" id="hoOk">Collect</button>
+</div>
+<div id="petPanel"><div id="petPanelCard"></div></div>
 <!-- ============ RESTOCK BANNER ============ -->
 <div id="restockBanner">
  <div class="rbIcon">🌱</div>
@@ -6599,6 +7784,12 @@ const Act2 = {
     const origTryInteract = window.tryInteract;
     if (origTryInteract) {
       window.tryInteract = function () {
+        // Check portal first (enter portal world)
+        if (typeof Portal !== 'undefined' && Portal.nearPortal) {
+          Portal.enterPortal();
+          if (typeof AudioSys !== 'undefined') AudioSys.play('click');
+          return;
+        }
         // Check horseman first (opens S2 GUI)
         if (A.nearHorseman) {
           A.openS2GUI();
