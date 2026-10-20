@@ -119,23 +119,30 @@ input[type=color]{padding:2px;width:52px;height:38px;cursor:pointer}
 .ewSlot span{font-size:8.5px;font-weight:800;line-height:1.1;max-width:78px;overflow:hidden}
 .ewSlot small{font-size:7px;color:#8a6880;text-transform:uppercase;letter-spacing:.08em}
 #intro{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;
- background:radial-gradient(ellipse at 50% 120%,#4a7a3f 0%,#2a4630 45%,#16251a 100%);overflow:hidden}
-#intro::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(115deg,#ffffff05 0 2px,transparent 2px 90px)}
-.iP{position:absolute;border-radius:50%;background:radial-gradient(circle,#ffe8a066,transparent 70%);animation:floatUp linear infinite}
+ background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0612 45%,#0a0208 100%);overflow:hidden}
+#intro::before{content:'';position:absolute;inset:0;
+ background:radial-gradient(ellipse at 30% 60%,#ff200008,transparent 55%),radial-gradient(ellipse at 70% 30%,#a86fd608,transparent 55%),
+ repeating-linear-gradient(115deg,#ffffff04 0 2px,transparent 2px 90px)}
+.iP{position:absolute;border-radius:50%;background:radial-gradient(circle,#ff803044,transparent 70%);animation:floatUp linear infinite}
 @keyframes floatUp{from{transform:translateY(110vh) rotate(0)}to{transform:translateY(-15vh) rotate(340deg)}}
 #introCard{position:relative;z-index:2;width:min(460px,92vw);text-align:center;padding:20px}
-#introCard .logo{font-family:'Fredoka';font-size:88px;font-weight:600;color:#f7f0e0;letter-spacing:.3em;text-indent:.3em;line-height:1;
- text-shadow:0 4px 0 #1e3322,0 14px 40px #0008;animation:logoIn 1s cubic-bezier(.2,1.4,.4,1)}
-@keyframes logoIn{from{transform:scale(.5);opacity:0;letter-spacing:.6em}}
-#introCard .tag{color:#b8d8a0;letter-spacing:.4em;font-size:12px;text-transform:uppercase;margin:10px 0 34px;animation:fadeIn 1s .4s both}
+#introCard .logo{font-family:'Creepster',cursive;font-size:82px;font-weight:400;color:#ff7020;letter-spacing:.06em;line-height:1;
+ text-shadow:0 0 20px #ff300066,0 0 60px #ff200044,0 4px 0 #200;animation:logoIn 1s cubic-bezier(.2,1.4,.4,1),spookyFlick 4s infinite}
+@keyframes logoIn{from{transform:scale(.5);opacity:0;letter-spacing:.3em}}
+#introCard .tag{color:#ff9a60;letter-spacing:.4em;font-size:12px;text-transform:uppercase;margin:10px 0 34px;animation:fadeIn 1s .4s both;font-family:'Fredoka'}
 @keyframes fadeIn{from{opacity:0}}
-.iField{background:#f7f0e0d9;border:2px solid #ffffff2a;border-radius:16px;padding:26px 30px;box-shadow:0 20px 60px #000a;animation:fadeIn 1s .7s both}
-.iField label{display:block;font-family:'Fredoka';font-size:18px;color:#2f5d3a;margin-bottom:10px}
-#nameIn{width:100%;font-size:19px;text-align:center;padding:12px;font-weight:800;border:3px solid #2f5d3a55;border-radius:12px;outline:none}
+.iField{background:linear-gradient(180deg,#1a0a14,#0a0408);border:2px solid #ff301044;border-radius:16px;padding:26px 30px;
+ box-shadow:0 20px 60px #000a,0 0 40px #ff200022;animation:fadeIn 1s .7s both}
+.iField label{display:block;font-family:'Creepster',cursive;font-size:22px;color:#ff8040;margin-bottom:10px;letter-spacing:.05em}
+#nameIn{width:100%;font-size:19px;text-align:center;padding:12px;font-weight:800;
+ border:3px solid #ff301044;border-radius:12px;outline:none;background:#0a0408;color:#ffd8c0;font-family:'Nunito'}
+#nameIn:focus{border-color:#ff3010}
 #nameIn:focus{border-color:var(--amber)}
-#nameErr{color:var(--red);font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px}
-#startBtn{width:100%;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-size:20px;padding:13px;border-radius:12px;
- box-shadow:0 6px 0 #1e3d26,0 14px 30px #0007;margin-top:6px}
+#nameErr{color:#ff4030;font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px}
+#startBtn{width:100%;background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;font-size:20px;padding:13px;border-radius:12px;
+ font-family:'Creepster',cursive;letter-spacing:.06em;border:2px solid #ff301066;
+ box-shadow:0 6px 0 #3a0606,0 14px 30px #ff200022;margin-top:6px}
+#startBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #3a0606}
 #startBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #1e3d26}
 .iKeys{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap;animation:fadeIn 1s 1.1s both}
 .iKeys span{background:#ffffff12;border:1px solid #ffffff25;color:#d8e8c8;font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px}
@@ -500,6 +507,14 @@ html.touch .grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 html.touch .card{padding:10px}
 html.touch .card .rname{font-size:14px}
 html.touch #adminDash{width:96vw;height:94vh}
+html.touch #timerBar{top:auto;bottom:120px;max-width:90vw;padding:6px 16px}
+html.touch #timerBar #timerTime{font-size:24px}
+html.touch #annBar{top:auto;bottom:180px;max-width:90vw;padding:10px 16px}
+html.touch #annBar .msg{font-size:16px}
+html.touch #annBar.style-spooky .msg{font-size:20px}
+html.touch #restockBanner{max-width:90vw;padding:16px 28px}
+html.touch #restockBanner .rbTitle{font-size:20px}
+html.touch #restockBanner .rbIcon{font-size:36px}
 html.touch .admTabs button{padding:8px 10px;font-size:11px}
 html.touch .seedCfgRow{grid-template-columns:1fr;gap:6px}
 html.touch .seedCfgRow .sname{font-size:12px}
@@ -757,13 +772,13 @@ html.touch .seedCfgRow .sname{font-size:12px}
 <body>
 <div id="intro">
  <div id="introCard">
-  <div class="logo">FARM</div>
-  <div class="tag">grow · mutate · prosper</div>
+  <div class="logo">LAST BLOOD</div>
+  <div class="tag">season 1 · spooky</div>
   <div class="iField">
-   <label>Choose your farmer name</label>
+   <label>Enter if you dare</label>
    <input id="nameIn" maxlength="16" placeholder="e.g. SunnyGrower" autocomplete="off" spellcheck="false">
    <div id="nameErr"></div>
-   <button id="startBtn">Start Farming</button>
+   <button id="startBtn">Begin</button>
   </div>
   <div class="iKeys"><span>WASD move</span><span>Mouse camera</span><span>E interact</span><span>I inventory</span><span>M map</span><span>B emotes</span></div>
   <div id="introLoad"><div class="bar"><i id="introBar"></i></div><p id="introMsg">Connecting to the garden…</p></div>
@@ -987,7 +1002,18 @@ const SKINS={
  pumpkinking:{n:'Pumpkin King',shirt:0xd86018,pants:0x6a3810,hat:0x2a1408,hair:0x4a2810,skin:0xe8b48a},
  plague:{n:'Plague Doctor',shirt:0x2a3226,pants:0x1a2018,hat:0x1a1a14,hair:0x2a2a24,skin:0xb8b09a},
  voidreaper:{n:'Void Reaper',shirt:0x1a0a2a,pants:0x0d0518,hat:0x2a1a3a,hair:0x1a0a20,skin:0x6a5a8a},
- eternalnight:{n:'Eternal Night',shirt:0x0a0a18,pants:0x05050e,hat:0x1a1a30,hair:0x0a0a14,skin:0x3a3a5a}};
+ eternalnight:{n:'Eternal Night',shirt:0x0a0a18,pants:0x05050e,hat:0x1a1a30,hair:0x0a0a14,skin:0x3a3a5a},
+ /* 10 new skins */
+ bloodknight:{n:'Blood Knight',shirt:0x6a0a0a,pants:0x2a0606,hat:0x4a0808,hair:0x8a1010,skin:0xd8c0b0},
+ shadowmage:{n:'Shadow Mage',shirt:0x1a0a0a,pants:0x0a0404,hat:0x2a1010,hair:0x1a0808,skin:0x9a8a8a},
+ ghosthunter:{n:'Ghost Hunter',shirt:0x2a2a3a,pants:0x1a1a2a,hat:0x3a3a4a,hair:0x4a4a5a,skin:0xe0d0c0},
+ witchbrew:{n:'Witch Brew',shirt:0x1a3a1a,pants:0x0a2a0a,hat:0x2a4a2a,hair:0x4a6a3a,skin:0xc0d0a0},
+ candycorn:{n:'Candy Corn',shirt:0xff8a10,pants:0xffd24a,hat:0xffffff,hair:0xffa030,skin:0xffe8b0},
+ nightterror:{n:'Night Terror',shirt:0x0a0a0a,pants:0x050505,hat:0x1a0a0a,hair:0x2a0a0a,skin:0x4a2a2a},
+ hauntedarmor:{n:'Haunted Armor',shirt:0x4a4a5a,pants:0x3a3a4a,hat:0x5a5a6a,hair:0x2a2a3a,skin:0xa0a0b0},
+ cryptkeeper:{n:'Crypt Keeper',shirt:0x3a2a1a,pants:0x2a1a0a,hat:0x1a0a00,hair:0x4a3a20,skin:0xb8a890},
+ spectralhunter:{n:'Spectral Hunter',shirt:0x0a3a3a,pants:0x052a2a,hat:0x1a4a4a,hair:0x2a5a5a,skin:0x80d0d0},
+ reaperlord:{n:'Reaper Lord',shirt:0x1a0a1a,pants:0x0a050a,hat:0x2a1a2a,hair:0x1a0a1a,skin:0x8a6a8a}};
 const COSMETICS=[
  {id:'pumpkin_head',n:'Pumpkin Head',rar:'Rare',pr:50000},
  {id:'witch_hat',n:'Witch Hat',rar:'Epic',pr:75000},
@@ -3797,10 +3823,11 @@ const UI={openWins:[],
   const be=$('#buyExpand');
   if(be)be.onclick=()=>{AudioSys.play('click');send({t:'expandPlot'});};},
  openSeedShop(){
-  this.show('Seed Shop — Sam\u2019s Stall',`<div class="shopRibbon"></div>
+  this.showSpk('Seed Shop — Sam\u2019s Stall',`<div class="spkSec"><div class="spkSecH">SPOOKY SEEDS</div>
+   <div class="spkSecS">season 1 · halloween harvest</div></div>
    <div class="row" style="margin-bottom:12px">
    <input id="shopQ" style="width:90px" type="number" value="1" min="1" max="50">
-   <span style="font-size:13px;color:#6a5f4a">Restock in <b id="shopRestock"></b></span></div><div class="grid" id="shopGrid"></div>`);
+   <span style="font-size:13px;color:#9a7090">Restock in <b id="shopRestock"></b></span></div><div class="grid" id="shopGrid"></div>`);
   const grid=$('#shopGrid');let idx=0;
   for(const id in SEEDS){
    const s=SEEDS[id],cfg=ST.shopCfg[id]||{};
@@ -4638,7 +4665,7 @@ function startPassBgAnim(){
    PORTAL LIFE: RISE TO RICHES — full life-sim expansion
    ============================================================ */
 const Portal = {
-  inPortal: false, portalData: null, nearPortal: false,
+  inPortal: false, portalData: null, nearPortal: false, portalEnabled: false,
   portalModel: null, zoneScene: null, zoneRenderer: null, zoneCamera: null,
   zoneRAF: null, zoneType: null, zonePlayer: null, zoneKeys: {},
   zoneYaw: 0, zonePitch: 0.5, zoneDist: 8, firstPerson: false,
@@ -4686,7 +4713,19 @@ const Portal = {
   handleNet(m) {
     const A = this;
     switch (m.t) {
-      case 'init': if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); } return false;
+      case 'init':
+        if (m.self && m.self.portal) { A.portalData = m.self.portal; A.updateRupeeChip(); }
+        if (m.portalEnabled !== undefined) {
+          A.portalEnabled = m.portalEnabled;
+          if (A.portalEnabled && !A.portalModel) A.buildPortalModel();
+          if (!A.portalEnabled && A.portalModel) { scene.remove(A.portalModel); A.disposeGroup(A.portalModel); A.portalModel = null; }
+        }
+        return false;
+      case 'portalToggle':
+        A.portalEnabled = m.enabled;
+        if (A.portalEnabled && !A.portalModel) A.buildPortalModel();
+        if (!A.portalEnabled && A.portalModel) { scene.remove(A.portalModel); A.disposeGroup(A.portalModel); A.portalModel = null; }
+        return true;
       case 'me': if (m.me && m.me.portal) { A.portalData = m.me.portal; A.updateRupeeChip(); } return false;
       case 'portalUpdate': A.portalData = m.portal; A.updateRupeeChip(); A.updateZoneHUD();
         // Advance tutorial — completed a job (rupees increased)
@@ -4701,6 +4740,7 @@ const Portal = {
   // ===== MONUMENTAL PORTAL MODEL =====
   buildPortalModel() {
     const A = this;
+    if (!A.portalEnabled) return; // Only build if admin enabled
     const g = new THREE.Group();
     const pos = A.portalPos;
 
@@ -8203,6 +8243,11 @@ const Act2 = {
             REVERT ACT 2
           </button>
         </div>
+        <div class="admRow" style="margin-top:10px">
+          <button class="btnSm ${Portal.portalEnabled ? 'btnR' : 'btnG'}" id="ctrlPortalToggle">
+            ${Portal.portalEnabled ? 'DISABLE PORTAL' : 'ENABLE PORTAL'}
+          </button>
+        </div>
         <div class="admRow" style="margin-top:12px">
           <label style="min-width:120px">Give Blood Drops</label>
           <input id="ctrlBloodAmt" type="number" value="1000000000" style="width:160px" placeholder="amount">
@@ -8266,6 +8311,15 @@ const Act2 = {
         if (!confirm('LAUNCH ACT 2: THE DESCENT for ALL players?\n\nThe island will crack open. A spiral staircase appears at the plaza edge. The Living Heart awakens in the cavern below.')) return;
         if (typeof send === 'function' && ST.adminToken) {
           send({ t: 'admin', token: ST.adminToken, cmd: 'launchAct2', args: {} });
+        }
+      };
+    }
+
+    const portalBtn = document.getElementById('ctrlPortalToggle');
+    if (portalBtn) {
+      portalBtn.onclick = () => {
+        if (typeof send === 'function' && ST.adminToken) {
+          send({ t: 'admin', token: ST.adminToken, cmd: 'togglePortal', args: {} });
         }
       };
     }

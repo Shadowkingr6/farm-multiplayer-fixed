@@ -217,7 +217,10 @@ const PASS_EMOTES={pass_salute:{n:'Spooky Salute',rar:'Uncommon'},pass_drift:{n:
  pass_waltz:{n:'Haunting Waltz',rar:'Epic'},pass_shriek:{n:'Banshee Shriek',rar:'Epic'},pass_reap:{n:"Reaper's Bow",rar:'Legendary'},
  pass_soul:{n:'Soul Laughter',rar:'Legendary'},pass_rise:{n:'Eternal Rise',rar:'Legendary'},pass_spin:{n:'Eternal Spiral',rar:'Mythical'}};
 const SKINS={spooky:{n:'Spooky Farmer'},wraith:{n:'Wraith Farmer'},bonelord:{n:'Bone Lord'},
- pumpkinking:{n:'Pumpkin King'},plague:{n:'Plague Doctor'},voidreaper:{n:'Void Reaper'},eternalnight:{n:'Eternal Night'}};
+ pumpkinking:{n:'Pumpkin King'},plague:{n:'Plague Doctor'},voidreaper:{n:'Void Reaper'},eternalnight:{n:'Eternal Night'},
+ bloodknight:{n:'Blood Knight'},shadowmage:{n:'Shadow Mage'},ghosthunter:{n:'Ghost Hunter'},witchbrew:{n:'Witch Brew'},
+ candycorn:{n:'Candy Corn'},nightterror:{n:'Night Terror'},hauntedarmor:{n:'Haunted Armor'},
+ cryptkeeper:{n:'Crypt Keeper'},spectralhunter:{n:'Spectral Hunter'},reaperlord:{n:'Reaper Lord'}};
 const COSMETICS=[
  {id:'pumpkin_head',n:'Pumpkin Head',rar:'Rare',pr:50000},{id:'witch_hat',n:'Witch Hat',rar:'Epic',pr:75000},
  {id:'skull_mask',n:'Skull Mask',rar:'Epic',pr:100000},{id:'spectral_aura',n:'Spectral Aura',rar:'Legendary',pr:200000},
@@ -230,7 +233,17 @@ const CHAR_BODIES=[
  {id:'skeleton',n:'Spooky Skeleton',rar:'Rare',pr:50000},
  {id:'ghost',n:'Ghost',rar:'Epic',pr:80000},
  {id:'vampire',n:'Vampire',rar:'Epic',pr:100000},
- {id:'mummy',n:'Mummy',rar:'Rare',pr:60000}];
+ {id:'mummy',n:'Mummy',rar:'Rare',pr:60000},
+ {id:'witch',n:'Witch',rar:'Epic',pr:90000},
+ {id:'zombie',n:'Zombie',rar:'Rare',pr:55000},
+ {id:'reaper',n:'Grim Reaper',rar:'Legendary',pr:200000},
+ {id:'frankenstein',n:'Frankenstein',rar:'Epic',pr:85000},
+ {id:'pumpkinhead',n:'Pumpkin Head',rar:'Rare',pr:65000},
+ {id:'batcreature',n:'Bat Creature',rar:'Epic',pr:95000},
+ {id:'spider',n:'Giant Spider',rar:'Legendary',pr:180000},
+ {id:'slime',n:'Slime Monster',rar:'Uncommon',pr:35000},
+ {id:'scarecrow',n:'Living Scarecrow',rar:'Rare',pr:58000},
+ {id:'demon',n:'Demon',rar:'Demon',pr:250000}];
 const CHAR_BODY_MAP=Object.fromEntries(CHAR_BODIES.map(b=>[b.id,b]));
 /* ===== PORTAL WORLD — life-sim with Rupees, houses, jobs ===== */
 const HOUSE_TIERS=[
@@ -277,6 +290,8 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
      act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},
  /* ===== GLOBAL COUNTDOWN TIMER ===== */
  timer:{active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},
+ /* ===== PORTAL VISIBILITY TOGGLE ===== */
+ portalEnabled:false,
  adminSessions:new Map(),authFails:new Map(),logs:[],startedAt:Date.now(),savedAt:Date.now(),dirty:false,nextId:1};
 G.maintenance={active:false,until:0,msg:'',fix:'',by:''};
 
@@ -305,7 +320,7 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
- maintenance:G.maintenance,s2:G.s2,timer:G.timer,
+ maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
@@ -332,6 +347,7 @@ function load(){let raw=null;
   G.maintenance=Object.assign({active:false,until:0,msg:'',fix:'',by:''},d.maintenance||{});
   G.s2=Object.assign({phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},d.s2||{});
   G.timer=Object.assign({active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},d.timer||{});
+  G.portalEnabled=!!d.portalEnabled;
   /* If a timer was active and expired while the server was down, clear it */
   if(G.timer.active&&G.timer.end<now()){G.timer.active=false;G.timer.end=0;}
   if(!Array.isArray(G.s2.deciderWishes))G.s2.deciderWishes=[];
@@ -423,7 +439,7 @@ function broadcast(msg,exceptId){if(!WSS)return;const s=JSON.stringify(msg);
  for(const c of WSS.clients)if(c.readyState===1&&c._id!==exceptId)c.send(s);}
 function sendTo(id,msg){if(!WSS)return;for(const c of WSS.clients)if(c._id===id&&c.readyState===1)c.send(JSON.stringify(msg));}
 function me(p){return serializePlayer(p);}
-function pushMe(p){sendTo(p.id,{t:'me',me:me(p)});G.dirty=true;}
+function pushMe(p){sendTo(p.id,{t:'me',me:me(p)});G.dirty=true;save();}
 function pushPlants(){broadcast({t:'plants',plants:[...G.plants.values()].map(plantPacket)});}
 function addStat(p,k,n=1){p.stats[k]=(p.stats[k]||0)+n;}
 function awardReward(p,r){if(r.cash){p.cash+=r.cash;p.stats.earned+=r.cash;}
@@ -700,7 +716,7 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    if(['Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'].includes(sd.rar))addStat(p,'rareHarvest');
    if(sd.reg>0)pl.prog=sd.grow*(1-sd.reg);else G.plants.delete(pl.id);
    for(const pet of p.pets){pet.xp=(pet.xp||0)+5;pet.lvl=Math.min(10,1+Math.floor(pet.xp/100));}
-   pushMe(p);pushPlants();
+   pushMe(p);pushPlants();G.dirty=true;save();
    sendTo(p.id,{t:'harvested',fruits,plantId:pl.id,seed:sd.id});break;}
   case 'sell':{const uids=Array.isArray(msg.uids)?msg.uids.slice(0,200):[];sellFruits(p,uids);break;}
   case 'sellAll':{sellFruits(p,p.produce.map(f=>f.uid));break;}
@@ -857,7 +873,7 @@ function sellFruits(p,uids){const set=new Set(uids);const sold=[];
  let total=0;for(const f of sold)total+=f.v;
  p.cash+=total;p.stats.earned+=total;addStat(p,'sell',sold.length);
  addPassXP(p,Math.min(60,sold.length*2));
- pushMe(p);sendTo(p.id,{t:'sold',total,count:sold.length});}
+ pushMe(p);G.dirty=true;save();sendTo(p.id,{t:'sold',total,count:sold.length});}
 
 function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
  const target=a.targetId?G.players.get(a.targetId):admin;
@@ -903,6 +919,11 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    G.maintenance={active:false,until:0,msg:'',fix:'',by:''};G.dirty=true;save();
    broadcast({t:'maintenance',until:0,msg:'',fix:'',by:''});
    sendTo(admin.id,{t:'toast',msg:'Server reopened!',kind:'good'});break;}
+  /* ===== PORTAL TOGGLE — admin controls whether portal is visible ===== */
+  case 'togglePortal':{
+   G.portalEnabled=!G.portalEnabled;G.dirty=true;save();
+   broadcast({t:'portalToggle',enabled:G.portalEnabled});
+   sendTo(admin.id,{t:'toast',msg:'Portal '+(G.portalEnabled?'ENABLED':'DISABLED'),kind:'good'});break;}
   /* ===== SEASON 1 ACT 2: THE DESCENT — admin launch ===== */
   case 'launchAct2':{
    if(G.s2.act2Launched)return sendTo(admin.id,{t:'toast',msg:'Act 2 already launched.',kind:'err'});
@@ -968,6 +989,11 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    G.dirty=true;save();
    broadcast({t:'timerCancel'});
    sendTo(admin.id,{t:'toast',msg:'Timer cancelled.',kind:'good'});break;}
+  /* ===== PORTAL VISIBILITY TOGGLE ===== */
+  case 'togglePortal':{
+   G.portalEnabled=!G.portalEnabled;G.dirty=true;save();
+   broadcast({t:'portalToggle',enabled:G.portalEnabled});
+   sendTo(admin.id,{t:'toast',msg:'Portal '+(G.portalEnabled?'ENABLED':'DISABLED'),kind:'good'});break;}
   case 'giveRelics':if(target){target.relics=(target.relics||0)+Math.max(0,+a.v||0);pushMe(target);}break;
   case 'rotateEmoteShop':rotateEmoteShop();break;
   case 'launchSeason':{if(G.season.active||G.season.status==='cinematic')return;
@@ -1057,7 +1083,7 @@ if(WebSocketServer){
     else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
     sock._id=p.id;joined=true;
     sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,
+     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,
      plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
      prices:priceMap(),cfg:G.shopConfig,
      emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
