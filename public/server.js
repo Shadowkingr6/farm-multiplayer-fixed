@@ -589,6 +589,20 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
  switch(msg.t){
   case 'pos':{p.x=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.x||0));p.z=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.z||0));
    p.ry=+msg.ry||0;broadcast({t:'ppos',id:p.id,x:p.x,z:p.z,ry:p.ry},p.id);break;}
+  /* ===== CHAT SYSTEM ===== */
+  case 'chat':{
+   if(!p._lastChat)p._lastChat=0;
+   if(now()-p._lastChat<1000)return sendTo(p.id,{t:'toast',msg:'Wait a moment before sending another message.',kind:'err'});
+   let text=String(msg.text||'').trim().slice(0,200);
+   if(!text)return;
+   /* Filter bad words */
+   const low=' '+text.toLowerCase()+' ';
+   for(const w of BAD){if(low.includes(w)){text='***';break;}}
+   /* Strip HTML */
+   text=text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+   p._lastChat=now();
+   broadcast({t:'chat',id:p.id,name:p.name,text:text});
+   break;}
   /* ================= HEART FEEDING (Season 2) ================= */
   case 'feedHeart':{
    if(G.s2.act<1)return sendTo(p.id,{t:'toast',msg:'The Heart is not yet accessible.',kind:'err'});
@@ -1238,8 +1252,9 @@ document.getElementById('submitBtn').onclick=async()=>{
    body:JSON.stringify({token:token,password:np1})});
   const data=await resp.json();
   if(data.success){document.getElementById('formDiv').style.display='none';
-   r.innerHTML='<div class="msg ok">✓ Password changed! You can now log in with your new password.</div>';
-   sub.textContent='Password reset successful!';}
+   r.innerHTML='<div class="msg ok">✓ Password changed! Redirecting to login...</div>';
+   sub.textContent='Password reset successful!';
+   setTimeout(()=>{window.location.href='/';},3000);}
   else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal)document.getElementById('formDiv').style.display='none';}
  }catch(e){r.innerHTML='<div class="msg err">Network error. Try again.</div>';}};
 </script></body></html>`;
@@ -1348,10 +1363,19 @@ if(WebSocketServer){
       if(email&&RESEND_API_KEY){
        const vToken=generateToken();
        ACCOUNTS[lowUser].verifyToken=vToken;saveAccounts();
-       sendEmail(email,'Verify your Last Blood account',
-        '<h2>Welcome to Last Blood!</h2><p>Click below to verify your email:</p>'+
-        '<a href="'+APP_BASE_URL.replace(/\/$/,'')+'/verify-email?token='+vToken+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Verify Email</a>'+
-        '<p>If you didn\'t create this account, ignore this email.</p>');
+       const vUrl=APP_BASE_URL.replace(/\/$/,'')+'/verify-email?token='+vToken;
+       sendEmail(email,'Welcome to FARM — Verify Your Email',
+        '<div style="max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;background:#f7f0e0;border-radius:16px;overflow:hidden;border:3px solid #2f5d3a">'+
+        '<div style="background:linear-gradient(135deg,#2f5d3a,#3f7a4a);padding:32px 24px;text-align:center">'+
+        '<h1 style="color:#f7f0e0;font-size:36px;margin:0;letter-spacing:.2em">FARM</h1>'+
+        '<p style="color:#b8d8a0;font-size:13px;letter-spacing:.3em;text-transform:uppercase;margin:6px 0 0">grow · mutate · prosper</p></div>'+
+        '<div style="padding:32px 24px">'+
+        '<h2 style="color:#2f5d3a;font-size:24px;margin:0 0 12px">Welcome to the FARM community!</h2>'+
+        '<p style="color:#3a3226;font-size:16px;line-height:1.6;margin:0 0 20px">Thanks for joining FARM. Verify your email address to activate your account.</p>'+
+        '<a href="'+vUrl+'" style="display:inline-block;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-size:18px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;margin:8px 0 20px">Verify My Email</a>'+
+        '<p style="color:#8a8270;font-size:13px;margin:12px 0 0">If you didn\'t create this account, ignore this email.</p>'+
+        '<p style="color:#8a8270;font-size:12px;margin:16px 0 0">Or copy this link: '+vUrl+'</p>'+
+        '</div></div>');
       }
       sock._id=p.id;joined=true;
       sendInitData(sock,p);
@@ -1379,12 +1403,20 @@ if(WebSocketServer){
      /* Always show same message — don't reveal if email exists */
      if(acc&&acc.emailVerified){
       const token=createResetToken(acc.username);
-      sendEmail(acc.email,'Reset your Last Blood password',
-       '<h2>Password Reset</h2><p>You requested a password reset for your Last Blood account.</p>'+
-       '<p>Click below to set a new password:</p>'+
-       '<a href="'+APP_BASE_URL.replace(/\/$/,'')+'/reset-password?token='+token+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a>'+
-       '<p>This link expires in 1 hour and can only be used once.</p>'+
-       '<p>If you didn\'t request this, ignore this email.</p>');
+      const rUrl=APP_BASE_URL.replace(/\/$/,'')+'/reset-password?token='+token;
+      sendEmail(acc.email,'FARM — Reset Your Password',
+       '<div style="max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;background:#f7f0e0;border-radius:16px;overflow:hidden;border:3px solid #2f5d3a">'+
+        '<div style="background:linear-gradient(135deg,#2f5d3a,#3f7a4a);padding:32px 24px;text-align:center">'+
+        '<h1 style="color:#f7f0e0;font-size:36px;margin:0;letter-spacing:.2em">FARM</h1>'+
+        '<p style="color:#b8d8a0;font-size:13px;letter-spacing:.3em;text-transform:uppercase;margin:6px 0 0">grow · mutate · prosper</p></div>'+
+        '<div style="padding:32px 24px">'+
+        '<h2 style="color:#2f5d3a;font-size:24px;margin:0 0 12px">Reset Your FARM Password</h2>'+
+        '<p style="color:#3a3226;font-size:16px;line-height:1.6;margin:0 0 20px">We received a request to reset your password. If you requested this, use the button below to choose a new password.</p>'+
+        '<a href="'+rUrl+'" style="display:inline-block;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-size:18px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;margin:8px 0 20px">Reset My Password</a>'+
+        '<p style="color:#8a8270;font-size:13px;margin:12px 0 0">This link expires in 1 hour and can only be used once.</p>'+
+        '<p style="color:#8a8270;font-size:13px;margin:8px 0 0">If you didn\'t request this, ignore this email.</p>'+
+        '<p style="color:#8a8270;font-size:12px;margin:16px 0 0">Or copy this link: '+rUrl+'</p>'+
+        '</div></div>');
      }
      sock.send(JSON.stringify({t:'authInfo',msg:'If an account exists for that email, a reset link has been sent.'}));
      return;}
