@@ -1216,47 +1216,77 @@ function sendInitData(sock,p){
 
 /* ===== HTML PAGES (defined BEFORE server creation) ===== */
 const RESET_PAGE_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Reset Password — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Reset Password — FARM</title><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0612 45%,#0a0208 100%);font-family:'Fredoka',sans-serif;color:#ffd8c0}
-.card{background:linear-gradient(180deg,#1a0a14,#0a0408);border:2px solid #ff301044;border-radius:20px;padding:40px;width:min(440px,92vw);
-box-shadow:0 30px 80px #000a,0 0 60px #ff200022;text-align:center}
-h1{font-family:'Creepster',cursive;font-size:42px;color:#ff7020;text-shadow:0 0 18px #ff300066;margin-bottom:8px}
-p{color:#a08070;font-size:14px;margin-bottom:18px;line-height:1.5}
-input{width:100%;background:#0a0408;border:2px solid #ff301033;border-radius:10px;color:#ffd8c0;padding:14px;font-size:18px;
+background:radial-gradient(ellipse at 50% 120%,#1a3a22 0%,#0c1e14 45%,#040a06 100%);font-family:'Nunito',sans-serif;color:#f0e8d0;padding:20px}
+.card{background:linear-gradient(180deg,#0e2418,#06120c);border:2px solid #2f5d3a;border-radius:20px;padding:36px 32px;width:min(440px,92vw);
+box-shadow:0 30px 80px #000a,0 0 60px #2f5d3a22;text-align:center}
+.brand{font-family:'Fredoka',sans-serif;font-weight:800;font-size:34px;letter-spacing:.22em;color:#80e890;
+text-shadow:0 0 18px #4fae6866;margin-bottom:4px}
+.tag{font-size:10px;color:#5a8a6a;letter-spacing:.3em;text-transform:uppercase;margin-bottom:22px}
+h1{font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#f0e8d0;margin-bottom:6px}
+p{color:#9ab0a0;font-size:14px;margin-bottom:18px;line-height:1.5}
+input{width:100%;background:#040a06;border:2px solid #2f5d3a55;border-radius:10px;color:#f0e8d0;padding:14px;font-size:16px;
 font-family:'Nunito',sans-serif;outline:none;margin-bottom:12px;text-align:center}
-input:focus{border-color:#ff3010}
-button{width:100%;background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;font-family:'Creepster',cursive;font-size:20px;
-padding:14px;border-radius:12px;border:2px solid #ff301066;cursor:pointer;margin-top:6px;letter-spacing:.06em}
-button:hover{filter:brightness(1.15)}button:active{transform:scale(.95)}
-.msg{margin-top:14px;font-size:14px;padding:10px;border-radius:8px}
-.msg.ok{background:#1a4a2a;color:#80e890}.msg.err{background:#4a1a1a;color:#ff6040}
-a{color:#ff7020;text-decoration:none;font-size:13px;display:inline-block;margin-top:14px}</style></head>
-<body><div class="card"><h1>RESET PASSWORD</h1><p id="subtitle">Enter your new password below.</p>
-<div id="formDiv"><input type="password" id="np1" placeholder="New password (min 6 chars)" autocomplete="new-password">
-<input type="password" id="np2" placeholder="Confirm new password" autocomplete="new-password">
-<button id="submitBtn">SET NEW PASSWORD</button></div>
-<div id="result"></div><a href="/">← Back to game</a></div>
+input:focus{border-color:#4fae68;box-shadow:0 0 0 3px #4fae6822}
+button{width:100%;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;
+padding:14px;border-radius:12px;border:2px solid #4fae6855;cursor:pointer;margin-top:6px;letter-spacing:.04em;transition:filter .15s,transform .1s}
+button:hover{filter:brightness(1.12)}button:active{transform:scale(.97)}
+.msg{margin-top:14px;font-size:14px;padding:12px;border-radius:8px;line-height:1.4}
+.msg.ok{background:#0e2418;border:1px solid #4fae68;color:#80e890}
+.msg.err{background:#2a1410;border:1px solid #c04020;color:#ff6040}
+a{color:#80e890;text-decoration:none;font-size:14px;display:inline-block;margin-top:14px;font-weight:600}
+a:hover{text-decoration:underline}
+.contBtn{display:none;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;text-decoration:none;
+padding:14px 28px;border-radius:12px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;border:2px solid #4fae6855;margin-top:14px}
+.contBtn:hover{filter:brightness(1.12);text-decoration:none}
+.pwShow{position:relative;width:100%;margin-bottom:12px}
+.pwShow input{margin-bottom:0;padding-right:46px}
+.pwShow .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#5a8a6a;
+cursor:pointer;font-size:18px;padding:6px;border-radius:6px}.pwShow .eye:hover{color:#80e890;background:#ffffff11}
+.hint{font-size:12px;color:#5a7060;margin-top:8px}</style></head>
+<body><div class="card"><div class="brand">FARM</div><div class="tag">grow · mutate · prosper</div>
+<h1>Set a New Password</h1><p id="subtitle">Type your new password below to finish resetting your account.</p>
+<div id="formDiv">
+ <div class="pwShow"><input type="password" id="np1" placeholder="New password (min 6 chars)" autocomplete="new-password">
+  <button class="eye" type="button" data-target="np1" aria-label="Show password">&#128065;</button></div>
+ <div class="pwShow"><input type="password" id="np2" placeholder="Confirm new password" autocomplete="new-password">
+  <button class="eye" type="button" data-target="np2" aria-label="Show password">&#128065;</button></div>
+ <button id="submitBtn">SET NEW PASSWORD</button>
+ <div class="hint">Tip: use 6+ characters, mix letters & numbers for a stronger password.</div>
+</div>
+<div id="result"></div>
+<a class="contBtn" id="continueBtn" href="/?fromReset=1">&#8594; CONTINUE TO LOGIN</a>
+<a id="cancelLink" href="/?fromReset=1" style="font-size:13px;color:#5a8a6a">Cancel reset</a></div>
 <script>
 const token=new URLSearchParams(location.search).get('token');
 const sub=document.getElementById('subtitle');
-if(!token){document.getElementById('formDiv').style.display='none';sub.textContent='Invalid reset link.';}
+const formDiv=document.getElementById('formDiv');
+const cancelLink=document.getElementById('cancelLink');
+if(!token){formDiv.style.display='none';sub.textContent='Invalid reset link — no token found in URL.';
+ cancelLink.textContent='← Go to login';cancelLink.href='/?fromReset=1';}
+/* Toggle password visibility */
+document.querySelectorAll('.eye').forEach(b=>{b.onclick=()=>{const i=document.getElementById(b.dataset.target);
+  if(i.type==='password'){i.type='text';b.innerHTML='&#128064;';}else{i.type='password';b.innerHTML='&#128065;';}};});
 document.getElementById('submitBtn').onclick=async()=>{
  const np1=document.getElementById('np1').value,np2=document.getElementById('np2').value;
  const r=document.getElementById('result');
  if(np1.length<6){r.innerHTML='<div class="msg err">Password must be at least 6 characters.</div>';return;}
  if(np1!==np2){r.innerHTML='<div class="msg err">Passwords do not match.</div>';return;}
- r.innerHTML='<div class="msg ok">Saving...</div>';
+ r.innerHTML='<div class="msg ok">Saving your new password...</div>';
+ document.getElementById('submitBtn').disabled=true;
  try{
   const resp=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({token:token,password:np1})});
   const data=await resp.json();
-  if(data.success){document.getElementById('formDiv').style.display='none';
-   r.innerHTML='<div class="msg ok">✓ Password changed! Redirecting to login...</div>';
-   sub.textContent='Password reset successful!';
-   setTimeout(()=>{window.location.href='/';},3000);}
-  else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal)document.getElementById('formDiv').style.display='none';}
- }catch(e){r.innerHTML='<div class="msg err">Network error. Try again.</div>';}};
+  if(data.success){formDiv.style.display='none';cancelLink.style.display='none';
+   r.innerHTML='<div class="msg ok">&#10003; Password changed successfully!<br>You can now log in with your new password.</div>';
+   sub.textContent='All set!';
+   /* Show the manual Continue button instead of auto-redirect */
+   document.getElementById('continueBtn').style.display='inline-block';}
+  else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal){formDiv.style.display='none';cancelLink.style.display='none';}
+   document.getElementById('submitBtn').disabled=false;}
+ }catch(e){r.innerHTML='<div class="msg err">Network error. Please try again.</div>';document.getElementById('submitBtn').disabled=false;}};
 </script></body></html>`;
 
 const VERIFY_OK_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">

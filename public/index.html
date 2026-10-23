@@ -806,10 +806,20 @@ html.touch .seedCfgRow .sname{font-size:12px}
 #chatInput input:focus{border-color:#e8a33d}
 #chatInput button{background:#2f5d3a;color:#fff;border:none;padding:10px 18px;border-radius:10px;font-family:'Fredoka';
  font-size:14px;cursor:pointer;margin-left:6px}
-#chatToggleBtn{display:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
+#chatToggleBtn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
  background:rgba(20,16,10,.85);border:2px solid #2f5d3a66;color:#f0e8d0;font-size:20px;cursor:pointer;
- pointer-events:auto;z-index:50;position:fixed;bottom:130px;right:16px}
-html.touch #chatToggleBtn{display:flex}
+ pointer-events:auto;z-index:80;position:fixed;bottom:90px;right:16px;
+ transition:transform .15s,background .15s,border-color .15s}
+#chatToggleBtn:hover{background:rgba(40,30,18,.92);border-color:#4fae6888;transform:translateY(-2px)}
+#chatToggleBtn:active{transform:scale(.92)}
+#chatToggleBtn .badge{position:absolute;top:-4px;right:-4px;background:#e8a33d;color:#1a0e08;font-size:10px;
+ font-weight:800;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:none;align-items:center;justify-content:center;
+ font-family:'Fredoka',sans-serif;border:2px solid #1a0e08}
+#chatToggleBtn .badge.on{display:flex}
+/* Desktop positioning — keep clear of bottom HUD; on touch devices the bottom HUD hides so move closer to bottom */
+@media (hover:hover) and (pointer:fine){
+ #chatToggleBtn{bottom:90px;right:18px;width:46px;height:46px;font-size:22px}
+}
 /* Chat bubble (3D sprite) */
 .chatBubble{position:absolute;background:rgba(255,255,255,.92);border-radius:12px;padding:6px 12px;font-size:14px;
  color:#3a3226;font-family:'Nunito',sans-serif;font-weight:600;max-width:220px;word-wrap:break-word;pointer-events:none;
@@ -817,6 +827,51 @@ html.touch #chatToggleBtn{display:flex}
 @keyframes bubbleIn{from{transform:translateY(8px);opacity:0}}
 .chatBubble::after{content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
  width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid rgba(255,255,255,.92)}
+/* ============ SETTINGS BUTTON & PANEL ============ */
+#settingsBtn{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
+ background:rgba(20,16,10,.85);border:2px solid #2f5d3a66;color:#f0e8d0;font-size:20px;cursor:pointer;
+ pointer-events:auto;z-index:80;position:fixed;bottom:144px;right:16px;
+ transition:transform .15s,background .15s,border-color .15s}
+#settingsBtn:hover{background:rgba(40,30,18,.92);border-color:#4fae6888;transform:translateY(-2px)}
+#settingsBtn:active{transform:scale(.92)}
+@media (hover:hover) and (pointer:fine){
+ #settingsBtn{bottom:144px;right:18px;width:46px;height:46px;font-size:22px}
+ #chatToggleBtn{bottom:90px;right:18px;width:46px;height:46px;font-size:22px}
+}
+/* On touch devices, move chat + settings to top-right (clear of bottom action buttons) */
+html.touch #chatToggleBtn{top:12px;bottom:auto;right:74px;width:42px;height:42px;font-size:18px}
+html.touch #settingsBtn{top:12px;bottom:auto;right:16px;width:42px;height:42px;font-size:18px}
+#settingsPanel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);
+ background:linear-gradient(180deg,#0e2418,#06120c);border:2px solid #2f5d3a;border-radius:18px;
+ padding:24px;width:min(420px,92vw);z-index:340;display:none;flex-direction:column;gap:14px;
+ box-shadow:0 30px 80px #000a,0 0 60px #2f5d3a22;opacity:0;transition:opacity .2s,transform .25s cubic-bezier(.2,1.4,.3,1)}
+#settingsPanel.on{display:flex;opacity:1;transform:translate(-50%,-50%) scale(1)}
+#settingsPanel .spHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+#settingsPanel .spHead h2{font-family:'Fredoka';font-size:22px;color:#80e890;letter-spacing:.04em;margin:0;font-weight:700}
+#settingsPanel .spClose{background:#ffffff14;color:#9ab0a0;width:30px;height:30px;border-radius:8px;border:none;
+ cursor:pointer;font-size:16px;font-weight:700}
+#settingsPanel .spClose:hover{background:#ffffff24;color:#f0e8d0}
+#settingsPanel .spRow{display:flex;align-items:center;justify-content:space-between;
+ background:#ffffff08;border:1px solid #2f5d3a44;border-radius:10px;padding:12px 14px;gap:10px}
+#settingsPanel .spRow .lbl{font-family:'Nunito';font-size:14px;color:#f0e8d0;font-weight:600}
+#settingsPanel .spRow .sub{font-size:11px;color:#5a8a6a;margin-top:2px}
+#settingsPanel .spRow .ctl{display:flex;align-items:center;gap:8px}
+#settingsPanel .toggle{width:44px;height:24px;border-radius:12px;background:#2a3a30;border:1px solid #4fae6844;
+ cursor:pointer;position:relative;transition:background .15s;flex-shrink:0}
+#settingsPanel .toggle.on{background:#4f9a5c;border-color:#4fae68}
+#settingsPanel .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+ background:#f0e8d0;transition:transform .2s}
+#settingsPanel .toggle.on::after{transform:translateX(20px)}
+#settingsPanel .sliderRow{flex:1;min-width:0}
+#settingsPanel input[type=range]{width:120px;accent-color:#4f9a5c}
+#settingsPanel .val{font-family:'Fredoka';color:#80e890;font-size:13px;min-width:34px;text-align:right}
+#settingsPanel .spSection{font-family:'Fredoka';font-size:11px;color:#5a8a6a;letter-spacing:.2em;text-transform:uppercase;
+ margin:6px 0 -4px;font-weight:700}
+#settingsPanel .spBtn{background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-family:'Fredoka';font-weight:600;
+ font-size:14px;padding:10px;border-radius:10px;border:1px solid #4fae6855;cursor:pointer;transition:filter .15s}
+#settingsPanel .spBtn:hover{filter:brightness(1.12)}
+#settingsPanel .spBtn.danger{background:linear-gradient(180deg,#a04030,#5a1a10);border-color:#c0402055}
+#settingsPanel .spFoot{font-size:11px;color:#5a7060;text-align:center;margin-top:4px}
 /* ============ RESTOCK BANNER ============ */
 #restockBanner{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.8);z-index:560;
  display:none;flex-direction:column;align-items:center;gap:8px;padding:24px 48px;border-radius:18px;
@@ -870,9 +925,10 @@ html.touch #chatToggleBtn{display:flex}
   <!-- LOGIN SCREEN -->
   <div class="iField" id="loginPanel">
    <label>Log In</label>
-   <input id="loginUser" maxlength="16" placeholder="Username" autocomplete="username" spellcheck="false">
-   <input id="loginPass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" style="margin-top:6px">
+   <input id="loginUser" maxlength="16" placeholder="Username" autocomplete="off" spellcheck="false">
+   <input id="loginPass" type="password" maxlength="64" placeholder="Password" autocomplete="off" style="margin-top:6px">
    <div id="authErr" style="color:#ff4030;font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
+   <div id="resetNotice" style="display:none;background:#0e2418;border:1px solid #4fae68;color:#80e890;font-size:13px;font-weight:700;padding:8px 10px;border-radius:8px;margin:8px 0 4px"></div>
    <button id="loginBtn">LOG IN</button>
    <div style="margin-top:10px;font-size:13px">
     <a href="#" id="showSignup" style="color:#ff7020;text-decoration:none">Sign up</a>
@@ -883,9 +939,9 @@ html.touch #chatToggleBtn{display:flex}
   <!-- SIGNUP SCREEN -->
   <div class="iField" id="signupPanel" style="display:none">
    <label>Create Account</label>
-   <input id="signupUser" maxlength="16" placeholder="Username (3-16 chars)" autocomplete="username" spellcheck="false">
+   <input id="signupUser" maxlength="16" placeholder="Username (3-16 chars)" autocomplete="off" spellcheck="false">
    <input id="signupPass" type="password" maxlength="64" placeholder="Password (min 6 chars)" autocomplete="new-password" style="margin-top:6px">
-   <input id="signupEmail" type="email" maxlength="100" placeholder="Email (for password reset)" autocomplete="email" style="margin-top:6px">
+   <input id="signupEmail" type="email" maxlength="100" placeholder="Email (for password reset)" autocomplete="off" style="margin-top:6px">
    <div id="signupErr" style="color:#ff4030;font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
    <button id="signupBtn">CREATE ACCOUNT</button>
    <div style="margin-top:10px;font-size:13px"><a href="#" id="showLogin" style="color:#ff7020;text-decoration:none">← Back to login</a></div>
@@ -894,7 +950,7 @@ html.touch #chatToggleBtn{display:flex}
   <div class="iField" id="forgotPanel" style="display:none">
    <label>Reset Password</label>
    <p style="font-size:12px;color:#a08070;margin-bottom:10px;line-height:1.5">Enter the email linked to your account. We'll send a reset link.</p>
-   <input id="forgotEmail" type="email" maxlength="100" placeholder="Your email" autocomplete="email">
+   <input id="forgotEmail" type="email" maxlength="100" placeholder="Your email" autocomplete="off">
    <div id="forgotMsg" style="font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
    <button id="forgotBtn">SEND RESET LINK</button>
    <div style="margin-top:10px;font-size:13px"><a href="#" id="forgotBack" style="color:#ff7020;text-decoration:none">← Back to login</a></div>
@@ -973,10 +1029,14 @@ const BAD=['fuck','shit','bitch','cunt','asshole','bastard','dick','piss','whore
 function nameOK(n){n=String(n||'').trim();if(n.length<2||n.length>16)return false;
  if(!/^[A-Za-z0-9 _-]+$/.test(n))return false;
  const low=' '+n.toLowerCase()+' ';for(const w of BAD)if(low.includes(w))return false;return true;}
-const AudioSys={ctx:null,sfx:null,muted:false,
+const AudioSys={ctx:null,sfx:null,muted:false,masterVol:.5,
  init(){if(this.ctx)return;try{this.ctx=new(window.AudioContext||window.webkitAudioContext)();
-  const m=this.ctx.createGain();m.gain.value=.5;m.connect(this.ctx.destination);
+  const m=this.ctx.createGain();m.gain.value=this.masterVol;m.connect(this.ctx.destination);
   this.sfx=this.ctx.createGain();this.sfx.gain.value=.8;this.sfx.connect(m);}catch(e){}},
+ setVolume(v){v=Math.max(0,Math.min(1,v));this.masterVol=v;
+  if(this.ctx){const m=this.ctx.destination;this.sfx.disconnect();
+   const g=this.ctx.createGain();g.gain.value=v;g.connect(m);this.sfx.connect(g);this.sfx._master=g;}
+  this.muted=(v<=0);},
  tone(f,dur,type='sine',vol=.25,slide=0){if(!this.ctx||this.muted)return;const t=this.ctx.currentTime;
   const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.setValueAtTime(f,t);
   if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+dur);
@@ -4656,23 +4716,35 @@ function tryInteract(){
  $('#loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginBtn').click();});
  $('#signupPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('#signupBtn').click();});
  $('#forgotEmail').addEventListener('keydown',e=>{if(e.key==='Enter')$('#forgotBtn').click();});
- /* Pre-fill saved username */
- const savedUser=localStorage.getItem('lb_user');
- if(savedUser)$('#loginUser').value=savedUser;
+ /* Pre-fill: REMOVED — user must type username every time for security (no localStorage cache) */
+ /* Also wipe any previously cached username so the field starts empty */
+ try{localStorage.removeItem('lb_user');}catch(e){}
+ /* Detect redirect from password reset page — show confirmation banner */
+ (function(){
+  const params=new URLSearchParams(location.search);
+  if(params.get('fromReset')==='1'){
+   const notice=$('#resetNotice');
+   if(notice){notice.style.display='block';notice.textContent='✓ Your password was reset. Log in with your new password.';}
+   /* Clean the URL so refresh doesn't keep showing the notice */
+   try{history.replaceState({},'',location.pathname);}catch(e){}
+  }
+ })();
 
  $('#loginBtn').onclick=()=>{
   AudioSys.init();AudioSys.play('click');
+  /* Apply saved audio settings (volume/mute) now that AudioContext exists */
+  if(typeof applySettings==='function')applySettings();
   const user=$('#loginUser').value.trim();
   const pass=$('#loginPass').value;
   if(!user||!pass){$('#authErr').textContent='Enter username and password.';return;}
   $('#authErr').textContent='';
-  localStorage.setItem('lb_user',user);
   $('#introLoad').style.display='block';
   $('#introMsg').textContent='Logging in…';$('#introBar').style.width='40%';
   connectAuth({t:'login',username:user,password:pass});
  };
  $('#signupBtn').onclick=()=>{
   AudioSys.init();AudioSys.play('click');
+  if(typeof applySettings==='function')applySettings();
   const user=$('#signupUser').value.trim();
   const pass=$('#signupPass').value;
   const email=$('#signupEmail').value.trim();
@@ -4909,12 +4981,21 @@ function animate(){
 /* ============ CHAT SYSTEM ============ */
 const chatBubbles=new Map();
 let chatOpen=false;
+let chatUnread=0;
+function updateChatBadge(){
+ const b=$('#chatBadge');
+ if(!b)return;
+ if(chatUnread>0){b.textContent=chatUnread>99?'99+':chatUnread;b.classList.add('on');}
+ else{b.classList.remove('on');}
+}
 function toggleChat(){
  chatOpen=!chatOpen;
  const inp=$('#chatInput');
  if(chatOpen){
   inp.classList.add('on');
   $('#chatTextInput').value='';
+  /* Clear unread when opening chat */
+  chatUnread=0;updateChatBadge();
   setTimeout(()=>$('#chatTextInput').focus(),50);
  }else{
   inp.classList.remove('on');
@@ -4948,6 +5029,8 @@ function addChatMessage(name,text){
  msg.innerHTML='<b>'+name.replace(/</g,'&lt;')+'</b>: '+text;
  hist.insertBefore(msg,hist.firstChild);
  if(hist.children.length>15)hist.removeChild(hist.lastChild);
+ /* Increment unread count when chat is closed */
+ if(!chatOpen){chatUnread++;updateChatBadge();}
 }
 function showChatBubble(playerId,name,text){
  if(chatBubbles.has(playerId)){
@@ -4985,6 +5068,73 @@ function updateChatBubbles(){
   data.el.style.top=(y-data.el.offsetHeight+10)+'px';
  }
 }
+/* ============ SETTINGS PANEL ============ */
+const settingsState={audio:true,volume:0.8,bubbles:true,history:true,shake:true};
+/* Load saved settings */
+try{const saved=JSON.parse(localStorage.getItem('lb_settings')||'{}');
+ for(const k in saved)if(k in settingsState)settingsState[k]=saved[k];}catch(e){}
+function saveSettings(){try{localStorage.setItem('lb_settings',JSON.stringify(settingsState));}catch(e){}}
+function applySettings(){
+ /* Audio toggle */
+ if(typeof AudioSys!=='undefined'&&AudioSys){
+  if(settingsState.audio){if(typeof AudioSys.setVolume==='function')AudioSys.setVolume(settingsState.volume);}
+  else{if(typeof AudioSys.setVolume==='function')AudioSys.setVolume(0);}
+ }
+ /* Chat history visibility */
+ const hist=$('#chatHistory');
+ if(hist)hist.style.display=settingsState.history?'flex':'none';
+ /* Chat bubbles — if disabled, clear all */
+ if(!settingsState.bubbles){for(const[,d]of chatBubbles){if(d.el)d.el.remove();clearTimeout(d.timeout);}chatBubbles.clear();}
+ /* Update UI controls */
+ const setToggles=['setAudio','setBubbles','setHistory','setShake'];
+ const keys={setAudio:'audio',setBubbles:'bubbles',setHistory:'history',setShake:'shake'};
+ setToggles.forEach(id=>{const el=$('#'+id);if(el)el.classList.toggle('on',settingsState[keys[id]]);});
+ const vEl=$('#setVol'),vVal=$('#setVolVal');
+ if(vEl)vEl.value=Math.round(settingsState.volume*100);
+ if(vVal)vVal.textContent=Math.round(settingsState.volume*100)+'%';
+}
+function toggleSettings(){
+ const p=$('#settingsPanel');
+ if(!p)return;
+ const open=!p.classList.contains('on');
+ p.classList.toggle('on',open);
+ if(open)applySettings();
+}
+function logout(){
+ /* Close WebSocket and return to login screen */
+ try{if(typeof ST!=='undefined'&&ST&&ST.close)ST.close();}catch(e){}
+ /* Clear any session-related state */
+ try{sessionStorage.clear();}catch(e){}
+ /* Reload page to show login screen */
+ location.href=location.pathname;
+}
+(function(){
+ const sb=$('#settingsBtn'),sp=$('#settingsPanel'),sc=$('#spClose');
+ if(sb)sb.onclick=()=>{toggleSettings();AudioSys.init();AudioSys.play('click');};
+ if(sc)sc.onclick=()=>toggleSettings();
+ /* Close on outside click */
+ addEventListener('click',e=>{
+  if(!sp||!sp.classList.contains('on'))return;
+  if(sp.contains(e.target)||sb.contains(e.target))return;
+  toggleSettings();
+ });
+ /* Close on Escape */
+ addEventListener('keydown',e=>{if(e.key==='Escape'&&sp&&sp.classList.contains('on')){toggleSettings();}});
+ /* Toggle handlers */
+ const tg=id=>{const el=$('#'+id);if(el)el.onclick=()=>{const k={setAudio:'audio',setBubbles:'bubbles',setHistory:'history',setShake:'shake'}[id];
+   settingsState[k]=!settingsState[k];el.classList.toggle('on',settingsState[k]);saveSettings();applySettings();AudioSys.play('click');}};
+ ['setAudio','setBubbles','setHistory','setShake'].forEach(tg);
+ /* Volume slider */
+ const vEl=$('#setVol');
+ if(vEl)vEl.oninput=()=>{settingsState.volume=vEl.value/100;saveSettings();applySettings();
+  $('#setVolVal').textContent=vEl.value+'%';};
+ /* Logout / Quit buttons */
+ const lo=$('#setLogout'),q=$('#setQuit');
+ if(lo)lo.onclick=()=>{if(confirm('Log out of your account?'))logout();};
+ if(q)q.onclick=()=>{if(confirm('Return to login screen? Any unsaved progress will be lost.'))logout();};
+ /* Apply settings on load */
+ applySettings();
+})();
 animate();
 let _passBgRAF=null;
 function startPassBgAnim(){
@@ -7263,8 +7413,29 @@ window.TimerCtrl={
 </div>
 <!-- ============ CHAT SYSTEM ============ -->
 <div id="chatHistory"></div>
-<div id="chatInput"><input id="chatTextInput" maxlength="200" placeholder="Type a message..." autocomplete="off"><button id="chatSendBtn">Send</button></div>
-<button id="chatToggleBtn">💬</button>
+<div id="chatInput"><input id="chatTextInput" maxlength="200" placeholder="Type a message... (Enter to send, Esc to close)" autocomplete="off"><button id="chatSendBtn">Send</button></div>
+<button id="chatToggleBtn" title="Open chat (Enter)" aria-label="Open chat">&#128172;<span class="badge" id="chatBadge">0</span></button>
+<!-- ============ SETTINGS ============ -->
+<button id="settingsBtn" title="Settings" aria-label="Settings">&#9881;<span class="badge" id="setBadge" style="display:none"></span></button>
+<div id="settingsPanel">
+ <div class="spHead"><h2>Settings</h2><button class="spClose" id="spClose">&#10005;</button></div>
+ <div class="spSection">Audio</div>
+ <div class="spRow"><div class="lbl">Music & SFX<div class="sub">Toggle all game audio</div></div>
+  <div class="ctl"><div class="toggle on" id="setAudio"></div></div></div>
+ <div class="spRow"><div class="lbl">Volume<div class="sub">Adjust master volume</div></div>
+  <div class="ctl sliderRow"><input type="range" id="setVol" min="0" max="100" value="80"><span class="val" id="setVolVal">80%</span></div></div>
+ <div class="spSection">Display</div>
+ <div class="spRow"><div class="lbl">Chat Bubbles<div class="sub">Show speech bubbles above players</div></div>
+  <div class="ctl"><div class="toggle on" id="setBubbles"></div></div></div>
+ <div class="spRow"><div class="lbl">Show Chat History<div class="sub">Display recent messages on left side</div></div>
+  <div class="ctl"><div class="toggle on" id="setHistory"></div></div></div>
+ <div class="spRow"><div class="lbl">Camera Shake<div class="sub">Screen shake on events</div></div>
+  <div class="ctl"><div class="toggle on" id="setShake"></div></div></div>
+ <div class="spSection">Account</div>
+ <button class="spBtn" id="setLogout">Log Out</button>
+ <button class="spBtn danger" id="setQuit">Quit to Login Screen</button>
+ <div class="spFoot">FARM · grow · mutate · prosper</div>
+</div>
 <button id="auctionHudBtn">
  <span class="ahIcon">🔨</span>
  <span class="ahText">Auction</span>
