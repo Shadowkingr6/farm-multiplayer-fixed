@@ -292,6 +292,7 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
  timer:{active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},
  /* ===== PORTAL VISIBILITY TOGGLE ===== */
  portalEnabled:false,
+ stickyNote:'',stickyNoteColor:'#ff7020',
  /* ===== AUCTION HOUSE ===== */
  auction:{active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',
   highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},
@@ -323,7 +324,7 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
- maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
+ maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
@@ -351,6 +352,7 @@ function load(){let raw=null;
   G.s2=Object.assign({phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},d.s2||{});
   G.timer=Object.assign({active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},d.timer||{});
   G.portalEnabled=!!d.portalEnabled;
+  G.stickyNote=d.stickyNote||'';G.stickyNoteColor=d.stickyNoteColor||'#ff7020';
   G.auction=Object.assign({active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},d.auction||{});
   if(G.auction.active)G.auction.active=false; /* Don't restore active auctions after restart */
   /* If a timer was active and expired while the server was down, clear it */
@@ -956,6 +958,15 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    G.portalEnabled=!G.portalEnabled;G.dirty=true;save();
    broadcast({t:'portalToggle',enabled:G.portalEnabled});
    sendTo(admin.id,{t:'toast',msg:'Portal '+(G.portalEnabled?'ENABLED':'DISABLED'),kind:'good'});break;}
+  /* ===== ADMIN STICKY NOTE ===== */
+  case 'sendNote':{
+   const text=String(a.text||'').slice(0,300);
+   const color=/^#[0-9a-fA-F]{6}$/.test(a.color||'')?a.color:'#ff7020';
+   if(!text){G.stickyNote='';G.dirty=true;save();broadcast({t:'stickyNote',text:'',color:''});
+    sendTo(admin.id,{t:'toast',msg:'Sticky note removed.',kind:'good'});break;}
+   G.stickyNote=text;G.stickyNoteColor=color;G.dirty=true;save();
+   broadcast({t:'stickyNote',text,color});
+   sendTo(admin.id,{t:'toast',msg:'Sticky note sent to all players!',kind:'good'});break;}
   /* ===== AUCTION HOUSE — admin commands ===== */
   case 'startAuction':{
    if(G.auction.active)return sendTo(admin.id,{t:'toast',msg:'Auction already active.',kind:'err'});
@@ -1148,7 +1159,7 @@ if(WebSocketServer){
     else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
     sock._id=p.id;joined=true;
     sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
+     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
      plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
      prices:priceMap(),cfg:G.shopConfig,
      emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
