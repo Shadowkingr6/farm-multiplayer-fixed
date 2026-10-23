@@ -1,6 +1,64 @@
 ﻿/* FARM — authoritative server. Season 2: THE REBIRTH. Run: node server.js */
 'use strict';
 const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto');
+const bcrypt=require('bcrypt');
+const RESEND_API_KEY=process.env.RESEND_API_KEY||'';
+const EMAIL_FROM=process.env.EMAIL_FROM||'onboarding@resend.dev';
+const APP_BASE_URL=process.env.APP_BASE_URL||'http://localhost:3000';
+const ACCOUNTS_FILE='accounts.json';
+/* ===== ACCOUNTS DATABASE (separate from farm_save.json) =====
+   Stores: username (lowercased), passwordHash (bcrypt), email, emailVerified,
+   playerId (links to farm_save.json player), createdAt
+   Reset tokens are stored in memory (Map) — they expire in 1 hour and are single-use.
+   This keeps auth data OUT of farm_save.json. */
+let ACCOUNTS={}; /* {username: {username, passwordHash, email, emailVerified, playerId, createdAt}} */
+const resetTokens=new Map(); /* token -> {username, expires, used} */
+function loadAccounts(){
+ try{if(fs.existsSync(ACCOUNTS_FILE)){ACCOUNTS=JSON.parse(fs.readFileSync(ACCOUNTS_FILE,'utf8'));console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts');}}
+ catch(e){console.error('[FARM] accounts load failed:',e.message);ACCOUNTS={};}}
+function saveAccounts(){
+ try{fs.writeFileSync(ACCOUNTS_FILE+'.tmp',JSON.stringify(ACCOUNTS,null,2));fs.renameSync(ACCOUNTS_FILE+'.tmp',ACCOUNTS_FILE);}
+ catch(e){console.error('[FARM] accounts save failed:',e.message);}}
+/* ===== RESEND EMAIL ===== */
+async function sendEmail(to,subject,html){
+ if(!RESEND_API_KEY){console.log('[FARM-EMAIL] No RESEND_API_KEY set — skipping email to',to);return{success:false,reason:'no_api_key'};}
+ try{
+  const resp=await fetch('https://api.resend.com/emails',{
+   method:'POST',
+   headers:{'Authorization':'Bearer '+RESEND_API_KEY,'Content-Type':'application/json'},
+   body:JSON.stringify({from:EMAIL_FROM,to:to,subject:subject,html:html})
+  });
+  const data=await resp.json();
+  if(resp.ok){console.log('[FARM-EMAIL] Sent to',to,'id:',data.id);return{success:true,id:data.id};}
+  else{console.error('[FARM-EMAIL] API error:',data);return{success:false,reason:data.message||'api_error'};}
+ }catch(e){console.error('[FARM-EMAIL] send failed:',e.message);return{success:false,reason:e.message};}}
+/* ===== TOKEN SYSTEM ===== */
+function generateToken(){return crypto.randomBytes(32).toString('hex');}
+function createResetToken(username){
+ const token=generateToken();
+ resetTokens.set(token,{username,expires:Date.now()+3600000,used:false}); /* 1 hour */
+ return token;}
+function validateResetToken(token){
+ const t=resetTokens.get(token);
+ if(!t)return{valid:false,reason:'Token not found.'};
+ if(t.used)return{valid:false,reason:'Token already used.'};
+ if(Date.now()>t.expires){resetTokens.delete(token);return{valid:false,reason:'Token expired.'};}
+ return{valid:true,username:t.username};}
+function consumeResetToken(token){const t=resetTokens.get(token);if(t){t.used=true;resetTokens.delete(token);}}
+/* Clean expired tokens every 5 minutes */
+setInterval(()=>{const now=Date.now();for(const[k,v]of resetTokens){if(now>v.expires||v.used)resetTokens.delete(k);}},300000);
+/* ===== USERNAME VALIDATION ===== */
+function usernameOK(name){
+ name=String(name||'').trim();
+ if(name.length<3||name.length>16)return false;
+ if(!/^[A-Za-z0-9_-]+$/.test(name))return false;
+ const low=name.toLowerCase();
+ for(const w of BAD)if(low.includes(w))return false;
+ return true;}
+function findAccountByUsername(name){return ACCOUNTS[String(name||'').toLowerCase().trim()];}
+function findAccountByEmail(email){email=String(email||'').toLowerCase().trim();
+ for(const u in ACCOUNTS){if(ACCOUNTS[u].email&&ACCOUNTS[u].email.toLowerCase()===email)return ACCOUNTS[u];}
+ return null;}
 const PORT=process.env.PORT||3000;
 const ADMIN_CODE=process.env.ADMIN_CODE||'486900892414';
 const SAVE_FILE='farm_save.json',SAVE_BAK='farm_save.bak.json';
@@ -321,7 +379,8 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
  role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
- portal:p.portal||null};}
+ portal:p.portal||null,
+ username:p.username||'',passwordHash:p.passwordHash||'',email:p.email||'',emailVerified:!!p.emailVerified};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
@@ -1125,8 +1184,53 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
   default:sendTo(admin.id,{t:'toast',msg:'Unknown command: '+c,kind:'err'});
  }}
 
+/* ===== INIT DATA HELPER ===== */
+function sendInitData(sock,p){
+ sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
+  season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
+  plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
+  prices:priceMap(),cfg:G.shopConfig,
+  emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
+  event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
+  plots:G.plots,plotPos:PLOT_POS,
+  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
+   cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
+   ac:x.activeCosmetic||null,role:x.role||'player'}))}));
+ broadcast({t:'pJoin',id:p.id,name:p.name,
+  cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
+  ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();}
+
 const server=http.createServer((req,res)=>{
  const url=(req.url||'/').split('?')[0];
+ /* ===== RESET PASSWORD PAGE ===== */
+ if(url==='/reset-password'){
+  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(RESET_PAGE_HTML);return;}
+ /* ===== RESET PASSWORD API ===== */
+ if(url==='/api/reset-password'&&req.method==='POST'){
+  let body='';req.on('data',c=>body+=c);req.on('end',()=>{
+   try{
+    const data=JSON.parse(body);const token=data.token;const password=data.password;
+    if(!token||!password||password.length<6)return res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));
+    const check=validateResetToken(token);
+    if(!check.valid)return res.writeHead(400).end(JSON.stringify({success:false,message:check.reason,fatal:true}));
+    const acc=findAccountByUsername(check.username);
+    if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'Account not found.',fatal:true}));
+    /* Hash new password and save */
+    bcrypt.hash(password,10,(e,hash)=>{
+     if(e)return res.writeHead(500).end(JSON.stringify({success:false,message:'Server error.'}));
+     acc.passwordHash=hash;saveAccounts();consumeResetToken(token);
+     console.log('[FARM] Password reset for',acc.username);
+     res.writeHead(200,{'Content-Type':'application/json'});
+     res.end(JSON.stringify({success:true}));});
+   }catch(e){res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));}});
+  return;}
+ /* ===== VERIFY EMAIL ===== */
+ if(url==='/verify-email'){
+  const token=new URL(req.url,APP_BASE_URL).searchParams.get('token');
+  const acc=Object.values(ACCOUNTS).find(a=>a.verifyToken===token);
+  if(acc&&token){acc.emailVerified=true;acc.verifyToken=undefined;saveAccounts();
+   res.writeHead(200,{'Content-Type':'text/html'});res.end('<h1>Email verified!</h1><p>You can now use password reset.</p><a href="/">Back to game</a>');return;}
+  res.writeHead(400,{'Content-Type':'text/html'});res.end('<h1>Invalid or expired token.</h1><a href="/">Back to game</a>');return;}
  if(url==='/'||url==='/index.html'){
   fs.readFile(path.join(__dirname,'index.html'),(e,buf)=>{
    if(e){res.writeHead(500);return res.end('index.html missing');}
@@ -1139,7 +1243,50 @@ const server=http.createServer((req,res)=>{
   fs.readFile(fp,(e,buf)=>{if(e){res.writeHead(500);return res.end();}
    res.writeHead(200,{'Content-Type':mime});res.end(buf);});return;}
  res.writeHead(404);res.end();});
-
+/* ===== HTTP ROUTES FOR PASSWORD RESET ===== */
+const RESET_PAGE_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reset Password — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0612 45%,#0a0208 100%);font-family:'Fredoka',sans-serif;color:#ffd8c0}
+.card{background:linear-gradient(180deg,#1a0a14,#0a0408);border:2px solid #ff301044;border-radius:20px;padding:40px;width:min(440px,92vw);
+box-shadow:0 30px 80px #000a,0 0 60px #ff200022;text-align:center}
+h1{font-family:'Creepster',cursive;font-size:42px;color:#ff7020;text-shadow:0 0 18px #ff300066;margin-bottom:8px}
+p{color:#a08070;font-size:14px;margin-bottom:18px;line-height:1.5}
+input{width:100%;background:#0a0408;border:2px solid #ff301033;border-radius:10px;color:#ffd8c0;padding:14px;font-size:18px;
+font-family:'Nunito',sans-serif;outline:none;margin-bottom:12px;text-align:center}
+input:focus{border-color:#ff3010}
+button{width:100%;background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;font-family:'Creepster',cursive;font-size:20px;
+padding:14px;border-radius:12px;border:2px solid #ff301066;cursor:pointer;margin-top:6px;letter-spacing:.06em}
+button:hover{filter:brightness(1.15)}button:active{transform:scale(.95)}
+.msg{margin-top:14px;font-size:14px;padding:10px;border-radius:8px}
+.msg.ok{background:#1a4a2a;color:#80e890}.msg.err{background:#4a1a1a;color:#ff6040}
+a{color:#ff7020;text-decoration:none;font-size:13px;display:inline-block;margin-top:14px}</style></head>
+<body><div class="card"><h1>RESET PASSWORD</h1><p id="subtitle">Enter your new password below.</p>
+<div id="formDiv"><input type="password" id="np1" placeholder="New password (min 6 chars)" autocomplete="new-password">
+<input type="password" id="np2" placeholder="Confirm new password" autocomplete="new-password">
+<button id="submitBtn">SET NEW PASSWORD</button></div>
+<div id="result"></div><a href="/">← Back to game</a></div>
+<script>
+const token=new URLSearchParams(location.search).get('token');
+const sub=document.getElementById('subtitle');
+if(!token){document.getElementById('formDiv').style.display='none';sub.textContent='Invalid reset link.';}
+document.getElementById('submitBtn').onclick=async()=>{
+ const np1=document.getElementById('np1').value,np2=document.getElementById('np2').value;
+ const r=document.getElementById('result');
+ if(np1.length<6){r.innerHTML='<div class="msg err">Password must be at least 6 characters.</div>';return;}
+ if(np1!==np2){r.innerHTML='<div class="msg err">Passwords do not match.</div>';return;}
+ r.innerHTML='<div class="msg ok">Saving...</div>';
+ try{
+  const resp=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({token:token,password:np1})});
+  const data=await resp.json();
+  if(data.success){document.getElementById('formDiv').style.display='none';
+   r.innerHTML='<div class="msg ok">✓ Password changed! You can now log in with your new password.</div>';
+   sub.textContent='Password reset successful!';}
+  else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal)document.getElementById('formDiv').style.display='none';}
+ }catch(e){r.innerHTML='<div class="msg err">Network error. Try again.</div>';}};
+</script></body></html>`;
+/* Serve reset page */
 if(WebSocketServer){
  const wss=new WebSocketServer.Server({server});WSS=wss;
  wss.on('connection',(sock,req)=>{
@@ -1150,30 +1297,91 @@ if(WebSocketServer){
    let msg;try{msg=JSON.parse(raw);}catch(e){return;}
    b.n+=msg.t==='pos'?.2:1;if(b.n>40)return;
    if(!joined){
-    if(msg.t!=='join')return;
-    const clean=cleanName(msg.name);
-    if(!clean)return sock.send(JSON.stringify({t:'nameRejected',msg:'Bad name.'}));
-    const id='U'+crypto.randomBytes(6).toString('hex');
-    let p=[...G.players.values()].find(x=>x.name===clean&&!x.online);
-    if(p){p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;}
-    else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
+    /* ===== ACCOUNT AUTHENTICATION ===== */
+    if(msg.t==='signup'){
+     const username=String(msg.username||'').trim();
+     const password=String(msg.password||'');
+     const email=String(msg.email||'').trim().toLowerCase();
+     if(!usernameOK(username))return sock.send(JSON.stringify({t:'authError',msg:'Username must be 3-16 chars, letters/numbers/_- only, no bad words.'}));
+     if(password.length<6)return sock.send(JSON.stringify({t:'authError',msg:'Password must be at least 6 characters.'}));
+     if(findAccountByUsername(username))return sock.send(JSON.stringify({t:'authError',msg:'That username is taken.'}));
+     const lowUser=username.toLowerCase();
+     bcrypt.hash(password,10,(e,hash)=>{
+      if(e)return sock.send(JSON.stringify({t:'authError',msg:'Server error. Try again.'}));
+      const id='U'+crypto.randomBytes(6).toString('hex');
+      const p=newPlayer(id,username);p.online=true;G.players.set(p.id,p);
+      ACCOUNTS[lowUser]={username:lowUser,passwordHash:hash,email:email,emailVerified:false,playerId:id,createdAt:Date.now()};
+      saveAccounts();
+      /* Send verification email if email provided */
+      if(email&&RESEND_API_KEY){
+       const vToken=generateToken();
+       ACCOUNTS[lowUser].verifyToken=vToken;saveAccounts();
+       sendEmail(email,'Verify your Last Blood account',
+        '<h2>Welcome to Last Blood!</h2><p>Click below to verify your email:</p>'+
+        '<a href="'+APP_BASE_URL+'/verify-email?token='+vToken+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Verify Email</a>'+
+        '<p>If you didn\'t create this account, ignore this email.</p>');
+      }
+      sock._id=p.id;joined=true;
+      sendInitData(sock,p);
+     });
+     return;}
+    if(msg.t==='login'){
+     const username=String(msg.username||'').trim();
+     const password=String(msg.password||'');
+     const acc=findAccountByUsername(username);
+     if(!acc)return sock.send(JSON.stringify({t:'authError',msg:'Invalid username or password.'}));
+     bcrypt.compare(password,acc.passwordHash,(e,match)=>{
+      if(e||!match)return sock.send(JSON.stringify({t:'authError',msg:'Invalid username or password.'}));
+      let p=G.players.get(acc.playerId);
+      if(!p){p=newPlayer(acc.playerId,acc.username||username);G.players.set(p.id,p);}
+      if(p.online){for(const c of WSS.clients){if(c._id===p.id&&c.readyState===1)c.close();}}
+      p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
+      p.username=acc.username;p.email=acc.email;p.emailVerified=acc.emailVerified;
+      sock._id=p.id;joined=true;
+      sendInitData(sock,p);
+     });
+     return;}
+    if(msg.t==='forgotPassword'){
+     const email=String(msg.email||'').trim().toLowerCase();
+     const acc=findAccountByEmail(email);
+     /* Always show same message — don't reveal if email exists */
+     if(acc&&acc.emailVerified){
+      const token=createResetToken(acc.username);
+      sendEmail(acc.email,'Reset your Last Blood password',
+       '<h2>Password Reset</h2><p>You requested a password reset for your Last Blood account.</p>'+
+       '<p>Click below to set a new password:</p>'+
+       '<a href="'+APP_BASE_URL+'/reset-password?token='+token+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a>'+
+       '<p>This link expires in 1 hour and can only be used once.</p>'+
+       '<p>If you didn\'t request this, ignore this email.</p>');
+     }
+     sock.send(JSON.stringify({t:'authInfo',msg:'If an account exists for that email, a reset link has been sent.'}));
+     return;}
+    if(msg.t==='changePassword'){
+     /* Requires being logged in — but this is pre-join, so handle it post-join via handleMsg */
+     return;}
+    /* Legacy join still works for backward compat (but client won't send it) */
+    if(msg.t==='join'){
+     const clean=cleanName(msg.name);
+     if(!clean)return sock.send(JSON.stringify({t:'nameRejected',msg:'Bad name.'}));
+     const id='U'+crypto.randomBytes(6).toString('hex');
+     let p=[...G.players.values()].find(x=>x.name===clean);
+     if(p){
+      if(p.online){for(const c of WSS.clients){if(c._id===p.id&&c.readyState===1)c.close();}}
+      p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
+     }
+     else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
     sock._id=p.id;joined=true;
-    sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
-     plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
-     prices:priceMap(),cfg:G.shopConfig,
-     emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
-     event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
-     plots:G.plots,plotPos:PLOT_POS,
-     players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
-      cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
-      ac:x.activeCosmetic||null,role:x.role||'player'}))}));
+    sendInitData(sock,p);
     broadcast({t:'pJoin',id:p.id,name:p.name,
      cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
      ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();return;}
+   }
    try{handleMsg(sock,msg);}catch(e){console.error('[FARM] handler:',e.message);}});
-  sock.on('close',()=>{if(!sock._id)return;const p=G.players.get(sock._id);if(p)p.online=false;
-   broadcast({t:'pLeft',id:sock._id});save();});});
+  sock.on('close',()=>{
+   if(!sock._id)return;
+   const p=G.players.get(sock._id);
+   if(p){p.online=false;save();} /* Force save on disconnect so progress isn't lost */
+   broadcast({t:'pLeft',id:sock._id});});});
  setInterval(()=>{tickPlants();tickSeason2();
   if(G.event&&now()>G.event.end)endEvent();
   if(!G.event&&now()>G.nextEventRoll){G.nextEventRoll=now()+60000;if(Math.random()<.65)rollEvent();}
@@ -1265,7 +1473,8 @@ if(WebSocketServer){
  setInterval(()=>{broadcast({t:'plots',plots:G.plots});
   broadcast({t:'leaderboard',list:[...G.players.values()].map(x=>({id:x.id,name:x.name,cash:x.cash})).sort((a,b)=>b.cash-a.cash).slice(0,10)});},20000);
  load();
- process.on('SIGINT',()=>{console.log('\n[FARM] saving…');save();process.exit(0);});
+ loadAccounts();
+ process.on('SIGINT',()=>{console.log('\n[FARM] saving…');save();saveAccounts();process.exit(0);});
  server.listen(PORT,()=>console.log('[FARM] http://localhost:'+PORT));
 }else{server.listen(PORT,()=>console.log('[FARM] HTTP only. npm install ws'));}
 function fmt(n){return n>=1e9?(n/1e9).toFixed(1)+'B':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':String(Math.round(n));}

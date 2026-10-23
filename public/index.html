@@ -842,11 +842,37 @@ html.touch .seedCfgRow .sname{font-size:12px}
  <div id="introCard">
   <div class="logo">LAST BLOOD</div>
   <div class="tag">season 1 · spooky</div>
-  <div class="iField">
-   <label>Enter if you dare</label>
-   <input id="nameIn" maxlength="16" placeholder="e.g. SunnyGrower" autocomplete="off" spellcheck="false">
-   <div id="nameErr"></div>
-   <button id="startBtn">Begin</button>
+  <!-- LOGIN SCREEN -->
+  <div class="iField" id="loginPanel">
+   <label>Log In</label>
+   <input id="loginUser" maxlength="16" placeholder="Username" autocomplete="username" spellcheck="false">
+   <input id="loginPass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" style="margin-top:6px">
+   <div id="authErr" style="color:#ff4030;font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
+   <button id="loginBtn">LOG IN</button>
+   <div style="margin-top:10px;font-size:13px">
+    <a href="#" id="showSignup" style="color:#ff7020;text-decoration:none">Sign up</a>
+    <span style="color:#604060;margin:0 8px">·</span>
+    <a href="#" id="showForgot" style="color:#ff7020;text-decoration:none">Forgot password?</a>
+   </div>
+  </div>
+  <!-- SIGNUP SCREEN -->
+  <div class="iField" id="signupPanel" style="display:none">
+   <label>Create Account</label>
+   <input id="signupUser" maxlength="16" placeholder="Username (3-16 chars)" autocomplete="username" spellcheck="false">
+   <input id="signupPass" type="password" maxlength="64" placeholder="Password (min 6 chars)" autocomplete="new-password" style="margin-top:6px">
+   <input id="signupEmail" type="email" maxlength="100" placeholder="Email (for password reset)" autocomplete="email" style="margin-top:6px">
+   <div id="signupErr" style="color:#ff4030;font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
+   <button id="signupBtn">CREATE ACCOUNT</button>
+   <div style="margin-top:10px;font-size:13px"><a href="#" id="showLogin" style="color:#ff7020;text-decoration:none">← Back to login</a></div>
+  </div>
+  <!-- FORGOT PASSWORD SCREEN -->
+  <div class="iField" id="forgotPanel" style="display:none">
+   <label>Reset Password</label>
+   <p style="font-size:12px;color:#a08070;margin-bottom:10px;line-height:1.5">Enter the email linked to your account. We'll send a reset link.</p>
+   <input id="forgotEmail" type="email" maxlength="100" placeholder="Your email" autocomplete="email">
+   <div id="forgotMsg" style="font-size:13px;font-weight:700;min-height:19px;margin:8px 0 4px"></div>
+   <button id="forgotBtn">SEND RESET LINK</button>
+   <div style="margin-top:10px;font-size:13px"><a href="#" id="forgotBack" style="color:#ff7020;text-decoration:none">← Back to login</a></div>
   </div>
   <div class="iKeys"><span>WASD move</span><span>Mouse camera</span><span>E interact</span><span>I inventory</span><span>M map</span><span>B emotes</span></div>
   <div id="introLoad"><div class="bar"><i id="introBar"></i></div><p id="introMsg">Connecting to the garden…</p></div>
@@ -3584,6 +3610,22 @@ function connect(name){
   if(!ST.me){wsRetry++;$('#introMsg').textContent='Connection lost — retrying ('+wsRetry+')…';
    $('#introBar').style.width='10%';setTimeout(()=>connect(name),1500);}
   else toast('Disconnected from server. Refresh to reconnect.','err');};}
+/* ===== AUTH CONNECT — for login/signup/forgot password ===== */
+let _authMsg=null;
+function connectAuth(authMsg){
+ _authMsg=authMsg;
+ const proto=location.protocol==='https:'?'wss':'ws';
+ try{ST.ws=new WebSocket(proto+'://'+location.host);}catch(e){
+  $('#authErr').textContent='Cannot connect to server.';return;}
+ ST.ws.onopen=()=>{ST.connected=true;send(authMsg);};
+ ST.ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}
+  /* Auth messages are handled here, game messages by handleNet */
+  if(m.t==='authError'||m.t==='authInfo'){handleAuthMsg(m);return;}
+  if(m.t==='init'){handleNet(m);handleAuthMsg(m);return;}
+  handleNet(m);};
+ ST.ws.onclose=()=>{ST.connected=false;
+  if(!ST.me){$('#authErr').textContent='Connection lost. Try again.';$('#introLoad').style.display='none';}
+  else toast('Disconnected from server. Refresh to reconnect.','err');};}
 function send(o){if(ST.ws&&ST.ws.readyState===1)ST.ws.send(JSON.stringify(o));}
 function handleNet(m){
  switch(m.t){
@@ -4572,18 +4614,68 @@ function tryInteract(){
   p.style.animationDuration=(9+Math.random()*14)+'s';
   p.style.animationDelay=(-Math.random()*14)+'s';
   intro.appendChild(p);}}
- $('#nameIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('#startBtn').click();});
- $('#nameIn').addEventListener('input',()=>{
- const v=$('#nameIn').value;
- $('#nameErr').textContent=/[^A-Za-z0-9 _-]/.test(v)?'Letters, numbers and spaces only':'';});
- $('#startBtn').onclick=()=>{
- AudioSys.init();AudioSys.play('click');
- const name=$('#nameIn').value.trim();
- if(!nameOK(name)){
-  $('#nameErr').textContent='Pick a friendly name: 2–16 characters, letters/numbers, no bad words.';
-  AudioSys.play('err');return;}
- localStorage.setItem('farm_name',name);
- connect(name);};
+ /* ===== ACCOUNT LOGIN / SIGNUP / FORGOT PASSWORD ===== */
+ function showPanel(id){
+  ['loginPanel','signupPanel','forgotPanel'].forEach(p=>$('#'+p).style.display=p===id?'block':'none');
+ }
+ $('#showSignup').onclick=(e)=>{e.preventDefault();showPanel('signupPanel');$('#signupUser').focus();};
+ $('#showLogin').onclick=(e)=>{e.preventDefault();showPanel('loginPanel');$('#loginUser').focus();};
+ $('#showForgot').onclick=(e)=>{e.preventDefault();showPanel('forgotPanel');$('#forgotEmail').focus();};
+ $('#forgotBack').onclick=(e)=>{e.preventDefault();showPanel('loginPanel');};
+ $('#loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginBtn').click();});
+ $('#signupPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('#signupBtn').click();});
+ $('#forgotEmail').addEventListener('keydown',e=>{if(e.key==='Enter')$('#forgotBtn').click();});
+ /* Pre-fill saved username */
+ const savedUser=localStorage.getItem('lb_user');
+ if(savedUser)$('#loginUser').value=savedUser;
+
+ $('#loginBtn').onclick=()=>{
+  AudioSys.init();AudioSys.play('click');
+  const user=$('#loginUser').value.trim();
+  const pass=$('#loginPass').value;
+  if(!user||!pass){$('#authErr').textContent='Enter username and password.';return;}
+  $('#authErr').textContent='';
+  localStorage.setItem('lb_user',user);
+  $('#introLoad').style.display='block';
+  $('#introMsg').textContent='Logging in…';$('#introBar').style.width='40%';
+  connectAuth({t:'login',username:user,password:pass});
+ };
+ $('#signupBtn').onclick=()=>{
+  AudioSys.init();AudioSys.play('click');
+  const user=$('#signupUser').value.trim();
+  const pass=$('#signupPass').value;
+  const email=$('#signupEmail').value.trim();
+  if(!user||user.length<3){$('#signupErr').textContent='Username must be 3-16 characters.';return;}
+  if(!pass||pass.length<6){$('#signupErr').textContent='Password must be at least 6 characters.';return;}
+  $('#signupErr').textContent='';
+  $('#introLoad').style.display='block';
+  $('#introMsg').textContent='Creating account…';$('#introBar').style.width='40%';
+  connectAuth({t:'signup',username:user,password:pass,email:email});
+ };
+ $('#forgotBtn').onclick=()=>{
+  AudioSys.init();AudioSys.play('click');
+  const email=$('#forgotEmail').value.trim();
+  if(!email){$('#forgotMsg').textContent='Enter your email.';return;}
+  $('#forgotMsg').textContent='';
+  $('#forgotBtn').textContent='Sending…';$('#forgotBtn').disabled=true;
+  connectAuth({t:'forgotPassword',email:email});
+ };
+ /* Handle auth responses */
+ function handleAuthMsg(m){
+  if(m.t==='authError'){$('#introLoad').style.display='none';$('#authErr').textContent=m.msg;
+   $('#signupErr').textContent=m.msg;AudioSys.play('err');return;}
+  if(m.t==='authInfo'){$('#introLoad').style.display='none';
+   $('#forgotMsg').textContent=m.msg;$('#forgotMsg').style.color='#80e890';
+   $('#forgotBtn').textContent='SEND RESET LINK';$('#forgotBtn').disabled=false;return;}
+  if(m.t==='init'){
+   /* Login/signup succeeded — hide intro */
+   $('#introBar').style.width='100%';
+   setTimeout(()=>{$('#intro').style.transition='opacity .7s';$('#intro').style.opacity=0;
+    setTimeout(()=>{$('#intro').style.display='none';
+     spawnAtPlot();rebuildPlayerVisual();
+     if(ST.season.status!=='active')IntroSeq.start();},700);},400);
+   return;}
+ }
 /* ================= MAIN LOOP ================= */
 let lastT=performance.now(),posT=0,promptT=0,cdT=0;
 const camTarget=new THREE.Vector3(),camPos=new THREE.Vector3();
@@ -4782,8 +4874,6 @@ function animate(){
  if(ST.connected&&t*1000-posT>90&&!inputLocked){posT=t*1000;
   send({t:'pos',x:+player.x.toFixed(2),z:+player.z.toFixed(2),ry:+player.ry.toFixed(2)});}
  renderer.render(scene,camera);}
-const savedName=localStorage.getItem('farm_name');
-if(savedName)$('#nameIn').value=savedName;
 animate();
 /* ============ BATTLE PASS 3D BACKGROUND ANIMATION ============ */
 let _passBgRAF=null;
