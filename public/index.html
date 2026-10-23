@@ -4665,7 +4665,7 @@ function tryInteract(){
   if(m.t==='authError'){$('#introLoad').style.display='none';$('#authErr').textContent=m.msg;
    $('#signupErr').textContent=m.msg;AudioSys.play('err');return;}
   if(m.t==='authInfo'){$('#introLoad').style.display='none';
-   $('#forgotMsg').textContent=m.msg;$('#forgotMsg').style.color='#80e890';
+   $('#forgotMsg').textContent=m.msg+' It may take up to 2 min or longer if the queue is big.';$('#forgotMsg').style.color='#80e890';
    $('#forgotBtn').textContent='SEND RESET LINK';$('#forgotBtn').disabled=false;return;}
   if(m.t==='init'){
    /* Login/signup succeeded — hide intro */

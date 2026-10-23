@@ -1273,7 +1273,7 @@ padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';
 /* ===== HTTP SERVER ===== */
 const server=http.createServer((req,res)=>{
  const fullUrl=req.url||'/';
- const url=fullUrl.split('?')[0];
+ const url=fullUrl.split('?')[0].replace(/\/+/g,'/'); /* normalize double slashes */
  /* Route: Reset password page */
  if(url==='/reset-password'){
   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(RESET_PAGE_HTML);return;}
@@ -1350,7 +1350,7 @@ if(WebSocketServer){
        ACCOUNTS[lowUser].verifyToken=vToken;saveAccounts();
        sendEmail(email,'Verify your Last Blood account',
         '<h2>Welcome to Last Blood!</h2><p>Click below to verify your email:</p>'+
-        '<a href="'+APP_BASE_URL+'/verify-email?token='+vToken+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Verify Email</a>'+
+        '<a href="'+APP_BASE_URL.replace(/\/$/,'')+'/verify-email?token='+vToken+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Verify Email</a>'+
         '<p>If you didn\'t create this account, ignore this email.</p>');
       }
       sock._id=p.id;joined=true;
@@ -1382,7 +1382,7 @@ if(WebSocketServer){
       sendEmail(acc.email,'Reset your Last Blood password',
        '<h2>Password Reset</h2><p>You requested a password reset for your Last Blood account.</p>'+
        '<p>Click below to set a new password:</p>'+
-       '<a href="'+APP_BASE_URL+'/reset-password?token='+token+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a>'+
+       '<a href="'+APP_BASE_URL.replace(/\/$/,'')+'/reset-password?token='+token+'" style="background:#a01010;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a>'+
        '<p>This link expires in 1 hour and can only be used once.</p>'+
        '<p>If you didn\'t request this, ignore this email.</p>');
      }
