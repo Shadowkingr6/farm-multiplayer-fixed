@@ -1200,50 +1200,7 @@ function sendInitData(sock,p){
   cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
   ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();}
 
-const server=http.createServer((req,res)=>{
- const url=(req.url||'/').split('?')[0];
- /* ===== RESET PASSWORD PAGE ===== */
- if(url==='/reset-password'){
-  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(RESET_PAGE_HTML);return;}
- /* ===== RESET PASSWORD API ===== */
- if(url==='/api/reset-password'&&req.method==='POST'){
-  let body='';req.on('data',c=>body+=c);req.on('end',()=>{
-   try{
-    const data=JSON.parse(body);const token=data.token;const password=data.password;
-    if(!token||!password||password.length<6)return res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));
-    const check=validateResetToken(token);
-    if(!check.valid)return res.writeHead(400).end(JSON.stringify({success:false,message:check.reason,fatal:true}));
-    const acc=findAccountByUsername(check.username);
-    if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'Account not found.',fatal:true}));
-    /* Hash new password and save */
-    bcrypt.hash(password,10,(e,hash)=>{
-     if(e)return res.writeHead(500).end(JSON.stringify({success:false,message:'Server error.'}));
-     acc.passwordHash=hash;saveAccounts();consumeResetToken(token);
-     console.log('[FARM] Password reset for',acc.username);
-     res.writeHead(200,{'Content-Type':'application/json'});
-     res.end(JSON.stringify({success:true}));});
-   }catch(e){res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));}});
-  return;}
- /* ===== VERIFY EMAIL ===== */
- if(url==='/verify-email'){
-  const token=new URL(req.url,APP_BASE_URL).searchParams.get('token');
-  const acc=Object.values(ACCOUNTS).find(a=>a.verifyToken===token);
-  if(acc&&token){acc.emailVerified=true;acc.verifyToken=undefined;saveAccounts();
-   res.writeHead(200,{'Content-Type':'text/html'});res.end('<h1>Email verified!</h1><p>You can now use password reset.</p><a href="/">Back to game</a>');return;}
-  res.writeHead(400,{'Content-Type':'text/html'});res.end('<h1>Invalid or expired token.</h1><a href="/">Back to game</a>');return;}
- if(url==='/'||url==='/index.html'){
-  fs.readFile(path.join(__dirname,'index.html'),(e,buf)=>{
-   if(e){res.writeHead(500);return res.end('index.html missing');}
-   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(buf);});return;}
- const fp=path.join(__dirname,path.normalize(url).replace(/^([/\\]|\.\.)+/g,''));
- if(fp.startsWith(__dirname)&&fs.existsSync(fp)&&fs.statSync(fp).isFile()){
-  const ext=path.extname(fp).toLowerCase();
-  const mime={'.js':'text/javascript','.html':'text/html; charset=utf-8','.css':'text/css',
-   '.ico':'image/x-icon','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'}[ext]||'application/octet-stream';
-  fs.readFile(fp,(e,buf)=>{if(e){res.writeHead(500);return res.end();}
-   res.writeHead(200,{'Content-Type':mime});res.end(buf);});return;}
- res.writeHead(404);res.end();});
-/* ===== HTTP ROUTES FOR PASSWORD RESET ===== */
+/* ===== HTML PAGES (defined BEFORE server creation) ===== */
 const RESET_PAGE_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reset Password — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -1286,7 +1243,82 @@ document.getElementById('submitBtn').onclick=async()=>{
   else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal)document.getElementById('formDiv').style.display='none';}
  }catch(e){r.innerHTML='<div class="msg err">Network error. Try again.</div>';}};
 </script></body></html>`;
-/* Serve reset page */
+
+const VERIFY_OK_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email Verified — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:radial-gradient(ellipse at 50% 120%,#1a4a2a 0%,#0a1a14 45%,#020804 100%);font-family:'Fredoka',sans-serif;color:#80e890}
+.card{background:linear-gradient(180deg,#0a1a14,#020804);border:2px solid #4fae6844;border-radius:20px;padding:40px;width:min(440px,92vw);
+box-shadow:0 30px 80px #000a,0 0 60px #4fae6822;text-align:center}
+h1{font-family:'Creepster',cursive;font-size:42px;color:#80e890;text-shadow:0 0 18px #4fae6866;margin-bottom:12px}
+p{color:#60a070;font-size:16px;margin-bottom:18px;line-height:1.5}
+a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#1a4a2a,#2a6a3a);color:#80e890;
+padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-size:18px;border:2px solid #4fae6844}</style></head>
+<body><div class="card"><h1>✓ EMAIL VERIFIED</h1><p>Your email has been verified successfully.</p><p>You can now use the forgot password feature.</p>
+<a href="/">← Back to Game</a></div></body></html>`;
+
+const VERIFY_FAIL_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verification Failed — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0606 45%,#0a0202 100%);font-family:'Fredoka',sans-serif;color:#ff6040}
+.card{background:linear-gradient(180deg,#1a0606,#0a0202);border:2px solid #ff301044;border-radius:20px;padding:40px;width:min(440px,92vw);
+box-shadow:0 30px 80px #000a,0 0 60px #ff200022;text-align:center}
+h1{font-family:'Creepster',cursive;font-size:42px;color:#ff4030;text-shadow:0 0 18px #ff301066;margin-bottom:12px}
+p{color:#a06050;font-size:16px;margin-bottom:18px;line-height:1.5}
+a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;
+padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-size:18px;border:2px solid #ff301066}</style></head>
+<body><div class="card"><h1>VERIFICATION FAILED</h1><p>The verification link is invalid, expired, or has already been used.</p>
+<a href="/">← Back to Game</a></div></body></html>`;
+
+/* ===== HTTP SERVER ===== */
+const server=http.createServer((req,res)=>{
+ const fullUrl=req.url||'/';
+ const url=fullUrl.split('?')[0];
+ /* Route: Reset password page */
+ if(url==='/reset-password'){
+  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(RESET_PAGE_HTML);return;}
+ /* Route: Reset password API */
+ if(url==='/api/reset-password'&&req.method==='POST'){
+  let body='';req.on('data',c=>body+=c);req.on('end',()=>{
+   try{
+    const data=JSON.parse(body);const token=data.token;const password=data.password;
+    if(!token||!password||password.length<6)return res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));
+    const check=validateResetToken(token);
+    if(!check.valid)return res.writeHead(400).end(JSON.stringify({success:false,message:check.reason,fatal:true}));
+    const acc=findAccountByUsername(check.username);
+    if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'Account not found.',fatal:true}));
+    bcrypt.hash(password,10,(e,hash)=>{
+     if(e)return res.writeHead(500).end(JSON.stringify({success:false,message:'Server error.'}));
+     acc.passwordHash=hash;saveAccounts();consumeResetToken(token);
+     console.log('[FARM] Password reset for',acc.username);
+     res.writeHead(200,{'Content-Type':'application/json'});
+     res.end(JSON.stringify({success:true}));});
+   }catch(e){res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));}});
+  return;}
+ /* Route: Verify email */
+ if(url==='/verify-email'){
+  const token=new URL(fullUrl,'http://localhost').searchParams.get('token');
+  if(token){
+   const acc=Object.values(ACCOUNTS).find(a=>a.verifyToken===token);
+   if(acc){acc.emailVerified=true;acc.verifyToken=undefined;saveAccounts();
+    console.log('[FARM] Email verified for',acc.username);
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(VERIFY_OK_HTML);return;}
+  }
+  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(VERIFY_FAIL_HTML);return;}
+ /* Route: Main game */
+ if(url==='/'||url==='/index.html'){
+  fs.readFile(path.join(__dirname,'index.html'),(e,buf)=>{
+   if(e){res.writeHead(500);return res.end('index.html missing');}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(buf);});return;}
+ const fp=path.join(__dirname,path.normalize(url).replace(/^([/\\]|\.\.)+/g,''));
+ if(fp.startsWith(__dirname)&&fs.existsSync(fp)&&fs.statSync(fp).isFile()){
+  const ext=path.extname(fp).toLowerCase();
+  const mime={'.js':'text/javascript','.html':'text/html; charset=utf-8','.css':'text/css',
+   '.ico':'image/x-icon','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'}[ext]||'application/octet-stream';
+  fs.readFile(fp,(e,buf)=>{if(e){res.writeHead(500);return res.end();}
+   res.writeHead(200,{'Content-Type':mime});res.end(buf);});return;}
+ res.writeHead(404);res.end();});
+
 if(WebSocketServer){
  const wss=new WebSocketServer.Server({server});WSS=wss;
  wss.on('connection',(sock,req)=>{
