@@ -664,6 +664,56 @@ html.touch .seedCfgRow .sname{font-size:12px}
 .petRow .pi .pr{font-size:10px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:5px}
 .petRow button{font-size:12px;padding:6px 12px;border-radius:7px;border:none;cursor:pointer;background:#2d6b45;color:#fff}
 .petRow button.eq{background:#a86fd6}
+/* ============ AUCTION HOUSE ============ */
+#auctionOverlay{position:fixed;inset:0;z-index:660;display:none;align-items:center;justify-content:center;
+ background:rgba(5,2,10,.88);backdrop-filter:blur(4px)}
+#auctionOverlay.on{display:flex}
+#auctionCard{width:min(560px,94vw);background:linear-gradient(180deg,#1a0a14,#0a0408);
+ border:2px solid #ff301044;border-radius:20px;padding:30px;text-align:center;
+ box-shadow:0 30px 80px #000a,0 0 60px #ff200022;position:relative;overflow:hidden}
+#auctionCard::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,#ff200008,transparent 60%);pointer-events:none}
+#aucTitle{font-family:'Creepster',cursive;font-size:38px;color:#ff7020;letter-spacing:.06em;
+ text-shadow:0 0 18px #ff300066,0 0 50px #ff200044;animation:spookyFlick 3s infinite;line-height:1}
+#aucItemName{font-family:'Fredoka';font-size:24px;color:#ffd8c0;margin:12px 0 4px;font-weight:700}
+#aucItemRar{font-size:11px;font-weight:800;text-transform:uppercase;padding:3px 10px;border-radius:6px;color:#fff;display:inline-block;margin-bottom:14px}
+#aucPreview{width:100px;height:100px;margin:0 auto 14px;border-radius:50%;
+ background:radial-gradient(circle at 35% 30%,#ff7020,#2a0a0a);border:3px solid #ff301044;
+ display:flex;align-items:center;justify-content:center;font-size:48px;animation:eggBob 2s ease-in-out infinite}
+#aucHighestBox{background:#0a0408;border:2px solid #ff301033;border-radius:14px;padding:14px;margin:10px 0}
+#aucHighestAmount{font-family:'Fredoka';font-size:32px;color:#80e890;line-height:1}
+#aucHighestBidder{font-size:13px;color:#a08070;margin-top:4px}
+#aucTimer{font-family:'Fredoka';font-size:28px;color:#ffd0a0;letter-spacing:.06em;margin:10px 0;
+ text-shadow:0 2px 0 #00000088;font-variant-numeric:tabular-nums}
+#aucTimer.urgent{color:#ff4030;animation:spookyFlick 1.4s infinite}
+#aucBidRow{display:flex;gap:10px;margin:12px 0}
+#aucBidInput{flex:1;background:#0a0408;border:2px solid #ff301033;border-radius:10px;color:#ffd8c0;
+ padding:12px 16px;font-size:18px;font-family:'Nunito';outline:none;text-align:center}
+#aucBidInput:focus{border-color:#ff3010}
+#aucBidBtn{background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;font-family:'Fredoka';
+ font-size:18px;padding:12px 24px;border-radius:10px;border:2px solid #ff301066;cursor:pointer;transition:transform .12s,filter .15s}
+#aucBidBtn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+#aucBidBtn:active{transform:scale(.95)}
+#aucBidBtn:disabled{opacity:.4;cursor:default}
+#aucMinBid{font-size:12px;color:#806060;margin-top:4px}
+#aucBidHistory{max-height:120px;overflow-y:auto;text-align:left;margin-top:10px}
+#aucBidHistory::-webkit-scrollbar{width:6px}#aucBidHistory::-webkit-scrollbar-thumb{background:#ff301033;border-radius:3px}
+#aucBidHistory .bh{font-size:12px;color:#a08070;padding:4px 8px;border-bottom:1px solid #ffffff08}
+#aucBidHistory .bh.me{color:#80e890}
+#aucCloseBtn{position:absolute;top:14px;right:14px;background:#ffffff14;color:#a08070;width:32px;height:32px;
+ border-radius:9px;border:none;cursor:pointer;font-size:16px}
+#aucCloseBtn:hover{background:#ffffff24}
+/* HUD auction button */
+#auctionHudBtn{display:none;align-items:center;gap:8px;background:linear-gradient(135deg,#1a0606,#2a0a0a);
+ border:2px solid #ff301066;border-radius:12px;padding:8px 14px;box-shadow:0 0 14px #ff200022;
+ cursor:pointer;pointer-events:auto;transition:transform .15s,box-shadow .2s}
+#auctionHudBtn.on{display:flex}
+#auctionHudBtn.active{animation:aucPulse 1.5s infinite}
+@keyframes aucPulse{50%{box-shadow:0 0 24px #ff300044;transform:scale(1.05)}}
+#auctionHudBtn .ahIcon{font-size:20px}
+#auctionHudBtn .ahText{font-family:'Fredoka';font-size:12px;color:#ffd8c0;letter-spacing:.1em;text-transform:uppercase}
+/* Confetti */
+.aucConfetti{position:fixed;width:10px;height:10px;z-index:999;pointer-events:none;animation:aucConfFall linear forwards}
+@keyframes aucConfFall{from{transform:translateY(-10vh) rotate(0)}to{transform:translateY(110vh) rotate(720deg)}}
 /* ============ NPC DIALOGUE BOX ============ */
 #npcDialogue{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:695;display:none;
  width:min(580px,92vw);background:linear-gradient(180deg,#1a0e2a,#0a0418);border:2px solid #a86fd666;
@@ -6254,6 +6304,192 @@ const Portal = {
     requestAnimationFrame(tick);
   },
 };
+/* ============================================================
+   AUCTION HOUSE — admin-run live bidding event
+   ============================================================ */
+window.AuctionCtrl = {
+  active: false, auction: null, _srvOffset: 0, _raf: null, _overlayOpen: false,
+
+  init() {
+    const A = this;
+    if (typeof handleNet === 'function') {
+      const orig = handleNet;
+      window.handleNet = function (m) { if (A.handleMsg(m)) return; orig(m); };
+    }
+    const hudBtn = document.getElementById('auctionHudBtn');
+    if (hudBtn) hudBtn.onclick = () => A.toggleOverlay();
+    const closeBtn = document.getElementById('aucCloseBtn');
+    if (closeBtn) closeBtn.onclick = () => A.toggleOverlay();
+    const bidBtn = document.getElementById('aucBidBtn');
+    if (bidBtn) bidBtn.onclick = () => A.placeBid();
+    const bidInput = document.getElementById('aucBidInput');
+    if (bidInput) bidInput.addEventListener('keydown', e => { if (e.key === 'Enter') A.placeBid(); });
+    console.log('[AuctionCtrl] initialized.');
+  },
+
+  handleMsg(m) {
+    const A = this;
+    switch (m.t) {
+      case 'auctionStart':
+        A.active = true; A.auction = m.auction;
+        if (m.serverTime) A._srvOffset = m.serverTime - Date.now();
+        A.showHudBtn(true); A.render(); A.startTick();
+        A.openOverlay();
+        if (typeof AudioSys !== 'undefined') AudioSys.play('buy');
+        if (typeof toast === 'function') toast('🔨 Auction started: ' + m.auction.itemName + '!', 'event');
+        return true;
+      case 'auctionUpdate':
+        A.auction = m.auction;
+        if (m.serverTime) A._srvOffset = m.serverTime - Date.now();
+        A.render();
+        return true;
+      case 'auctionEnd':
+        A.active = false; A.auction = null;
+        A.showHudBtn(false);
+        A.stopTick();
+        if (m.cancelled) {
+          if (typeof toast === 'function') toast('Auction cancelled by admin.', 'info');
+          A.renderEnded('Cancelled', 'The auction was cancelled.', '');
+        } else if (m.noWinner) {
+          A.renderEnded('No Winner', 'No one could afford the winning bid!', '');
+        } else {
+          A.renderEnded('🏆 ' + m.winner + ' Wins!', m.winner + ' won ' + m.item + ' for ' + A.fmt(m.amount) + ' ' + m.currency + '!', m.winner);
+          A.celebrate();
+          if (typeof AudioSys !== 'undefined') { AudioSys.play('hatch'); AudioSys.play('cash'); }
+        }
+        setTimeout(() => { if (!A.active) A.closeOverlay(); }, 6000);
+        return true;
+      case 'init':
+        if (m.auction && m.auction.active) {
+          A.active = true; A.auction = m.auction;
+          if (m.serverTime) A._srvOffset = m.serverTime - Date.now();
+          A.showHudBtn(true); A.render(); A.startTick();
+        }
+        return false;
+      default: return false;
+    }
+  },
+
+  showHudBtn(show) {
+    const btn = document.getElementById('auctionHudBtn');
+    if (!btn) return;
+    if (show) { btn.classList.add('on', 'active'); } else { btn.classList.remove('on', 'active'); }
+  },
+
+  toggleOverlay() {
+    const A = this;
+    if (!A.active && !A._overlayOpen) return;
+    A._overlayOpen = !A._overlayOpen;
+    const ov = document.getElementById('auctionOverlay');
+    if (A._overlayOpen) ov.classList.add('on');
+    else ov.classList.remove('on');
+  },
+
+  openOverlay() {
+    const A = this;
+    A._overlayOpen = true;
+    document.getElementById('auctionOverlay').classList.add('on');
+  },
+
+  closeOverlay() {
+    const A = this;
+    A._overlayOpen = false;
+    document.getElementById('auctionOverlay').classList.remove('on');
+  },
+
+  render() {
+    const A = this;
+    if (!A.auction) return;
+    const a = A.auction;
+    document.getElementById('aucItemName').textContent = a.itemName;
+    const rarEl = document.getElementById('aucItemRar');
+    if (a.itemRar) { rarEl.textContent = a.itemRar; rarEl.style.background = A.rarColor(a.itemRar); rarEl.style.display = 'inline-block'; }
+    else rarEl.style.display = 'none';
+    const cur = a.currency === 'relics' ? '🔮' : '🪙';
+    document.getElementById('aucHighestAmount').textContent = cur + ' ' + A.fmt(a.highestBid);
+    document.getElementById('aucHighestBidder').textContent = a.highestBidderName || 'Starting bid';
+    /* Bid history */
+    const hist = document.getElementById('aucBidHistory');
+    if (a.bids && a.bids.length) {
+      hist.innerHTML = a.bids.map(b => {
+        const isMe = ST.me && b.id === ST.me.id;
+        return '<div class="bh' + (isMe ? ' me' : '') + '">' + (a.currency === 'relics' ? '🔮' : '🪙') + ' ' + A.fmt(b.amount) + ' — ' + b.name + '</div>';
+      }).join('');
+    } else hist.innerHTML = '';
+    /* Min bid */
+    const minBid = Math.ceil(a.highestBid * 1.05);
+    document.getElementById('aucMinBid').textContent = 'Minimum next bid: ' + A.fmt(minBid) + ' ' + a.currency;
+    /* Input default */
+    const inp = document.getElementById('aucBidInput');
+    if (inp && !inp.value) inp.value = minBid;
+  },
+
+  startTick() {
+    const A = this;
+    if (A._raf) cancelAnimationFrame(A._raf);
+    function tick() {
+      if (!A.active || !A.auction) { A._raf = null; return; }
+      const rem = Math.max(0, A.auction.endAt - (Date.now() + A._srvOffset));
+      const s = Math.floor(rem / 1000);
+      const el = document.getElementById('aucTimer');
+      if (el) {
+        el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+        el.classList.toggle('urgent', rem < 10000);
+      }
+      if (rem <= 0) { A.active = false; A._raf = null; return; }
+      A._raf = requestAnimationFrame(tick);
+    }
+    tick();
+  },
+
+  stopTick() { if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; } },
+
+  placeBid() {
+    const A = this;
+    if (!A.active) return;
+    const inp = document.getElementById('aucBidInput');
+    if (!inp) return;
+    const amount = Math.floor(+inp.value || 0);
+    if (amount <= 0) { if (typeof toast === 'function') toast('Enter a valid bid amount.', 'err'); return; }
+    if (typeof send === 'function') send({ t: 'placeBid', amount });
+    inp.value = '';
+    if (typeof AudioSys !== 'undefined') AudioSys.play('click');
+  },
+
+  renderEnded(title, msg, winner) {
+    const card = document.getElementById('auctionCard');
+    if (!card) return;
+    card.innerHTML = '<button id="aucCloseBtn" onclick="document.getElementById(\'auctionOverlay\').classList.remove(\'on\')">✕</button>' +
+      '<div id="aucTitle" style="font-size:32px">' + title + '</div>' +
+      '<p style="color:#ffd8c0;font-size:16px;margin:16px 0;line-height:1.5">' + msg + '</p>';
+  },
+
+  celebrate() {
+    const colors = ['#ff7020', '#ffd24a', '#80e890', '#a86fd6', '#ff4030'];
+    for (let i = 0; i < 60; i++) {
+      const c = document.createElement('div');
+      c.className = 'aucConfetti';
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.background = colors[Math.floor(Math.random() * colors.length)];
+      c.style.animationDuration = (2 + Math.random() * 2) + 's';
+      c.style.animationDelay = Math.random() * 0.5 + 's';
+      c.style.borderRadius = Math.random() < 0.5 ? '50%' : '2px';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 5000);
+    }
+  },
+
+  fmt(n) { return n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(Math.floor(n)); },
+  rarColor(r) { const m = { Common: '#97a553', Uncommon: '#4fae68', Rare: '#3f9fd6', Epic: '#a86fd6', Legendary: '#e8a33d', Mythical: '#e05a8a', Demon: '#c03030', Divine: '#f0d060', Alienoic: '#39ff14' }; return m[r] || '#666'; },
+};
+(function () {
+  function boot() {
+    if (typeof handleNet !== 'function' || typeof ST === 'undefined') { setTimeout(boot, 50); return; }
+    AuctionCtrl.init();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
 /* Boot Portal module */
 (function () {
   function boot() {
@@ -6686,6 +6922,31 @@ window.TimerCtrl={
 </div>
 <div id="waypointArrow">➤</div>
 <div id="waypointDist"></div>
+<!-- ============ AUCTION HOUSE ============ -->
+<div id="auctionOverlay">
+ <div id="auctionCard">
+  <button id="aucCloseBtn">✕</button>
+  <div id="aucTitle">LIVE AUCTION</div>
+  <div id="aucPreview">📦</div>
+  <div id="aucItemName"></div>
+  <div id="aucItemRar"></div>
+  <div id="aucHighestBox">
+   <div id="aucHighestAmount">0</div>
+   <div id="aucHighestBidder">Starting bid</div>
+  </div>
+  <div id="aucTimer">00:00</div>
+  <div id="aucBidRow">
+   <input id="aucBidInput" type="number" placeholder="Your bid" autocomplete="off">
+   <button id="aucBidBtn">BID</button>
+  </div>
+  <div id="aucMinBid"></div>
+  <div id="aucBidHistory"></div>
+ </div>
+</div>
+<button id="auctionHudBtn">
+ <span class="ahIcon">🔨</span>
+ <span class="ahText">Auction</span>
+</button>
 <!-- ============ RESTOCK BANNER ============ -->
 <div id="restockBanner">
  <div class="rbIcon">🌱</div>
@@ -8002,6 +8263,105 @@ const Act2 = {
       A.renderRolesTab();
     };
     tabs.appendChild(rBtn);
+    /* Auction tab */
+    const aBtn = document.createElement('button');
+    aBtn.textContent = 'Auction';
+    aBtn.dataset.act2 = 'auction';
+    aBtn.onclick = () => {
+      [...tabs.children].forEach(x => x.classList.toggle('on', x === aBtn));
+      A.renderAuctionTab();
+    };
+    tabs.appendChild(aBtn);
+  },
+
+  renderAuctionTab() {
+    const A = this;
+    const el = document.getElementById('admBody');
+    if (!el) return;
+    const isActive = window.AuctionCtrl && AuctionCtrl.active;
+    const auc = window.AuctionCtrl && AuctionCtrl.auction;
+
+    /* Build item dropdown — all tradeable items */
+    const petOpts = Object.keys(PETS).map(id => `<option value="pet:${id}:${PETS[id].n}:${PETS[id].rar}">${PETS[id].n} (${PETS[id].rar})</option>`).join('');
+    const eggOpts = Object.keys(EGGS).map(id => `<option value="egg:${id}:${EGGS[id].n}:">${EGGS[id].n}</option>`).join('');
+    const seedOpts = Object.keys(SEEDS).filter(id => id !== 'carrot').map(id => `<option value="seed:${id}:${SEEDS[id].n}:${SEEDS[id].rar}">${SEEDS[id].n} (${SEEDS[id].rar})</option>`).join('');
+    const gearOpts = Object.keys(GEAR).map(id => `<option value="gear:${id}:${GEAR[id].n}:">${GEAR[id].n}</option>`).join('');
+    const cosOpts = COSMETICS.map(c => `<option value="cosmetic:${c.id}:${c.n}:${c.rar}">${c.n} (${c.rar})</option>`).join('');
+
+    el.innerHTML = `
+      <div class="admCtrlCard">
+        <h4 style="color:#ff7020">🔨 AUCTION HOUSE</h4>
+        <div class="desc" style="font-size:12px;color:#7c8a98;margin-bottom:14px">
+          Start a live auction. All online players see the overlay and can bid. 10% tax on the winner's payment (economy sink). Anti-snipe: last 10s bids extend timer by 10s (max 3x).
+        </div>
+        ${isActive ? `
+          <div style="background:#1a0a0a;border:2px solid #ff301044;border-radius:12px;padding:16px;margin-bottom:14px">
+            <h4 style="color:#ff7020;margin-bottom:8px">Active Auction</h4>
+            <p style="color:#c8d2dc">Item: <b>${auc ? auc.itemName : ''}</b></p>
+            <p style="color:#80e890">Highest bid: ${auc ? auc.highestBid : 0} ${auc ? auc.currency : ''} — ${auc ? auc.highestBidderName : ''}</p>
+            <div class="admRow" style="margin-top:10px">
+              <button class="btnSm btnA" id="aucExtend">+30s</button>
+              <button class="btnSm btnG" id="aucForceEnd">Force End</button>
+              <button class="btnSm btnR" id="aucCancel">Cancel Auction</button>
+            </div>
+          </div>
+        ` : `
+          <div class="admRow"><label>Item to auction</label>
+           <select id="aucItemSelect" style="flex:1;min-width:260px">
+             <optgroup label="Pets">${petOpts}</optgroup>
+             <optgroup label="Eggs">${eggOpts}</optgroup>
+             <optgroup label="Seeds">${seedOpts}</optgroup>
+             <optgroup label="Gear">${gearOpts}</optgroup>
+             <optgroup label="Cosmetics">${cosOpts}</optgroup>
+             <option value="goldpass:goldpass:Gold Pass:Legendary">Gold Pass (Legendary)</option>
+             <option value="pack:1:Seed Pack:">Seed Pack</option>
+             <option value="relics:5:5 Relics:">5 Relics</option>
+             <option value="relics:10:10 Relics:">10 Relics</option>
+             <option value="relics:25:25 Relics:">25 Relics</option>
+             <option value="cash:1000000:1M Sheckles:">1M Sheckles</option>
+             <option value="cash:10000000:10M Sheckles:">10M Sheckles</option>
+           </select>
+          </div>
+          <div class="admRow"><label>Base price</label>
+           <input id="aucBasePrice" type="number" value="1000" style="width:140px">
+           <label style="min-width:60px">Currency</label>
+           <select id="aucCurrency" style="width:120px">
+             <option value="cash">🪙 Sheckles</option>
+             <option value="relics">🔮 Relics</option>
+           </select>
+          </div>
+          <div class="admRow"><label>Duration (sec)</label>
+           <input id="aucDuration" type="number" value="60" min="10" max="600" style="width:100px">
+           <span style="font-size:11px;color:#6a7885">10-600 seconds</span>
+          </div>
+          <button class="btnSm btnA" id="aucStartBtn" style="width:100%;padding:14px;font-size:16px;margin-top:10px">
+           START AUCTION
+          </button>
+        `}
+      </div>`;
+
+    if (isActive) {
+      const ext = document.getElementById('aucExtend');
+      if (ext) ext.onclick = () => { if (typeof send === 'function' && ST.adminToken) send({ t: 'admin', token: ST.adminToken, cmd: 'extendAuction', args: { seconds: 30 } }); };
+      const fe = document.getElementById('aucForceEnd');
+      if (fe) fe.onclick = () => { if (confirm('Force end the auction? Awards to current highest bidder.')) if (typeof send === 'function' && ST.adminToken) send({ t: 'admin', token: ST.adminToken, cmd: 'forceEndAuction', args: {} }); };
+      const ca = document.getElementById('aucCancel');
+      if (ca) ca.onclick = () => { if (confirm('Cancel the auction? All bids are voided.')) if (typeof send === 'function' && ST.adminToken) send({ t: 'admin', token: ST.adminToken, cmd: 'cancelAuction', args: {} }); };
+    } else {
+      const start = document.getElementById('aucStartBtn');
+      if (start) start.onclick = () => {
+        const sel = document.getElementById('aucItemSelect').value.split(':');
+        const basePrice = +document.getElementById('aucBasePrice').value || 1000;
+        const currency = document.getElementById('aucCurrency').value;
+        const duration = +document.getElementById('aucDuration').value || 60;
+        if (!sel || sel.length < 3) return;
+        const itemType = sel[0], item = sel[1], itemName = sel[2], itemRar = sel[3] || '';
+        if (!confirm('Start auction for ' + itemName + ' at ' + basePrice + ' ' + currency + ' for ' + duration + 's?')) return;
+        if (typeof send === 'function' && ST.adminToken) {
+          send({ t: 'admin', token: ST.adminToken, cmd: 'startAuction', args: { item, itemType, itemName, itemRar, basePrice, currency, duration } });
+        }
+      };
+    }
   },
 
   renderRolesTab() {

@@ -292,6 +292,9 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
  timer:{active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},
  /* ===== PORTAL VISIBILITY TOGGLE ===== */
  portalEnabled:false,
+ /* ===== AUCTION HOUSE ===== */
+ auction:{active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',
+  highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},
  adminSessions:new Map(),authFails:new Map(),logs:[],startedAt:Date.now(),savedAt:Date.now(),dirty:false,nextId:1};
 G.maintenance={active:false,until:0,msg:'',fix:'',by:''};
 
@@ -320,7 +323,7 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
- maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,
+ maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
@@ -348,6 +351,8 @@ function load(){let raw=null;
   G.s2=Object.assign({phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},d.s2||{});
   G.timer=Object.assign({active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},d.timer||{});
   G.portalEnabled=!!d.portalEnabled;
+  G.auction=Object.assign({active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},d.auction||{});
+  if(G.auction.active)G.auction.active=false; /* Don't restore active auctions after restart */
   /* If a timer was active and expired while the server was down, clear it */
   if(G.timer.active&&G.timer.end<now()){G.timer.active=false;G.timer.end=0;}
   if(!Array.isArray(G.s2.deciderWishes))G.s2.deciderWishes=[];
@@ -865,6 +870,33 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    if(!friend||!friend.portal||!friend.portal.zone)return sendTo(p.id,{t:'toast',msg:'Friend has no house.',kind:'err'});
    sendTo(p.id,{t:'portalVisit',friendId:friendId,friendName:friend.name,portal:friend.portal});
    break;}
+  /* ===== AUCTION HOUSE — player bid ===== */
+  case 'placeBid':{
+   if(!G.auction.active)return sendTo(p.id,{t:'toast',msg:'No active auction.',kind:'err'});
+   const bid=Math.max(0,Math.floor(+msg.amount||0));
+   const minBid=Math.ceil(G.auction.highestBid*1.05);
+   if(bid<minBid)return sendTo(p.id,{t:'toast',msg:'Minimum bid is '+fmt(minBid)+' '+G.auction.currency+'.',kind:'err'});
+   /* Check player has enough money */
+   if(G.auction.currency==='relics'){
+    if((p.relics||0)<bid)return sendTo(p.id,{t:'toast',msg:'You don\'t have enough Relics!',kind:'err'});
+   }else{
+    if((p.cash||0)<bid)return sendTo(p.id,{t:'toast',msg:'You don\'t have enough Sheckles!',kind:'err'});
+   }
+   /* Valid bid — update auction */
+   G.auction.highestBid=bid;
+   G.auction.highestBidder=p.id;
+   G.auction.highestBidderName=p.name;
+   G.auction.bids.unshift({name:p.name,amount:bid,id:p.id});
+   if(G.auction.bids.length>10)G.auction.bids.length=10;
+   /* Anti-snipe: extend timer if bid in last 10 seconds */
+   const rem=G.auction.endAt-now();
+   if(rem<10000&&G.auction.extensionsUsed<3){
+    G.auction.endAt+=10000;G.auction.extensionsUsed++;
+   }
+   G.dirty=true;save();
+   broadcast({t:'auctionUpdate',auction:G.auction,serverTime:now()});
+   sendTo(p.id,{t:'toast',msg:'Bid placed: '+fmt(bid)+' '+G.auction.currency,kind:'good'});
+   break;}
  }
 }
 function sellFruits(p,uids){const set=new Set(uids);const sold=[];
@@ -924,6 +956,39 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    G.portalEnabled=!G.portalEnabled;G.dirty=true;save();
    broadcast({t:'portalToggle',enabled:G.portalEnabled});
    sendTo(admin.id,{t:'toast',msg:'Portal '+(G.portalEnabled?'ENABLED':'DISABLED'),kind:'good'});break;}
+  /* ===== AUCTION HOUSE — admin commands ===== */
+  case 'startAuction':{
+   if(G.auction.active)return sendTo(admin.id,{t:'toast',msg:'Auction already active.',kind:'err'});
+   const item=String(a.item||'').slice(0,40);
+   const itemType=String(a.itemType||'').slice(0,20);
+   const itemName=String(a.itemName||'').slice(0,60);
+   const itemRar=String(a.itemRar||'').slice(0,20);
+   const basePrice=Math.max(1,+a.basePrice||100);
+   const currency=(a.currency==='relics')?'relics':'cash';
+   const dur=Math.max(10,Math.min(600,+a.duration||60));
+   G.auction={active:true,item,itemType,itemName,itemRar,basePrice,currency,
+    highestBid:basePrice,highestBidder:null,highestBidderName:'Starting bid',
+    bids:[{name:'Starting bid',amount:basePrice}],endAt:now()+dur*1000,extensionsUsed:0,by:admin.name};
+   G.dirty=true;save();
+   broadcast({t:'auctionStart',auction:G.auction,serverTime:now()});
+   log('auction:start','global',itemName+' @ '+basePrice);
+   sendTo(admin.id,{t:'toast',msg:'Auction started: '+itemName,kind:'good'});break;}
+  case 'cancelAuction':{
+   if(!G.auction.active)return sendTo(admin.id,{t:'toast',msg:'No active auction.',kind:'err'});
+   G.auction={active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''};
+   G.dirty=true;save();
+   broadcast({t:'auctionEnd',cancelled:true});
+   sendTo(admin.id,{t:'toast',msg:'Auction cancelled.',kind:'good'});break;}
+  case 'extendAuction':{
+   if(!G.auction.active)return sendTo(admin.id,{t:'toast',msg:'No active auction.',kind:'err'});
+   const ext=Math.max(10,Math.min(300,+a.seconds||30));
+   G.auction.endAt+=ext*1000;G.dirty=true;save();
+   broadcast({t:'auctionUpdate',auction:G.auction,serverTime:now()});
+   sendTo(admin.id,{t:'toast',msg:'Extended by '+ext+'s.',kind:'good'});break;}
+  case 'forceEndAuction':{
+   if(!G.auction.active)return sendTo(admin.id,{t:'toast',msg:'No active auction.',kind:'err'});
+   G.auction.endAt=now();G.dirty=true;save();
+   sendTo(admin.id,{t:'toast',msg:'Auction force-ending...',kind:'good'});break;}
   /* ===== SEASON 1 ACT 2: THE DESCENT — admin launch ===== */
   case 'launchAct2':{
    if(G.s2.act2Launched)return sendTo(admin.id,{t:'toast',msg:'Act 2 already launched.',kind:'err'});
@@ -1083,7 +1148,7 @@ if(WebSocketServer){
     else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
     sock._id=p.id;joined=true;
     sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,
+     season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
      plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
      prices:priceMap(),cfg:G.shopConfig,
      emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
@@ -1116,6 +1181,54 @@ if(WebSocketServer){
    }
   }
  },2000);
+ /* ===== AUCTION TICK — checks every 1s if auction ended, awards item to winner ===== */
+ setInterval(()=>{
+  if(!G.auction.active)return;
+  if(now()<G.auction.endAt)return;
+  /* Auction ended — find winner (highest bidder who can still afford it) */
+  G.auction.active=false;
+  let winner=null,winnerName='',winAmount=0;
+  if(G.auction.bids.length>0){
+   for(const b of G.auction.bids){
+    if(b.id){
+     const bp=G.players.get(b.id);
+     if(!bp)continue;
+     const bal=G.auction.currency==='relics'?(bp.relics||0):(bp.cash||0);
+     if(bal>=b.amount){winner=bp;winnerName=bp.name;winAmount=b.amount;break;}
+    }
+   }
+  }
+  if(winner){
+   /* Deduct payment (10% tax = economy sink) */
+   const tax=Math.floor(winAmount*0.1);
+   const payout=winAmount-tax;
+   if(G.auction.currency==='relics'){winner.relics=(winner.relics||0)-winAmount;}
+   else{winner.cash=(winner.cash||0)-winAmount;}
+   /* Award item */
+   const it=G.auction.itemType;
+   const itemId=G.auction.item;
+   if(it==='pet'){winner.pets.push({uid:'K'+(G.nextId++),pid:itemId,lvl:1,xp:0,eq:false});
+    if(!winner.discovered.pets.includes(itemId))winner.discovered.pets.push(itemId);}
+   else if(it==='egg'){winner.eggs[itemId]=(winner.eggs[itemId]||0)+1;}
+   else if(it==='seed'){winner.seeds[itemId]=(winner.seeds[itemId]||0)+1;
+    if(!winner.discovered.seeds.includes(itemId))winner.discovered.seeds.push(itemId);}
+   else if(it==='gear'){if(!winner.gear.includes(itemId))winner.gear.push(itemId);}
+   else if(it==='cosmetic'){winner.cosmetics[itemId]=true;}
+   else if(it==='goldpass'){winner.goldOwned=true;}
+   else if(it==='relics'){winner.relics=(winner.relics||0)+parseInt(itemId)||0;}
+   else if(it==='cash'){winner.cash=(winner.cash||0)+parseInt(itemId)||0;}
+   else if(it==='pack'){winner.packs=(winner.packs||0)+1;}
+   pushMe(winner);save();
+   broadcast({t:'auctionEnd',winner:winnerName,amount:winAmount,currency:G.auction.currency,
+    item:G.auction.itemName,itemType:it,itemId:itemId});
+   log('auction:end',winner.id,G.auction.itemName+' @ '+winAmount);
+  }else{
+   broadcast({t:'auctionEnd',cancelled:false,noWinner:true});
+   log('auction:end','global','no winner');
+  }
+  G.auction={active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''};
+  G.dirty=true;save();
+ },1000);
  /* ===== TIMER TICK — checks every 250ms for smooth 3-2-1 countdown + fires event on expiry ===== */
  setInterval(()=>{
   if(!G.timer.active)return;
