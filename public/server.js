@@ -1,7 +1,7 @@
 ﻿/* FARM — authoritative server. Season 2: THE REBIRTH. Run: node server.js */
 'use strict';
 const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto');
-const bcrypt=require('bcrypt');
+const bcrypt=require('bcryptjs');
 const RESEND_API_KEY=process.env.RESEND_API_KEY||'';
 const EMAIL_FROM=process.env.EMAIL_FROM||'onboarding@resend.dev';
 const APP_BASE_URL=process.env.APP_BASE_URL||'http://localhost:3000';

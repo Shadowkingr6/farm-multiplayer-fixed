@@ -1,11 +1,19 @@
 {
-  "name": "farm-multiplayer",
+  "name": "last-blood",
   "version": "1.0.0",
-  "private": true,
+  "description": "",
+  "main": "server.js",
   "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
-    "ws": "^8.18.0"
+    "bcryptjs": "^3.0.3",
+    "resend": "^4.0.0",
+    "ws": "^8.22.0"
   }
 }
