@@ -2,19 +2,42 @@
 'use strict';
 const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto');
 const bcrypt=require('bcryptjs');
+const PORT=process.env.PORT||3000;
+const ADMIN_CODE=process.env.ADMIN_CODE||'486900892414';
+const SAVE_FILE='farm_save.json',SAVE_BAK='farm_save.bak.json';
+const ACCOUNTS_FILE='accounts.json';
 const RESEND_API_KEY=process.env.RESEND_API_KEY||'';
 const EMAIL_FROM=process.env.EMAIL_FROM||'onboarding@resend.dev';
-const APP_BASE_URL=process.env.APP_BASE_URL||'http://localhost:3000';
-const ACCOUNTS_FILE='accounts.json';
+const APP_BASE_URL=process.env.APP_BASE_URL||'http://localhost:'+PORT;
+const RESTOCK_MS=5*60*1000,SAVE_MS=30*1000,CINEMATIC_MS=46000;
+const EMOTE_RESTOCK_MS=2*60*60*1000;
+const PLOT_POS=[[-55,-55],[55,-55],[-55,55],[55,55],[-85,0],[85,0]];
+const PLOT_HALF=[6,7.5,9,10.5];
+const EXP_COST=[500,5000,50000];
+const WORLD_R=96;
+const PACK_PRICE=1000000;
+const PACK_SEEDS=[['rake',1],['bloodmoonrose',9],['flamepepper',8],['dragonfruit',10],['watermelon',12],['bellpepper',15],['corn',20],['pumpkin',25]];
+const RARITIES=['Common','Uncommon','Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'];
+const GOLD_PASS_COST=35,PASS_MAX=20;
+const HEART_ACT1_FED=500;        /* fruit needed to unlock Decider */
+const DECIDER_COST=1000000000;   /* 1B blood drops */
+let WebSocketServer=null,WSS=null;try{WebSocketServer=require('ws');}catch(e){console.error('[FARM] run: npm install ws');}
+const BAD=['fuck','shit','bitch','cunt','asshole','bastard','dick','piss','whore','slut','nigg','rape','retard','wank','bollock','arse','twat','cock','pussy','fag','spic','chink','kike','hitler','nazi','porn','penis','vagina','anal','jizz','dildo','orgasm','milf','cum'];
+function cleanName(raw){let n=String(raw||'').replace(/[^A-Za-z0-9 _-]/g,'').trim().slice(0,16);
+ const low=' '+n.toLowerCase()+' ';
+ for(const w of BAD)if(low.includes(w))return null;
+ if(n.length<2)return null;return n.replace(/\s+/g,' ');}
+
 /* ===== ACCOUNTS DATABASE (separate from farm_save.json) =====
    Stores: username (lowercased), passwordHash (bcrypt), email, emailVerified,
-   playerId (links to farm_save.json player), createdAt
+   playerId (links to farm_save.json player), createdAt, verifyToken (temp)
    Reset tokens are stored in memory (Map) — they expire in 1 hour and are single-use.
    This keeps auth data OUT of farm_save.json. */
-let ACCOUNTS={}; /* {username: {username, passwordHash, email, emailVerified, playerId, createdAt}} */
+let ACCOUNTS={}; /* {usernameLower: {username, passwordHash, email, emailVerified, playerId, createdAt, verifyToken?}} */
 const resetTokens=new Map(); /* token -> {username, expires, used} */
 function loadAccounts(){
- try{if(fs.existsSync(ACCOUNTS_FILE)){ACCOUNTS=JSON.parse(fs.readFileSync(ACCOUNTS_FILE,'utf8'));console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts');}}
+ try{if(fs.existsSync(ACCOUNTS_FILE)){ACCOUNTS=JSON.parse(fs.readFileSync(ACCOUNTS_FILE,'utf8'));
+   console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts');}}
  catch(e){console.error('[FARM] accounts load failed:',e.message);ACCOUNTS={};}}
 function saveAccounts(){
  try{fs.writeFileSync(ACCOUNTS_FILE+'.tmp',JSON.stringify(ACCOUNTS,null,2));fs.renameSync(ACCOUNTS_FILE+'.tmp',ACCOUNTS_FILE);}
@@ -46,7 +69,7 @@ function validateResetToken(token){
  return{valid:true,username:t.username};}
 function consumeResetToken(token){const t=resetTokens.get(token);if(t){t.used=true;resetTokens.delete(token);}}
 /* Clean expired tokens every 5 minutes */
-setInterval(()=>{const now=Date.now();for(const[k,v]of resetTokens){if(now>v.expires||v.used)resetTokens.delete(k);}},300000);
+setInterval(()=>{const n=Date.now();for(const[k,v]of resetTokens){if(n>v.expires||v.used)resetTokens.delete(k);}},300000);
 /* ===== USERNAME VALIDATION ===== */
 function usernameOK(name){
  name=String(name||'').trim();
@@ -59,27 +82,6 @@ function findAccountByUsername(name){return ACCOUNTS[String(name||'').toLowerCas
 function findAccountByEmail(email){email=String(email||'').toLowerCase().trim();
  for(const u in ACCOUNTS){if(ACCOUNTS[u].email&&ACCOUNTS[u].email.toLowerCase()===email)return ACCOUNTS[u];}
  return null;}
-const PORT=process.env.PORT||3000;
-const ADMIN_CODE=process.env.ADMIN_CODE||'486900892414';
-const SAVE_FILE='farm_save.json',SAVE_BAK='farm_save.bak.json';
-const RESTOCK_MS=5*60*1000,SAVE_MS=30*1000,CINEMATIC_MS=46000;
-const EMOTE_RESTOCK_MS=2*60*60*1000;
-const PLOT_POS=[[-55,-55],[55,-55],[-55,55],[55,55],[-85,0],[85,0]];
-const PLOT_HALF=[6,7.5,9,10.5];
-const EXP_COST=[500,5000,50000];
-const WORLD_R=96;
-const PACK_PRICE=1000000;
-const PACK_SEEDS=[['rake',1],['bloodmoonrose',9],['flamepepper',8],['dragonfruit',10],['watermelon',12],['bellpepper',15],['corn',20],['pumpkin',25]];
-const RARITIES=['Common','Uncommon','Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'];
-const GOLD_PASS_COST=35,PASS_MAX=20;
-const HEART_ACT1_FED=500;        /* fruit needed to unlock Decider */
-const DECIDER_COST=1000000000;   /* 1B blood drops */
-let WebSocketServer=null,WSS=null;try{WebSocketServer=require('ws');}catch(e){console.error('[FARM] run: npm install ws');}
-const BAD=['fuck','shit','bitch','cunt','asshole','bastard','dick','piss','whore','slut','nigg','rape','retard','wank','bollock','arse','twat','cock','pussy','fag','spic','chink','kike','hitler','nazi','porn','penis','vagina','anal','jizz','dildo','orgasm','milf','cum'];
-function cleanName(raw){let n=String(raw||'').replace(/[^A-Za-z0-9 _-]/g,'').trim().slice(0,16);
- const low=' '+n.toLowerCase()+' ';
- for(const w of BAD)if(low.includes(w))return null;
- if(n.length<2)return null;return n.replace(/\s+/g,' ');}
 
 /* ================= SEEDS (51 existing + Alien Apple = 52) ================= */
 const S=(id,n,rar,pr,sell,grow,fmin,fmax,wmin,wmax,type,fol,fru,reg)=>({id,n,rar,pr,sell,grow:grow*1000,fmin,fmax,wmin,wmax,type,fol,fru,reg:reg||0});
@@ -350,7 +352,6 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
  timer:{active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},
  /* ===== PORTAL VISIBILITY TOGGLE ===== */
  portalEnabled:false,
- stickyNote:'',stickyNoteColor:'#ff7020',
  /* ===== AUCTION HOUSE ===== */
  auction:{active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',
   highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},
@@ -379,11 +380,10 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
  role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
- portal:p.portal||null,
- username:p.username||'',passwordHash:p.passwordHash||'',email:p.email||'',emailVerified:!!p.emailVerified};}
+ portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
- maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
+ maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
@@ -411,7 +411,6 @@ function load(){let raw=null;
   G.s2=Object.assign({phase:'idle',met:null,heartFed:0,heartActive:false,act:0,deciderClaimed:null,totalBloodDrops:0,meteorAt:0,corruptionLevel:0,heartNearDeath:false,act2Launched:false,act2LaunchedAt:0,deciderWishes:[]},d.s2||{});
   G.timer=Object.assign({active:false,end:0,text:'',color:'#e8a33d',event:'',by:''},d.timer||{});
   G.portalEnabled=!!d.portalEnabled;
-  G.stickyNote=d.stickyNote||'';G.stickyNoteColor=d.stickyNoteColor||'#ff7020';
   G.auction=Object.assign({active:false,item:'',itemType:'',itemName:'',itemRar:'',basePrice:0,currency:'cash',highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},d.auction||{});
   if(G.auction.active)G.auction.active=false; /* Don't restore active auctions after restart */
   /* If a timer was active and expired while the server was down, clear it */
@@ -507,6 +506,22 @@ function sendTo(id,msg){if(!WSS)return;for(const c of WSS.clients)if(c._id===id&
 function me(p){return serializePlayer(p);}
 function pushMe(p){sendTo(p.id,{t:'me',me:me(p)});G.dirty=true;save();}
 function pushPlants(){broadcast({t:'plants',plants:[...G.plants.values()].map(plantPacket)});}
+/* ===== INIT DATA HELPER ===== */
+function sendInitData(sock,p){
+ sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
+  season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
+  stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
+  plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
+  prices:priceMap(),cfg:G.shopConfig,
+  emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
+  event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
+  plots:G.plots,plotPos:PLOT_POS,
+  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
+   cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
+   ac:x.activeCosmetic||null,role:x.role||'player'}))}));
+ broadcast({t:'pJoin',id:p.id,name:p.name,
+  cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
+  ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();}
 function addStat(p,k,n=1){p.stats[k]=(p.stats[k]||0)+n;}
 function awardReward(p,r){if(r.cash){p.cash+=r.cash;p.stats.earned+=r.cash;}
  if(r.tokens)p.tokens+=r.tokens;if(r.relics)p.relics=(p.relics||0)+r.relics;
@@ -589,20 +604,6 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
  switch(msg.t){
   case 'pos':{p.x=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.x||0));p.z=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.z||0));
    p.ry=+msg.ry||0;broadcast({t:'ppos',id:p.id,x:p.x,z:p.z,ry:p.ry},p.id);break;}
-  /* ===== CHAT SYSTEM ===== */
-  case 'chat':{
-   if(!p._lastChat)p._lastChat=0;
-   if(now()-p._lastChat<1000)return sendTo(p.id,{t:'toast',msg:'Wait a moment before sending another message.',kind:'err'});
-   let text=String(msg.text||'').trim().slice(0,200);
-   if(!text)return;
-   /* Filter bad words */
-   const low=' '+text.toLowerCase()+' ';
-   for(const w of BAD){if(low.includes(w)){text='***';break;}}
-   /* Strip HTML */
-   text=text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-   p._lastChat=now();
-   broadcast({t:'chat',id:p.id,name:p.name,text:text});
-   break;}
   /* ================= HEART FEEDING (Season 2) ================= */
   case 'feedHeart':{
    if(G.s2.act<1)return sendTo(p.id,{t:'toast',msg:'The Heart is not yet accessible.',kind:'err'});
@@ -1031,15 +1032,6 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    G.portalEnabled=!G.portalEnabled;G.dirty=true;save();
    broadcast({t:'portalToggle',enabled:G.portalEnabled});
    sendTo(admin.id,{t:'toast',msg:'Portal '+(G.portalEnabled?'ENABLED':'DISABLED'),kind:'good'});break;}
-  /* ===== ADMIN STICKY NOTE ===== */
-  case 'sendNote':{
-   const text=String(a.text||'').slice(0,300);
-   const color=/^#[0-9a-fA-F]{6}$/.test(a.color||'')?a.color:'#ff7020';
-   if(!text){G.stickyNote='';G.dirty=true;save();broadcast({t:'stickyNote',text:'',color:''});
-    sendTo(admin.id,{t:'toast',msg:'Sticky note removed.',kind:'good'});break;}
-   G.stickyNote=text;G.stickyNoteColor=color;G.dirty=true;save();
-   broadcast({t:'stickyNote',text,color});
-   sendTo(admin.id,{t:'toast',msg:'Sticky note sent to all players!',kind:'good'});break;}
   /* ===== AUCTION HOUSE — admin commands ===== */
   case 'startAuction':{
    if(G.auction.active)return sendTo(admin.id,{t:'toast',msg:'Auction already active.',kind:'err'});
@@ -1198,22 +1190,6 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
   default:sendTo(admin.id,{t:'toast',msg:'Unknown command: '+c,kind:'err'});
  }}
 
-/* ===== INIT DATA HELPER ===== */
-function sendInitData(sock,p){
- sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
-  season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
-  plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
-  prices:priceMap(),cfg:G.shopConfig,
-  emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
-  event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
-  plots:G.plots,plotPos:PLOT_POS,
-  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
-   cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
-   ac:x.activeCosmetic||null,role:x.role||'player'}))}));
- broadcast({t:'pJoin',id:p.id,name:p.name,
-  cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
-  ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();}
-
 /* ===== HTML PAGES (defined BEFORE server creation) ===== */
 const RESET_PAGE_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reset Password — FARM</title><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1229,25 +1205,29 @@ p{color:#9ab0a0;font-size:14px;margin-bottom:18px;line-height:1.5}
 input{width:100%;background:#040a06;border:2px solid #2f5d3a55;border-radius:10px;color:#f0e8d0;padding:14px;font-size:16px;
 font-family:'Nunito',sans-serif;outline:none;margin-bottom:12px;text-align:center}
 input:focus{border-color:#4fae68;box-shadow:0 0 0 3px #4fae6822}
+input::placeholder{color:#5a8a6a;font-weight:500}
 button{width:100%;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;
 padding:14px;border-radius:12px;border:2px solid #4fae6855;cursor:pointer;margin-top:6px;letter-spacing:.04em;transition:filter .15s,transform .1s}
 button:hover{filter:brightness(1.12)}button:active{transform:scale(.97)}
 .msg{margin-top:14px;font-size:14px;padding:12px;border-radius:8px;line-height:1.4}
 .msg.ok{background:#0e2418;border:1px solid #4fae68;color:#80e890}
 .msg.err{background:#2a1410;border:1px solid #c04020;color:#ff6040}
-a{color:#80e890;text-decoration:none;font-size:14px;display:inline-block;margin-top:14px;font-weight:600}
-a:hover{text-decoration:underline}
-.contBtn{display:none;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;text-decoration:none;
-padding:14px 28px;border-radius:12px;font-family:'Fredoka',sans-serif;font-weight:600;font-size:16px;border:2px solid #4fae6855;margin-top:14px}
-.contBtn:hover{filter:brightness(1.12);text-decoration:none}
 .pwShow{position:relative;width:100%;margin-bottom:12px}
 .pwShow input{margin-bottom:0;padding-right:46px}
 .pwShow .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#5a8a6a;
 cursor:pointer;font-size:18px;padding:6px;border-radius:6px}.pwShow .eye:hover{color:#80e890;background:#ffffff11}
-.hint{font-size:12px;color:#5a7060;margin-top:8px}</style></head>
+.hint{font-size:12px;color:#5a7060;margin-top:8px}
+.doneBox{display:none;padding:32px 16px}
+.doneBox .check{font-size:64px;color:#80e890;text-shadow:0 0 20px #4fae6866;margin-bottom:16px;animation:pop .5s cubic-bezier(.2,1.4,.3,1)}
+@keyframes pop{from{transform:scale(0);opacity:0}}
+.doneBox h2{font-family:'Fredoka',sans-serif;font-weight:700;font-size:22px;color:#80e890;margin-bottom:10px}
+.doneBox p{color:#9ab0a0;font-size:15px;line-height:1.6;margin-bottom:8px}
+.doneBox .leaveMsg{margin-top:20px;padding:16px;background:#0a1a14;border:1px solid #2f5d3a44;border-radius:10px;
+color:#80e890;font-weight:600;font-size:15px}</style></head>
 <body><div class="card"><div class="brand">FARM</div><div class="tag">grow · mutate · prosper</div>
-<h1>Set a New Password</h1><p id="subtitle">Type your new password below to finish resetting your account.</p>
 <div id="formDiv">
+<h1>Reset Your Password</h1><p>Type your username and choose a new password to update your account.</p>
+ <input id="resetUser" maxlength="16" placeholder="Your username" autocomplete="off" spellcheck="false">
  <div class="pwShow"><input type="password" id="np1" placeholder="New password (min 6 chars)" autocomplete="new-password">
   <button class="eye" type="button" data-target="np1" aria-label="Show password">&#128065;</button></div>
  <div class="pwShow"><input type="password" id="np2" placeholder="Confirm new password" autocomplete="new-password">
@@ -1256,85 +1236,94 @@ cursor:pointer;font-size:18px;padding:6px;border-radius:6px}.pwShow .eye:hover{c
  <div class="hint">Tip: use 6+ characters, mix letters & numbers for a stronger password.</div>
 </div>
 <div id="result"></div>
-<a class="contBtn" id="continueBtn" href="/?fromReset=1">&#8594; CONTINUE TO LOGIN</a>
-<a id="cancelLink" href="/?fromReset=1" style="font-size:13px;color:#5a8a6a">Cancel reset</a></div>
+<div class="doneBox" id="doneBox">
+ <div class="check">&#10003;</div>
+ <h2>Password Updated!</h2>
+ <p>Your account has been updated successfully.</p>
+ <div class="leaveMsg">You can now close this page.</div>
+</div></div>
 <script>
-const token=new URLSearchParams(location.search).get('token');
-const sub=document.getElementById('subtitle');
-const formDiv=document.getElementById('formDiv');
-const cancelLink=document.getElementById('cancelLink');
-if(!token){formDiv.style.display='none';sub.textContent='Invalid reset link — no token found in URL.';
- cancelLink.textContent='← Go to login';cancelLink.href='/?fromReset=1';}
 /* Toggle password visibility */
 document.querySelectorAll('.eye').forEach(b=>{b.onclick=()=>{const i=document.getElementById(b.dataset.target);
   if(i.type==='password'){i.type='text';b.innerHTML='&#128064;';}else{i.type='password';b.innerHTML='&#128065;';}};});
 document.getElementById('submitBtn').onclick=async()=>{
+ const username=document.getElementById('resetUser').value.trim();
  const np1=document.getElementById('np1').value,np2=document.getElementById('np2').value;
  const r=document.getElementById('result');
+ if(!username){r.innerHTML='<div class="msg err">Please enter your username.</div>';return;}
  if(np1.length<6){r.innerHTML='<div class="msg err">Password must be at least 6 characters.</div>';return;}
  if(np1!==np2){r.innerHTML='<div class="msg err">Passwords do not match.</div>';return;}
  r.innerHTML='<div class="msg ok">Saving your new password...</div>';
  document.getElementById('submitBtn').disabled=true;
  try{
   const resp=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({token:token,password:np1})});
+   body:JSON.stringify({username:username,password:np1})});
   const data=await resp.json();
-  if(data.success){formDiv.style.display='none';cancelLink.style.display='none';
-   r.innerHTML='<div class="msg ok">&#10003; Password changed successfully!<br>You can now log in with your new password.</div>';
-   sub.textContent='All set!';
-   /* Show the manual Continue button instead of auto-redirect */
-   document.getElementById('continueBtn').style.display='inline-block';}
-  else{r.innerHTML='<div class="msg err">'+data.message+'</div>';if(data.fatal){formDiv.style.display='none';cancelLink.style.display='none';}
+  if(data.success){
+   document.getElementById('formDiv').style.display='none';
+   r.innerHTML='';
+   document.getElementById('doneBox').style.display='block';
+  }else{r.innerHTML='<div class="msg err">'+data.message+'</div>';
    document.getElementById('submitBtn').disabled=false;}
  }catch(e){r.innerHTML='<div class="msg err">Network error. Please try again.</div>';document.getElementById('submitBtn').disabled=false;}};
 </script></body></html>`;
 
 const VERIFY_OK_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Email Verified — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Email Verified — FARM</title><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:radial-gradient(ellipse at 50% 120%,#1a4a2a 0%,#0a1a14 45%,#020804 100%);font-family:'Fredoka',sans-serif;color:#80e890}
+background:radial-gradient(ellipse at 50% 120%,#1a3a22 0%,#0a1a14 45%,#020804 100%);font-family:'Nunito',sans-serif;color:#80e890}
 .card{background:linear-gradient(180deg,#0a1a14,#020804);border:2px solid #4fae6844;border-radius:20px;padding:40px;width:min(440px,92vw);
 box-shadow:0 30px 80px #000a,0 0 60px #4fae6822;text-align:center}
-h1{font-family:'Creepster',cursive;font-size:42px;color:#80e890;text-shadow:0 0 18px #4fae6866;margin-bottom:12px}
-p{color:#60a070;font-size:16px;margin-bottom:18px;line-height:1.5}
-a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#1a4a2a,#2a6a3a);color:#80e890;
-padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-size:18px;border:2px solid #4fae6844}</style></head>
-<body><div class="card"><h1>✓ EMAIL VERIFIED</h1><p>Your email has been verified successfully.</p><p>You can now use the forgot password feature.</p>
-<a href="/">← Back to Game</a></div></body></html>`;
+.brand{font-family:'Fredoka',sans-serif;font-weight:800;font-size:30px;letter-spacing:.22em;color:#80e890;
+text-shadow:0 0 18px #4fae6866;margin-bottom:4px}
+.tag{font-size:10px;color:#5a8a6a;letter-spacing:.3em;text-transform:uppercase;margin-bottom:22px}
+h1{font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#80e890;margin-bottom:12px}
+p{color:#60a070;font-size:15px;margin-bottom:18px;line-height:1.5}
+a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;
+padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-weight:600;font-size:16px;border:2px solid #4fae6855}
+a:hover{filter:brightness(1.12)}</style></head>
+<body><div class="card"><div class="brand">FARM</div><div class="tag">grow · mutate · prosper</div>
+<h1>&#10003; Email Verified</h1><p>Your email has been verified successfully.</p>
+<p>You can now use the forgot password feature if you ever lose access.</p>
+<a href="/">&#8594; CONTINUE TO LOGIN</a></div></body></html>`;
 
 const VERIFY_FAIL_HTML=`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verification Failed — LAST BLOOD</title><link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Verification Failed — FARM</title><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0606 45%,#0a0202 100%);font-family:'Fredoka',sans-serif;color:#ff6040}
-.card{background:linear-gradient(180deg,#1a0606,#0a0202);border:2px solid #ff301044;border-radius:20px;padding:40px;width:min(440px,92vw);
-box-shadow:0 30px 80px #000a,0 0 60px #ff200022;text-align:center}
-h1{font-family:'Creepster',cursive;font-size:42px;color:#ff4030;text-shadow:0 0 18px #ff301066;margin-bottom:12px}
-p{color:#a06050;font-size:16px;margin-bottom:18px;line-height:1.5}
-a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#5a0a0a,#a01010);color:#ffd0a0;
-padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-size:18px;border:2px solid #ff301066}</style></head>
-<body><div class="card"><h1>VERIFICATION FAILED</h1><p>The verification link is invalid, expired, or has already been used.</p>
-<a href="/">← Back to Game</a></div></body></html>`;
+background:radial-gradient(ellipse at 50% 120%,#2a0a0a 0%,#1a0606 45%,#0a0202 100%);font-family:'Nunito',sans-serif;color:#ff6040}
+.card{background:linear-gradient(180deg,#1a0606,#0a0202);border:2px solid #c0402044;border-radius:20px;padding:40px;width:min(440px,92vw);
+box-shadow:0 30px 80px #000a,0 0 60px #c0402022;text-align:center}
+.brand{font-family:'Fredoka',sans-serif;font-weight:800;font-size:30px;letter-spacing:.22em;color:#ff6040;
+text-shadow:0 0 18px #c0402066;margin-bottom:4px}
+.tag{font-size:10px;color:#8a5a5a;letter-spacing:.3em;text-transform:uppercase;margin-bottom:22px}
+h1{font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#ff4030;margin-bottom:12px}
+p{color:#a06050;font-size:15px;margin-bottom:18px;line-height:1.5}
+a{display:inline-block;margin-top:14px;background:linear-gradient(180deg,#a04030,#5a1a10);color:#ffd0a0;
+padding:14px 28px;border-radius:12px;text-decoration:none;font-family:'Fredoka';font-weight:600;font-size:16px;border:2px solid #c0402055}
+a:hover{filter:brightness(1.12)}</style></head>
+<body><div class="card"><div class="brand">FARM</div><div class="tag">grow · mutate · prosper</div>
+<h1>Verification Failed</h1><p>The verification link is invalid, expired, or has already been used.</p>
+<a href="/">&#8594; BACK TO LOGIN</a></div></body></html>`;
 
-/* ===== HTTP SERVER ===== */
 const server=http.createServer((req,res)=>{
  const fullUrl=req.url||'/';
  const url=fullUrl.split('?')[0].replace(/\/+/g,'/'); /* normalize double slashes */
  /* Route: Reset password page */
  if(url==='/reset-password'){
   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(RESET_PAGE_HTML);return;}
- /* Route: Reset password API */
+ /* Route: Reset password API — accepts {username, password}, updates accounts.json directly */
  if(url==='/api/reset-password'&&req.method==='POST'){
   let body='';req.on('data',c=>body+=c);req.on('end',()=>{
    try{
-    const data=JSON.parse(body);const token=data.token;const password=data.password;
-    if(!token||!password||password.length<6)return res.writeHead(400).end(JSON.stringify({success:false,message:'Invalid request.'}));
-    const check=validateResetToken(token);
-    if(!check.valid)return res.writeHead(400).end(JSON.stringify({success:false,message:check.reason,fatal:true}));
-    const acc=findAccountByUsername(check.username);
-    if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'Account not found.',fatal:true}));
+    const data=JSON.parse(body);
+    const username=String(data.username||'').trim();
+    const password=String(data.password||'');
+    if(!username||password.length<6)return res.writeHead(400).end(JSON.stringify({success:false,message:'Username and a 6+ char password are required.'}));
+    const acc=findAccountByUsername(username);
+    if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'No account found with that username.'}));
     bcrypt.hash(password,10,(e,hash)=>{
      if(e)return res.writeHead(500).end(JSON.stringify({success:false,message:'Server error.'}));
-     acc.passwordHash=hash;saveAccounts();consumeResetToken(token);
+     acc.passwordHash=hash;saveAccounts();
      console.log('[FARM] Password reset for',acc.username);
      res.writeHead(200,{'Content-Type':'application/json'});
      res.end(JSON.stringify({success:true}));});
@@ -1389,7 +1378,7 @@ if(WebSocketServer){
       const p=newPlayer(id,username);p.online=true;G.players.set(p.id,p);
       ACCOUNTS[lowUser]={username:lowUser,passwordHash:hash,email:email,emailVerified:false,playerId:id,createdAt:Date.now()};
       saveAccounts();
-      /* Send verification email if email provided */
+      /* Send verification email if email provided and Resend is configured */
       if(email&&RESEND_API_KEY){
        const vToken=generateToken();
        ACCOUNTS[lowUser].verifyToken=vToken;saveAccounts();
@@ -1420,6 +1409,7 @@ if(WebSocketServer){
       if(e||!match)return sock.send(JSON.stringify({t:'authError',msg:'Invalid username or password.'}));
       let p=G.players.get(acc.playerId);
       if(!p){p=newPlayer(acc.playerId,acc.username||username);G.players.set(p.id,p);}
+      /* Force-close any stale connection from a previous session */
       if(p.online){for(const c of WSS.clients){if(c._id===p.id&&c.readyState===1)c.close();}}
       p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
       p.username=acc.username;p.email=acc.email;p.emailVerified=acc.emailVerified;
@@ -1432,8 +1422,7 @@ if(WebSocketServer){
      const acc=findAccountByEmail(email);
      /* Always show same message — don't reveal if email exists */
      if(acc&&acc.emailVerified){
-      const token=createResetToken(acc.username);
-      const rUrl=APP_BASE_URL.replace(/\/$/,'')+'/reset-password?token='+token;
+      const rUrl=APP_BASE_URL.replace(/\/$/,'')+'/reset-password';
       sendEmail(acc.email,'FARM — Reset Your Password',
        '<div style="max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;background:#f7f0e0;border-radius:16px;overflow:hidden;border:3px solid #2f5d3a">'+
         '<div style="background:linear-gradient(135deg,#2f5d3a,#3f7a4a);padding:32px 24px;text-align:center">'+
@@ -1441,40 +1430,31 @@ if(WebSocketServer){
         '<p style="color:#b8d8a0;font-size:13px;letter-spacing:.3em;text-transform:uppercase;margin:6px 0 0">grow · mutate · prosper</p></div>'+
         '<div style="padding:32px 24px">'+
         '<h2 style="color:#2f5d3a;font-size:24px;margin:0 0 12px">Reset Your FARM Password</h2>'+
-        '<p style="color:#3a3226;font-size:16px;line-height:1.6;margin:0 0 20px">We received a request to reset your password. If you requested this, use the button below to choose a new password.</p>'+
+        '<p style="color:#3a3226;font-size:16px;line-height:1.6;margin:0 0 20px">We received a request to reset your password. Click the button below to open the reset page, then type your username and choose a new password.</p>'+
         '<a href="'+rUrl+'" style="display:inline-block;background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-size:18px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;margin:8px 0 20px">Reset My Password</a>'+
-        '<p style="color:#8a8270;font-size:13px;margin:12px 0 0">This link expires in 1 hour and can only be used once.</p>'+
+        '<p style="color:#8a8270;font-size:13px;margin:12px 0 0">You will need your username to complete the reset.</p>'+
         '<p style="color:#8a8270;font-size:13px;margin:8px 0 0">If you didn\'t request this, ignore this email.</p>'+
         '<p style="color:#8a8270;font-size:12px;margin:16px 0 0">Or copy this link: '+rUrl+'</p>'+
         '</div></div>');
      }
      sock.send(JSON.stringify({t:'authInfo',msg:'If an account exists for that email, a reset link has been sent.'}));
      return;}
-    if(msg.t==='changePassword'){
-     /* Requires being logged in — but this is pre-join, so handle it post-join via handleMsg */
-     return;}
-    /* Legacy join still works for backward compat (but client won't send it) */
+    /* Legacy 'join' still works (for older clients) — auto-creates a player without an account */
     if(msg.t==='join'){
      const clean=cleanName(msg.name);
      if(!clean)return sock.send(JSON.stringify({t:'nameRejected',msg:'Bad name.'}));
      const id='U'+crypto.randomBytes(6).toString('hex');
-     let p=[...G.players.values()].find(x=>x.name===clean);
-     if(p){
-      if(p.online){for(const c of WSS.clients){if(c._id===p.id&&c.readyState===1)c.close();}}
-      p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
-     }
+     let p=[...G.players.values()].find(x=>x.name===clean&&!x.online);
+     if(p){p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;}
      else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
-    sock._id=p.id;joined=true;
-    sendInitData(sock,p);
-    broadcast({t:'pJoin',id:p.id,name:p.name,
-     cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
-     ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();return;}
+     sock._id=p.id;joined=true;
+     sendInitData(sock,p);
+     return;}
+    /* Ignore any other message type until joined */
+    return;
    }
    try{handleMsg(sock,msg);}catch(e){console.error('[FARM] handler:',e.message);}});
-  sock.on('close',()=>{
-   if(!sock._id)return;
-   const p=G.players.get(sock._id);
-   if(p){p.online=false;save();} /* Force save on disconnect so progress isn't lost */
+  sock.on('close',()=>{if(!sock._id)return;const p=G.players.get(sock._id);if(p){p.online=false;save();}
    broadcast({t:'pLeft',id:sock._id});});});
  setInterval(()=>{tickPlants();tickSeason2();
   if(G.event&&now()>G.event.end)endEvent();
