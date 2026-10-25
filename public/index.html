@@ -818,6 +818,78 @@ html.touch .seedCfgRow .sname{font-size:12px}
 .timerActiveCard .taTime{font-family:'Fredoka';font-size:32px;color:#e8a33d;line-height:1;font-variant-numeric:tabular-nums}
 .timerActiveCard .taText{font-size:13px;color:#f0e0c0;margin:6px 0}
 .timerActiveCard .taBy{font-size:10px;color:#8a7a60;letter-spacing:.2em;text-transform:uppercase}
+/* ============ CHAT SYSTEM + SETTINGS BUTTON (top-left corner) ============ */
+#chatHistory{position:fixed;left:14px;top:60px;width:300px;max-height:240px;overflow-y:auto;
+ z-index:50;pointer-events:none;display:flex;flex-direction:column-reverse;gap:4px;opacity:.85}
+#chatHistory::-webkit-scrollbar{width:4px}#chatHistory::-webkit-scrollbar-thumb{background:#ffffff22;border-radius:2px}
+.chatMsg{background:rgba(20,30,18,.85);border-radius:8px;padding:5px 10px;font-size:13px;color:#f0e8d0;
+ max-width:280px;word-wrap:break-word;animation:fadeIn .3s;font-family:'Nunito',sans-serif}
+.chatMsg b{color:#e8a33d;font-weight:700}.chatMsg b.admin{color:#ff7020}.chatMsg b.special{color:#c060ff}
+#chatInput{position:fixed;top:14px;left:64px;width:min(360px,calc(100vw - 80px));display:none;z-index:100;gap:6px}
+#chatInput.on{display:flex}
+#chatInput input{flex:1;background:rgba(20,30,18,.95);border:2px solid #2f5d3a88;border-radius:10px;color:#f0e8d0;
+ padding:10px 14px;font-size:14px;font-family:'Nunito',sans-serif;outline:none}
+#chatInput input:focus{border-color:#e8a33d}
+#chatInput button{background:#2f5d3a;color:#fff;border:none;padding:10px 16px;border-radius:10px;font-family:'Fredoka';
+ font-size:13px;cursor:pointer;font-weight:600}
+#chatInput button:hover{filter:brightness(1.15)}
+/* Chat + Settings buttons in top-left corner */
+#chatToggleBtn,#settingsBtn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:10px;
+ background:rgba(20,30,18,.85);border:2px solid #2f5d3a66;color:#f0e8d0;font-size:18px;cursor:pointer;
+ pointer-events:auto;z-index:80;position:fixed;top:14px;
+ transition:transform .15s,background .15s,border-color .15s}
+#chatToggleBtn{left:14px}#settingsBtn{left:60px}
+#chatToggleBtn:hover,#settingsBtn:hover{background:rgba(40,50,38,.92);border-color:#4fae6888;transform:translateY(-1px)}
+#chatToggleBtn:active,#settingsBtn:active{transform:scale(.92)}
+#chatToggleBtn .badge{position:absolute;top:-6px;right:-6px;background:#e8a33d;color:#1a0e08;font-size:10px;
+ font-weight:800;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:none;align-items:center;justify-content:center;
+ font-family:'Fredoka',sans-serif;border:2px solid #0c1e14}
+#chatToggleBtn .badge.on{display:flex}
+/* Chat bubble (above player head) */
+.chatBubble{position:absolute;background:rgba(255,255,255,.95);border-radius:12px;padding:6px 12px;font-size:13px;
+ color:#1a1410;font-family:'Nunito',sans-serif;font-weight:600;max-width:220px;word-wrap:break-word;pointer-events:none;
+ z-index:40;box-shadow:0 4px 12px #0006;animation:bubbleIn .2s}
+@keyframes bubbleIn{from{transform:translateY(8px);opacity:0}}
+.chatBubble::after{content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
+ width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid rgba(255,255,255,.95)}
+.chatBubble b{color:#2f5d3a}
+/* ============ SETTINGS PANEL ============ */
+#settingsPanel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);
+ background:linear-gradient(180deg,#0e2418,#06120c);border:2px solid #2f5d3a;border-radius:18px;
+ padding:24px;width:min(420px,92vw);z-index:340;display:none;flex-direction:column;gap:14px;
+ box-shadow:0 30px 80px #000a,0 0 60px #2f5d3a22;opacity:0;transition:opacity .2s,transform .25s cubic-bezier(.2,1.4,.3,1)}
+#settingsPanel.on{display:flex;opacity:1;transform:translate(-50%,-50%) scale(1)}
+#settingsPanel .spHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+#settingsPanel .spHead h2{font-family:'Fredoka';font-size:22px;color:#80e890;letter-spacing:.04em;margin:0;font-weight:700}
+#settingsPanel .spClose{background:#ffffff14;color:#9ab0a0;width:30px;height:30px;border-radius:8px;border:none;
+ cursor:pointer;font-size:16px;font-weight:700}
+#settingsPanel .spClose:hover{background:#ffffff24;color:#f0e8d0}
+#settingsPanel .spRow{display:flex;align-items:center;justify-content:space-between;
+ background:#ffffff08;border:1px solid #2f5d3a44;border-radius:10px;padding:12px 14px;gap:10px}
+#settingsPanel .spRow .lbl{font-family:'Nunito';font-size:14px;color:#f0e8d0;font-weight:600}
+#settingsPanel .spRow .sub{font-size:11px;color:#5a8a6a;margin-top:2px}
+#settingsPanel .spRow .ctl{display:flex;align-items:center;gap:8px}
+#settingsPanel .toggle{width:44px;height:24px;border-radius:12px;background:#2a3a30;border:1px solid #4fae6844;
+ cursor:pointer;position:relative;transition:background .15s;flex-shrink:0}
+#settingsPanel .toggle.on{background:#4f9a5c;border-color:#4fae68}
+#settingsPanel .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+ background:#f0e8d0;transition:transform .2s}
+#settingsPanel .toggle.on::after{transform:translateX(20px)}
+#settingsPanel input[type=range]{width:120px;accent-color:#4f9a5c}
+#settingsPanel .val{font-family:'Fredoka';color:#80e890;font-size:13px;min-width:34px;text-align:right}
+#settingsPanel .spSection{font-family:'Fredoka';font-size:11px;color:#5a8a6a;letter-spacing:.2em;text-transform:uppercase;
+ margin:6px 0 -4px;font-weight:700}
+#settingsPanel .spBtn{background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;font-family:'Fredoka';font-weight:600;
+ font-size:14px;padding:10px;border-radius:10px;border:1px solid #4fae6855;cursor:pointer;transition:filter .15s}
+#settingsPanel .spBtn:hover{filter:brightness(1.12)}
+#settingsPanel .spBtn.danger{background:linear-gradient(180deg,#a04030,#5a1a10);border-color:#c0402055}
+#settingsPanel .spInfo{background:#0a1a14;border:1px solid #2f5d3a44;border-radius:10px;padding:12px 14px;font-size:13px;color:#9ab0a0;line-height:1.5}
+#settingsPanel .spInfo b{color:#80e890;font-family:'Fredoka'}
+/* Mobile adjustments — keep top-left clear on small screens */
+html.touch #chatHistory{top:54px;width:240px;max-height:180px}
+html.touch #chatInput{top:10px;left:58px;width:calc(100vw - 130px)}
+html.touch #chatToggleBtn,html.touch #settingsBtn{width:38px;height:38px;font-size:16px}
+html.touch #settingsBtn{left:54px}
 </style>
 </head>
 <body>
@@ -865,6 +937,26 @@ html.touch .seedCfgRow .sname{font-size:12px}
 <button id="skipIntro">Skip Intro</button>
 <canvas id="c3d"></canvas>
 <div id="navFade"></div>
+<!-- ============ CHAT SYSTEM (top-left) ============ -->
+<button id="chatToggleBtn" title="Open chat (Enter)" aria-label="Open chat">&#128172;<span class="badge" id="chatBadge">0</span></button>
+<button id="settingsBtn" title="Settings" aria-label="Settings">&#9881;</button>
+<div id="chatHistory"></div>
+<div id="chatInput"><input id="chatTextInput" maxlength="200" placeholder="Type a message... (Enter to send, Esc to close)" autocomplete="off"><button id="chatSendBtn">Send</button></div>
+<!-- ============ SETTINGS PANEL ============ -->
+<div id="settingsPanel">
+ <div class="spHead"><h2>Settings</h2><button class="spClose" id="spClose">&#10005;</button></div>
+ <div class="spSection">Account</div>
+ <div class="spInfo" id="spInfo">Loading...</div>
+ <div class="spSection">Display</div>
+ <div class="spRow"><div class="lbl">Chat Bubbles<div class="sub">Show speech bubbles above players</div></div>
+  <div class="ctl"><div class="toggle on" id="setBubbles"></div></div></div>
+ <div class="spRow"><div class="lbl">Chat History<div class="sub">Show recent messages on left side</div></div>
+  <div class="ctl"><div class="toggle on" id="setHistory"></div></div></div>
+ <div class="spSection">Audio</div>
+ <div class="spRow"><div class="lbl">Volume<div class="sub">Adjust master volume</div></div>
+  <div class="ctl"><input type="range" id="setVol" min="0" max="100" value="50"><span class="val" id="setVolVal">50%</span></div></div>
+ <button class="spBtn danger" id="setLogout">Log Out</button>
+</div>
 <nav id="topnav">
  <button data-nav="home">Home</button>
  <button data-nav="sell">Sell</button>
@@ -932,10 +1024,15 @@ const BAD=['fuck','shit','bitch','cunt','asshole','bastard','dick','piss','whore
 function nameOK(n){n=String(n||'').trim();if(n.length<2||n.length>16)return false;
  if(!/^[A-Za-z0-9 _-]+$/.test(n))return false;
  const low=' '+n.toLowerCase()+' ';for(const w of BAD)if(low.includes(w))return false;return true;}
-const AudioSys={ctx:null,sfx:null,muted:false,
+const AudioSys={ctx:null,sfx:null,muted:false,masterVol:.5,
  init(){if(this.ctx)return;try{this.ctx=new(window.AudioContext||window.webkitAudioContext)();
-  const m=this.ctx.createGain();m.gain.value=.5;m.connect(this.ctx.destination);
-  this.sfx=this.ctx.createGain();this.sfx.gain.value=.8;this.sfx.connect(m);}catch(e){}},
+  const m=this.ctx.createGain();m.gain.value=this.masterVol;m.connect(this.ctx.destination);
+  this.sfx=this.ctx.createGain();this.sfx.gain.value=.8;this.sfx.connect(m);this.sfx._master=m;}catch(e){}},
+ setVolume(v){v=Math.max(0,Math.min(1,v));this.masterVol=v;this.muted=(v<=0);
+  if(this.ctx&&this.sfx&&this.sfx._master){this.sfx._master.gain.value=v;}
+  else if(this.ctx){try{
+   const m=this.ctx.createGain();m.gain.value=v;m.connect(this.ctx.destination);
+   this.sfx.disconnect();this.sfx.connect(m);this.sfx._master=m;}catch(e){}}},
  tone(f,dur,type='sine',vol=.25,slide=0){if(!this.ctx||this.muted)return;const t=this.ctx.currentTime;
   const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.setValueAtTime(f,t);
   if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+dur);
@@ -1154,9 +1251,34 @@ function mat(c,o={}){const k=c+JSON.stringify(o);if(!MAT[k])MAT[k]=new THREE.Mes
 function um(c){return new THREE.MeshLambertMaterial({color:c});}   /* unique material — for skinnable farmers */
 function box(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);return m;}
 function ubox(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),um(c));m.position.set(x,y,z);return m;}
-function sph(r,c,x=0,y=0,z=0,s=16){const m=new THREE.Mesh(new THREE.SphereGeometry(r,s,Math.max(10,s-4)),mat(c));m.position.set(x,y,z);return m;}
-function cyl(rt,rb,h,c,x=0,y=0,z=0,s=12){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c));m.position.set(x,y,z);return m;}
-function cone(r,h,c,x=0,y=0,z=0,s=12){const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c));m.position.set(x,y,z);return m;}
+/* Higher-poly defaults for smoother look — was 16/12, now 24/16 */
+function sph(r,c,x=0,y=0,z=0,s=24){const m=new THREE.Mesh(new THREE.SphereGeometry(r,s,Math.max(14,s-6)),mat(c));m.position.set(x,y,z);return m;}
+function cyl(rt,rb,h,c,x=0,y=0,z=0,s=16){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c));m.position.set(x,y,z);return m;}
+function cone(r,h,c,x=0,y=0,z=0,s=16){const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c));m.position.set(x,y,z);return m;}
+/* Rounded box — bevelled edges using BoxGeometry with high segments + bevel via scale trick (no, simpler: use a sphere stretch)
+   For chunky-smooth look we use a slightly smaller box + overlay sphere corners. Cheap & effective. */
+function rbox(w,h,d,c,x=0,y=0,z=0){
+ const g=new THREE.Group();
+ const core=new THREE.Mesh(new THREE.BoxGeometry(w*.92,h*.92,d*.92),um(c));g.add(core);
+ /* Add 8 corner spheres for a rounded look */
+ const r=Math.min(w,h,d)*.18;
+ const hw=w*.46,hh=h*.46,hd=d*.46;
+ for(const sx of[-1,1])for(const sy of[-1,1])for(const sz of[-1,1]){
+  const cs=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),um(c));
+  cs.position.set(sx*hw,sy*hh,sz*hd);g.add(cs);
+ }
+ /* Edge cylinders along each axis */
+ const er=r*.7;
+ for(const sx of[-1,1])for(const sy of[-1,1]){
+  const ex=new THREE.Mesh(new THREE.CylinderGeometry(er,er,w*.92,10),um(c));
+  ex.rotation.z=Math.PI/2;ex.position.set(0,sy*hh,sx*hd);g.add(ex);
+  const ey=new THREE.Mesh(new THREE.CylinderGeometry(er,er,h*.92,10),um(c));
+  ey.position.set(sx*hw,0,sy*hd);g.add(ey);
+  const ez=new THREE.Mesh(new THREE.CylinderGeometry(er,er,d*.92,10),um(c));
+  ez.rotation.x=Math.PI/2;ez.position.set(sx*hw,sy*hh,0);g.add(ez);
+ }
+ g.position.set(x,y,z);g.children.forEach(ch=>{ch.castShadow=true;});return g;
+}
 function disposeGroup(g){g.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
 function distTo(a,b,c,d){return Math.hypot(a-c,b-d);}
 function nameTag(text,big,mine){
@@ -1175,18 +1297,91 @@ const ROLE_STYLES={
  special:{label:'SPECIAL',bg:'#1a0a3a',border:'#a86fd6',text:'#e8d8ff',icon:'★'},
  player:{label:'',bg:'',border:'',text:'',icon:''}
 };
-function roleBadge(role){
- const s=ROLE_STYLES[role]||ROLE_STYLES.player;
+/* Convert hex color like '#ff7020' to {bg,border,text} triple for a role badge */
+function roleColors(hex){
+ if(!hex||!/^#[0-9a-fA-F]{6}$/.test(hex))return null;
+ const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+ const darkBG='rgb('+Math.floor(r*0.25)+','+Math.floor(g*0.25)+','+Math.floor(b*0.25)+')';
+ return {bg:darkBG,border:hex,text:'#ffffff'};
+}
+/* Build a role badge sprite. effect can be: 'none','glow','neon','spooky','rainbow','fire','ice' */
+function roleBadge(role,customColor,effect,glow){
+ /* Backward-compat: if effect is undefined but glow is true, use 'glow' */
+ if(!effect&&glow)effect='glow';
+ if(!effect)effect='none';
+ let s=ROLE_STYLES[role]||null;
+ if(!s){
+  const label=String(role||'').toUpperCase().slice(0,12);
+  if(!label)return null;
+  const colors=roleColors(customColor)||{bg:'#3a2810',border:'#e8a33d',text:'#fff'};
+  s={label:bg=>label,bg:colors.bg,border:colors.border,text:colors.text,icon:'◆'};
+ }
+ /* If admin provided custom color, override the colors */
+ if(customColor&&/^#[0-9a-fA-F]{6}$/.test(customColor)){
+  const colors=roleColors(customColor);
+  s={...s,bg:colors.bg,border:customColor,text:'#ffffff'};
+ }
  if(!s.label)return null;
- const cv=document.createElement('canvas');cv.width=256;cv.height=64;
+ /* Canvas dimensions can be larger for effects with extra glow halo */
+ const hasEffect=effect&&effect!=='none';
+ const cv=document.createElement('canvas');cv.width=288;cv.height=72;
  const cx=cv.getContext('2d');
- /* Pill background */
- cx.fillStyle=s.bg;cx.beginPath();cx.roundRect(4,4,248,56,28);cx.fill();
- cx.strokeStyle=s.border;cx.lineWidth=3;cx.stroke();
+ const labelText=typeof s.label==='function'?s.label(s.bg):s.label;
+ /* Effect-specific aura color */
+ let auraCol=s.border,auraBlur=0;
+ if(effect==='glow'){auraBlur=20;}
+ if(effect==='neon'){auraBlur=32;cx.shadowColor=s.border;}
+ if(effect==='spooky'){auraBlur=24;cx.shadowColor='#a040ff';}
+ if(effect==='rainbow'){auraBlur=28;}
+ if(effect==='fire'){auraBlur=28;cx.shadowColor='#ff6020';}
+ if(effect==='ice'){auraBlur=24;cx.shadowColor='#80c8ff';}
+ /* Background with optional aura */
+ if(auraBlur>0){cx.shadowColor=auraCol;cx.shadowBlur=auraBlur;}
+ cx.fillStyle=s.bg;cx.beginPath();cx.roundRect(8,8,272,56,28);cx.fill();
+ cx.shadowBlur=0;
+ /* Border (maybe double for neon) */
+ cx.strokeStyle=s.border;cx.lineWidth=3;cx.beginPath();cx.roundRect(8,8,272,56,28);cx.stroke();
+ if(effect==='neon'){
+  /* Inner glow stroke */
+  cx.strokeStyle=s.border;cx.lineWidth=1.5;cx.globalAlpha=.7;
+  cx.beginPath();cx.roundRect(12,12,264,48,24);cx.stroke();cx.globalAlpha=1;
+ }
+ if(effect==='spooky'){
+  /* Floating purple ghost wisps */
+  cx.fillStyle='rgba(160,64,255,.4)';
+  for(let i=0;i<3;i++){
+   cx.beginPath();cx.arc(40+i*100,12+Math.sin(i)*4,8,0,7);cx.fill();
+  }
+ }
+ if(effect==='fire'){
+  /* Flame flicker lines */
+  cx.fillStyle='rgba(255,140,40,.5)';
+  for(let i=0;i<4;i++){
+   cx.beginPath();cx.moveTo(30+i*70,8);cx.lineTo(38+i*70,20);cx.lineTo(46+i*70,8);cx.closePath();cx.fill();
+  }
+ }
+ if(effect==='ice'){
+  /* Ice crystal shards */
+  cx.strokeStyle='rgba(180,230,255,.7)';cx.lineWidth=1.5;
+  for(let i=0;i<4;i++){
+   cx.beginPath();cx.moveTo(30+i*70,12);cx.lineTo(40+i*70,28);cx.lineTo(50+i*70,12);cx.stroke();
+  }
+ }
  /* Icon + text */
  cx.fillStyle=s.text;cx.font='700 26px Fredoka, sans-serif';cx.textAlign='center';cx.textBaseline='middle';
- cx.fillText(s.icon+' '+s.label,128,34);
- return new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthTest:false}));
+ if(effect==='rainbow'){
+  /* Rainbow text gradient */
+  const grad=cx.createLinearGradient(80,0,210,0);
+  grad.addColorStop(0,'#ff5050');grad.addColorStop(.2,'#ffaa30');grad.addColorStop(.4,'#ffe040');
+  grad.addColorStop(.6,'#50e050');grad.addColorStop(.8,'#5090ff');grad.addColorStop(1,'#a050ff');
+  cx.fillStyle=grad;
+ }
+ cx.fillText(s.icon+' '+labelText,144,34);
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthTest:false}));
+ if(hasEffect){
+  sprite.userData.isGlowing=true;sprite.userData.effect=effect;sprite.userData.glowColor=s.border;sprite.userData.baseScale=1.6;
+ }
+ return sprite;
 }
 const shakeFx={amp:0,dur:0};
 function doShake(a,d){shakeFx.amp=Math.max(shakeFx.amp,a);shakeFx.dur=Math.max(shakeFx.dur,d);}
@@ -1717,34 +1912,75 @@ const Spooky={grp:null,moon:null,magma:null,applied:false,encT:0,creature:null,
 /* ============ PLAYER (skinnable — unique materials) ============ */
 function makeFarmer(shirtCol,skinCol,hatCol,hairCol,pantsCol){
  const g=new THREE.Group(),P={};
- P.legL=ubox(.19,.72,.22,pantsCol,0,-.3,0);P.legL.position.set(-.15,1.14,0);
- P.legR=P.legL.clone();P.legR.position.x=.15;
- P.legL.add(ubox(.23,.2,.28,0x4a3520,0,-.33,.03));
- P.legR.add(ubox(.23,.2,.28,0x4a3520,0,-.33,.03));
- P.torso=ubox(.7,.92,.42,shirtCol,0,1.55,0);
- P.torso.add(ubox(.46,.66,.08,pantsCol,0,-.04,.23));
- P.torso.add(ubox(.09,.44,.08,pantsCol,-.17,.3,.21));
- P.torso.add(ubox(.09,.44,.08,pantsCol,.17,.3,.21));
- P.torso.add(ubox(.72,.12,.44,0x3a2818,0,-.44,0));
- P.torso.add(ubox(.14,.14,.08,0xd8a55a,0,-.44,.24));
- P.torso.add(ubox(.42,.5,.2,0x6a4426,0,.12,-.3));
- P.torso.add(new THREE.Mesh(new THREE.SphereGeometry(.16,7,5),um(shirtCol)));P.torso.children[6].position.set(-.37,.38,0);
- P.torso.add(new THREE.Mesh(new THREE.SphereGeometry(.16,7,5),um(shirtCol)));P.torso.children[7].position.set(.37,.38,0);
- P.torso.add(cyl(.03,.03,.9,0x8a6a44,.3,.1,-.28,5));
- P.torso.add(ubox(.26,.14,.05,0xb0b0b0,.3,.55,-.28));
- P.armL=ubox(.16,.68,.16,shirtCol,0,-.24,0);P.armL.position.set(-.46,1.9,0);
- P.armL.add(new THREE.Mesh(new THREE.SphereGeometry(.11,7,5),um(skinCol)));P.armL.children[0].position.set(0,-.4,0);
- P.armR=P.armL.clone();P.armR.position.x=.46;
- P.head=ubox(.5,.5,.5,skinCol,0,2.36,0);
- const hat1=ubox(.62,.12,.68,hatCol,0,.34,.05);hat1.userData.isHat=true;
- const hat2=ubox(.46,.28,.46,hatCol,0,.5,0);hat2.userData.isHat=true;
- const hat3=ubox(.5,.08,.5,0x6a4426,0,.4,0);hat3.userData.isHat=true;
- P.head.add(hat1);P.head.add(hat2);P.head.add(hat3);
- P.head.add(ubox(.54,.14,.54,hairCol,0,.24,-.02));
- P.head.add(ubox(.54,.18,.1,hairCol,0,.1,-.25));
- P.head.add(sph(.055,0x2a2a2a,-.12,.02,.26,6));P.head.add(sph(.055,0x2a2a2a,.12,.02,.26,6));
- P.head.add(ubox(.14,.04,.05,0xb06a4a,0,-.11,.26));
- for(const k in P){P[k].castShadow=true;g.add(P[k]);}
+ /* Legs — group with geometry offset downward so rotation pivots at the hip (top of leg) */
+ P.legL=new THREE.Group();P.legL.position.set(-.15,1.5,0);
+ const legLM=rbox(.2,.74,.22,pantsCol,0,-.37,0);P.legL.add(legLM);
+ P.legL.add(sph(.13,0x4a3520,0,-.74,.05)); /* boot at bottom */
+ P.legR=new THREE.Group();P.legR.position.set(.15,1.5,0);
+ const legRM=rbox(.2,.74,.22,pantsCol,0,-.37,0);P.legR.add(legRM);
+ P.legR.add(sph(.13,0x4a3520,0,-.74,.05));
+ /* Torso — rounded box, slightly tapered */
+ P.torso=rbox(.7,.92,.44,shirtCol,0,1.55,0);
+ /* Overalls front patch */
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.46,.66,.06),um(pantsCol)));
+ P.torso.children[P.torso.children.length-1].position.set(0,-.02,.22);
+ /* Overall straps */
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.08,.42,.06),um(pantsCol)));
+ P.torso.children[P.torso.children.length-1].position.set(-.17,.28,.22);
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.08,.42,.06),um(pantsCol)));
+ P.torso.children[P.torso.children.length-1].position.set(.17,.28,.22);
+ /* Belt */
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.72,.12,.44),um(0x3a2818)));
+ P.torso.children[P.torso.children.length-1].position.set(0,-.44,0);
+ /* Belt buckle */
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.14,.12,.06),um(0xd8a55a)));
+ P.torso.children[P.torso.children.length-1].position.set(0,-.44,.24);
+ /* Backpack */
+ P.torso.add(new THREE.Mesh(new THREE.SphereGeometry(.28,16,12),um(0x6a4426)));
+ P.torso.children[P.torso.children.length-1].position.set(0,.12,-.3);
+ P.torso.children[P.torso.children.length-1].scale.set(.7,.8,.7);
+ /* Shoulder caps */
+ P.torso.add(new THREE.Mesh(new THREE.SphereGeometry(.18,16,12),um(shirtCol)));
+ P.torso.children[P.torso.children.length-1].position.set(-.37,.38,0);
+ P.torso.add(new THREE.Mesh(new THREE.SphereGeometry(.18,16,12),um(shirtCol)));
+ P.torso.children[P.torso.children.length-1].position.set(.37,.38,0);
+ /* Pitchfork handle on back */
+ P.torso.add(cyl(.025,.025,.95,0x8a6a44,.32,.1,-.28,8));
+ P.torso.add(new THREE.Mesh(new THREE.BoxGeometry(.26,.14,.04),um(0xb0b0b0)));
+ P.torso.children[P.torso.children.length-1].position.set(.32,.55,-.28);
+ /* Arms — cylinders with sphere shoulders/elbows/hands. Group pivots at shoulder. */
+ P.armL=new THREE.Group();P.armL.position.set(-.46,1.9,0);
+ P.armL.add(cyl(.07,.055,.6,shirtCol,0,-.3,0,12));
+ P.armL.add(sph(.11,skinCol,0,-.6,0)); /* hand */
+ P.armR=new THREE.Group();P.armR.position.set(.46,1.9,0);
+ P.armR.add(cyl(.07,.055,.6,shirtCol,0,-.3,0,12));
+ P.armR.add(sph(.11,skinCol,0,-.6,0));
+ /* Head — sphere instead of box for smooth look */
+ P.head=new THREE.Group();P.head.position.set(0,2.36,0);
+ const skull=new THREE.Mesh(new THREE.SphereGeometry(.32,24,18),um(skinCol));
+ skull.scale.set(.95,1,.95);P.head.add(skull);P.head.userData.skull=skull;
+ /* Hair cap */
+ const hair=new THREE.Mesh(new THREE.SphereGeometry(.34,20,14,0,Math.PI*2,0,Math.PI/2),um(hairCol));
+ hair.position.y=.04;P.head.add(hair);hair.userData.isHat=true;
+ /* Hat — wide flat-brimmed farmer hat */
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.06,24),um(hatCol));
+ brim.position.y=.22;P.head.add(brim);brim.userData.isHat=true;
+ const crown=new THREE.Mesh(new THREE.CylinderGeometry(.28,.32,.28,20),um(hatCol));
+ crown.position.y=.38;P.head.add(crown);crown.userData.isHat=true;
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.06,20),um(0x6a4426));
+ band.position.y=.28;P.head.add(band);band.userData.isHat=true;
+ /* Eyes */
+ P.head.add(sph(.045,0x2a2a2a,-.12,.02,.05));
+ P.head.add(sph(.045,0x2a2a2a,.12,.02,.05));
+ /* Eye shine */
+ P.head.add(sph(.018,0xffffff,-.135,.035,.08));
+ P.head.add(sph(.018,0xffffff,.105,.035,.08));
+ /* Nose */
+ P.head.add(sph(.06,skinCol,0,-.04,.3));
+ /* Smile */
+ const smile=new THREE.Mesh(new THREE.TorusGeometry(.07,.012,8,12,Math.PI),um(0x8a4a3a));
+ smile.position.set(0,-.1,.28);smile.rotation.z=Math.PI;P.head.add(smile);
+ for(const k in P){P[k].traverse(o=>{o.castShadow=true;});g.add(P[k]);}
  g.userData.parts=P;return g;}
 const player={obj:makeFarmer(0x4f8a5c,0xe8b48a,0xd8a55a,0x6a4a2a,0x4a5a7a),x:0,z:26,ry:Math.PI,vy:0,y:0,speed:6.2,sprint:9.2,walkT:0,idleT:0};
 scene.add(player.obj);
@@ -1752,10 +1988,10 @@ let myTag=null,auraObj=null,myRoleBadge=null;
 function setMyTag(text){if(myTag)player.obj.remove(myTag);
  if(myRoleBadge){player.obj.remove(myRoleBadge);myRoleBadge=null;}
  myTag=nameTag(text);myTag.position.y=3.25;myTag.scale.set(2.2,.55,1);player.obj.add(myTag);
- /* Role badge above my name tag */
+ /* Role badge above my name tag (with custom color + effect) */
  if(ST.me&&ST.me.role&&ST.me.role!=='player'){
-  myRoleBadge=roleBadge(ST.me.role);
-  if(myRoleBadge){myRoleBadge.position.y=3.9;myRoleBadge.scale.set(1.6,.4,1);player.obj.add(myRoleBadge);}
+  myRoleBadge=roleBadge(ST.me.role,ST.me.roleColor,ST.me.roleEffect,ST.me.roleGlow);
+  if(myRoleBadge){myRoleBadge.position.y=3.9;myRoleBadge.scale.set(1.6,.4,1);myRoleBadge.userData.isRoleBadge=true;player.obj.add(myRoleBadge);}
  }}
 /* ---- skin / cosmetic application (rebuilds the farmer, preserves hand item) ---- */
 function rebuildPlayerVisual(){
@@ -1852,27 +2088,51 @@ function makeVampire(){
  const skinMat=new THREE.MeshLambertMaterial({color:0xe8e0d0});
  const shirtMat=new THREE.MeshLambertMaterial({color:0xf0f0e8});
  const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat);m.castShadow=true;return m;};
- P.torso=mk(new THREE.BoxGeometry(.7,.95,.42),suitMat);P.torso.position.y=1.55;g.add(P.torso);
+ P.torso=new THREE.Group();P.torso.position.y=1.55;
+ const torsoM=rbox(.7,.95,.42,suitMat);P.torso.add(torsoM);
  /* Cape draping down the back */
  const cape=mk(new THREE.BoxGeometry(.8,1.2,.08),capeMat);cape.position.set(0,-.1,-.26);P.torso.add(cape);
+ /* Cape collar — high back */
+ const collar=mk(new THREE.ConeGeometry(.45,.35,16,1,true),capeMat);
+ collar.position.set(0,.25,-.2);collar.rotation.x=-.3;P.torso.add(collar);
  /* White shirt V-neck */
- const collar=mk(new THREE.BoxGeometry(.3,.4,.08),shirtMat);collar.position.set(0,-.1,.22);P.torso.add(collar);
- /* Head — pale */
- P.head=mk(new THREE.BoxGeometry(.5,.5,.5),skinMat);P.head.position.y=2.36;g.add(P.head);
- /* Red eyes */
- P.head.add(mk(new THREE.SphereGeometry(.05,6,5),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(-.12,.04,.26);
- P.head.add(mk(new THREE.SphereGeometry(.05,6,5),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(.12,.04,.26);
- /* Fangs */
- P.head.add(mk(new THREE.ConeGeometry(.03,.08,4),shirtMat)).position.set(-.06,-.12,.26);
- P.head.add(mk(new THREE.ConeGeometry(.03,.08,4),shirtMat)).position.set(.06,-.12,.26);
+ const vneck=mk(new THREE.BoxGeometry(.3,.4,.08),shirtMat);vneck.position.set(0,-.1,.22);P.torso.add(vneck);
+ /* Bow tie */
+ const bow=mk(new THREE.BoxGeometry(.18,.06,.04),new THREE.MeshLambertMaterial({color:0xc00010}));
+ bow.position.set(0,.05,.24);P.torso.add(bow);
+ g.add(P.torso);
+ /* Head — sphere for smooth look */
+ P.head=new THREE.Group();P.head.position.y=2.36;
+ const skull=mk(new THREE.SphereGeometry(.32,24,18),skinMat);skull.scale.set(.95,1,.95);P.head.add(skull);
  /* Slicked-back hair */
- P.head.add(mk(new THREE.BoxGeometry(.54,.14,.5),new THREE.MeshLambertMaterial({color:0x1a1a1a}))).position.set(0,.26,0);
- /* Arms */
- P.armL=mk(new THREE.BoxGeometry(.16,.68,.16),suitMat);P.armL.position.set(-.46,1.9,0);g.add(P.armL);
- P.armR=P.armL.clone();P.armR.position.x=.46;g.add(P.armR);
- /* Legs */
- P.legL=mk(new THREE.BoxGeometry(.19,.75,.22),new THREE.MeshLambertMaterial({color:0x0a0a0a}));P.legL.position.set(-.15,1.14,0);g.add(P.legL);
- P.legR=P.legL.clone();P.legR.position.x=.15;g.add(P.legR);
+ const hair=mk(new THREE.SphereGeometry(.34,20,14,0,Math.PI*2,0,Math.PI/2.2),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ hair.position.y=.04;P.head.add(hair);
+ /* Widow's peak */
+ const peak=mk(new THREE.ConeGeometry(.1,.12,12),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ peak.position.set(0,.1,.22);peak.rotation.x=Math.PI;P.head.add(peak);
+ /* Red glowing eyes */
+ P.head.add(mk(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(-.12,.04,.28);
+ P.head.add(mk(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(.12,.04,.28);
+ /* Fangs */
+ P.head.add(mk(new THREE.ConeGeometry(.025,.09,6),shirtMat)).position.set(-.06,-.13,.28);
+ P.head.add(mk(new THREE.ConeGeometry(.025,.09,6),shirtMat)).position.set(.06,-.13,.28);
+ g.add(P.head);
+ /* Arms — cylinders */
+ P.armL=new THREE.Group();P.armL.position.set(-.46,1.9,0);
+ P.armL.add(cyl(.065,.05,.6,suitMat,0,-.3,0,12));
+ P.armL.add(sph(.1,skinMat,0,-.6,0));
+ P.armR=new THREE.Group();P.armR.position.set(.46,1.9,0);
+ P.armR.add(cyl(.065,.05,.6,suitMat,0,-.3,0,12));
+ P.armR.add(sph(.1,skinMat,0,-.6,0));
+ g.add(P.armL);g.add(P.armR);
+ /* Legs — cylinders */
+ P.legL=new THREE.Group();P.legL.position.set(-.15,1.5,0);
+ P.legL.add(rbox(.2,.74,.22,0x0a0a0a,0,-.37,0));
+ P.legL.add(sph(.12,0x0a0a0a,0,-.74,.05));
+ P.legR=new THREE.Group();P.legR.position.set(.15,1.5,0);
+ P.legR.add(rbox(.2,.74,.22,0x0a0a0a,0,-.37,0));
+ P.legR.add(sph(.12,0x0a0a0a,0,-.74,.05));
+ g.add(P.legL);g.add(P.legR);
  g.userData.parts=P;return g;}
 function makeMummy(){
  const g=new THREE.Group(),P={};
@@ -2212,7 +2472,7 @@ function packetTexture(sd){
  c.fillText(sd.n,96,216);
  return new THREE.CanvasTexture(cv);}
 const VGeo={};
-function gFruit(){if(!VGeo.fruit)VGeo.fruit=new THREE.SphereGeometry(1,10,8);return VGeo.fruit;}
+function gFruit(){if(!VGeo.fruit)VGeo.fruit=new THREE.SphereGeometry(1,18,14);return VGeo.fruit;}
 const flyAnims=[],flyTmp=new THREE.Vector3();
 const easeOutCubic=k=>1-Math.pow(1-k,3);
 const HandItem={
@@ -2814,10 +3074,10 @@ function updateSky(t){
  hemi.intensity=ST.halloween?.3:.42;
  sun.target.position.set(player.x,0,player.z);
  sun.position.set(player.x+30,60,player.z-40);}
-/* PLANT MODELS */
+/* PLANT MODELS — smoother geometry for non-chunky look */
 const VGeo2={},VMat={};
-function gLeaf(){if(!VGeo2.leaf){VGeo2.leaf=new THREE.SphereGeometry(1,6,4);VGeo2.leaf.scale(.55,1,.14);}return VGeo2.leaf;}
-function gStem(seg){if(!VGeo2['st'+seg])VGeo2['st'+seg]=new THREE.CylinderGeometry(1,1,1,seg);return VGeo2['st'+seg];}
+function gLeaf(){if(!VGeo2.leaf){VGeo2.leaf=new THREE.SphereGeometry(1,16,10);VGeo2.leaf.scale(.55,1,.14);}return VGeo2.leaf;}
+function gStem(seg){if(!VGeo2['st'+seg])VGeo2['st'+seg]=new THREE.CylinderGeometry(1,1,1,Math.max(seg,8));return VGeo2['st'+seg];}
 function vmat(c,e){const k=c+'|'+(e||'');
  if(!VMat[k])VMat[k]=new THREE.MeshLambertMaterial({color:c,
   emissive:e?new THREE.Color(e):new THREE.Color(0)});return VMat[k];}
@@ -2977,13 +3237,16 @@ function localProg(pl){const sd=SEEDS[pl.s];if(!sd)return 0;
 function updatePlantVisual(pl){
  const sd=SEEDS[pl.s];if(!sd)return;
  const rec=plantMeshes.get(pl.id),prog=localProg(pl),stage=Math.floor(Math.min(prog,1)*5);
- if(rec&&rec.seedId===pl.s&&rec.stage===stage){rec.p0=pl.p;return;}
+ const muts=pl.muts||[];
+ /* Rebuild if stage changed OR mutations changed (so player sees the mutation appear) */
+ const mutsKey=muts.slice().sort().join(',');
+ if(rec&&rec.seedId===pl.s&&rec.stage===stage&&rec.mutsKey===mutsKey){rec.p0=pl.p;return;}
  if(rec){scene.remove(rec.g);disposeGroup(rec.g);}
- const built=buildPlantModel(sd,stage,[]);
+ const built=buildPlantModel(sd,stage,muts);
  built.g.position.set(pl.x,0,pl.z);
  built.g.rotation.y=(parseInt(pl.id.slice(1))%6)*1.05;
  scene.add(built.g);
- plantMeshes.set(pl.id,{g:built.g,sway:built.sway,seedId:pl.s,stage,p0:pl.p,pop:1});}
+ plantMeshes.set(pl.id,{g:built.g,sway:built.sway,seedId:pl.s,stage,p0:pl.p,pop:1,mutsKey});}
 function refreshPlants(plants){
  ST.plants=plants;ST.plantSnapT=performance.now();
  const seen=new Set();
@@ -3581,10 +3844,10 @@ function handleNet(m){
    if(ST.me&&m.id!==ST.me.id&&!otherObjs.has(m.id)){
     const g=makeCharForBody(m.cb,m.cs,m.cp,m.ck);
     const tag=nameTag(m.name||'Farmer');tag.position.y=3.25;tag.scale.set(2.2,.55,1);g.add(tag);
-    /* Role badge above name tag */
-    if(m.role&&m.role!=='player'){const rb=roleBadge(m.role);if(rb){rb.position.y=3.9;rb.scale.set(1.6,.4,1);g.add(rb);}}
+    /* Role badge above name tag (uses custom color + effect) */
+    if(m.role&&m.role!=='player'){const rb=roleBadge(m.role,m.roleColor,m.roleEffect,m.roleGlow);if(rb){rb.position.y=3.9;rb.scale.set(1.6,.4,1);rb.userData.isRoleBadge=true;g.add(rb);}}
     scene.add(g);
-    const rec={g,tx:0,tz:26,ry:0,charBody:m.cb||'farmer',charHat:m.ch||null,activeCosmetic:m.ac||null,role:m.role||'player'};
+    const rec={g,tx:0,tz:26,ry:0,charBody:m.cb||'farmer',charHat:m.ch||null,activeCosmetic:m.ac||null,role:m.role||'player',roleColor:m.roleColor||'',roleEffect:m.roleEffect||'none',roleGlow:!!m.roleGlow,pid:m.pid||''};
     /* Apply hat/cosmetic if they have one */
     if(m.ch||m.ac){ST.me=ST.me||{};const _save=ST.me.activeCosmetic;ST.me.activeCosmetic=m.ch||m.ac;attachCosmetic(g.userData.parts);ST.me.activeCosmetic=_save;}
     otherObjs.set(m.id,rec);
@@ -3623,14 +3886,26 @@ function handleNet(m){
    /* Another player's role changed — rebuild their badge */
    const r=otherObjs.get(m.id);
    if(r){
-    r.role=m.role||'player';
+    r.role=m.role||'player';r.roleColor=m.roleColor||'';r.roleEffect=m.roleEffect||'none';r.roleGlow=!!m.roleGlow;
     /* Remove old badge */
     r.g.children=r.g.children.filter(c=>{if(c.userData&&c.userData.isRoleBadge){c.material.map.dispose();c.material.dispose();return false;}return true;});
-    /* Add new badge */
-    if(r.role!=='player'){const rb=roleBadge(r.role);if(rb){rb.position.y=3.9;rb.scale.set(1.6,.4,1);rb.userData.isRoleBadge=true;r.g.add(rb);}}
+    /* Add new badge with custom color + effect */
+    if(r.role!=='player'){const rb=roleBadge(r.role,r.roleColor,r.roleEffect,r.roleGlow);if(rb){rb.position.y=3.9;rb.scale.set(1.6,.4,1);rb.userData.isRoleBadge=true;r.g.add(rb);}}
    }
    /* If it's me, update my role + rebuild my tag */
-   if(ST.me&&m.id===ST.me.id){ST.me.role=m.role||'player';setMyTag(ST.me.name);}
+   if(ST.me&&m.id===ST.me.id){ST.me.role=m.role||'player';ST.me.roleColor=m.roleColor||'';ST.me.roleEffect=m.roleEffect||'none';ST.me.roleGlow=!!m.roleGlow;setMyTag(ST.me.name);}
+   break;}
+  case 'chat':{
+   /* Chat message from another player (or ourselves — echo from server) */
+   const isMe=ST.me&&m.id===ST.me.id;
+   addChatMessage(m.name,m.text,m.role);
+   if(settings.bubbles||typeof settings==='undefined')showChatBubble(isMe?'me':m.id,m.name,m.text);
+   break;}
+  case 'plantMutated':{
+   /* A plant mutated during an event — show a notification */
+   const mutName=(typeof MUTS!=='undefined'&&MUTS[m.mut])?MUTS[m.mut].n:m.mut;
+   toast('✨ Your '+m.plantName+' mutated: '+mutName+'!','quest');
+   if(typeof AudioSys!=='undefined')AudioSys.play('mut');
    break;}
   case 'toast':
    if(String(m.msg).startsWith('[Admin]'))showAnnounce(String(m.msg).replace('[Admin] ',''),{targeted:true});
@@ -4273,13 +4548,34 @@ const UI={openWins:[],
    <div class="st"><b style="font-size:15px">${data.season}</b><span>${data.seasonName}</span></div>
    <div class="st"><b>${data.paused?'Yes':'No'}</b><span>Growth paused</span></div></div></div>`;
   if(kind==='players')el.innerHTML=`<div class="admCard"><h4>Connected & Saved Players</h4>
-   <table><tr><th>Name</th><th>Sheckles</th><th>Plot</th><th>Produce</th><th>Pets</th><th>Online</th><th>Actions</th></tr>
-   ${data.map(p=>`<tr><td><b>${p.name}</b></td><td>${fmt(p.cash)}</td><td>${p.plot} (exp ${p.exp})</td><td>${p.produce}</td><td>${p.pets}</td>
+   <table><tr><th>ID</th><th>Name</th><th>Role</th><th>Benefits</th><th>Sheckles</th><th>Plot</th><th>Produce</th><th>Pets</th><th>Online</th><th>Actions</th></tr>
+   ${data.map(p=>{
+    const roleCell=p.role&&p.role!=='player'
+     ?`<span style="color:${p.roleColor||'#e8a33d'};font-weight:700;${(p.roleEffect&&p.roleEffect!=='none')?'text-shadow:0 0 6px '+(p.roleColor||'#e8a33d')+'88':''}">${p.role.toUpperCase()}</span>`+
+      (p.roleEffect&&p.roleEffect!=='none'?` <span style="font-size:9px;color:#7c8a98">[${p.roleEffect}]</span>`:'')
+     :'<span style="color:#5a8a6a">player</span>';
+    /* Benefits chips */
+    let benChips='';
+    if(p.roleBenefits&&typeof p.roleBenefits==='object'){
+     const b=p.roleBenefits;const ch=[];
+     if(b.cashPerDay)ch.push('💵'+b.cashPerDay);
+     if(b.relicsPerDay)ch.push('🔮'+b.relicsPerDay);
+     if(b.growBoost&&b.growBoost>1)ch.push('🌱'+b.growBoost+'x');
+     if(b.sellBoost&&b.sellBoost>1)ch.push('💰'+b.sellBoost+'x');
+     if(b.mutBoost&&b.mutBoost>1)ch.push('✨'+b.mutBoost+'x');
+     if(b.invCap)ch.push('🎒+'+b.invCap);
+     if(b.weatherControl)ch.push('🌦');
+     if(b.adminPowers)ch.push('⚡');
+     if(ch.length)benChips='<span style="font-size:10px;color:#9ab0a0">'+ch.join(' ')+'</span>';
+    }
+    return `<tr><td style="font-family:monospace;font-size:12px;color:#80e890">${p.pid||'--------'}</td>
+    <td><b>${p.name}</b></td><td>${roleCell}</td><td>${benChips}</td><td>${fmt(p.cash)}</td><td>${p.plot} (exp ${p.exp})</td><td>${p.produce}</td><td>${p.pets}</td>
    <td>${p.online?'<span style="color:#4fd07f">●</span>':'○'}</td>
    <td><button class="btnSm btnGhost" data-tgo="${p.id}">TP to</button>
    <button class="btnSm btnGhost" data-bring="${p.id}">Bring</button>
    <button class="btnSm btnGhost" data-ntf="${p.id}">Notify</button>
-   <button class="btnSm btnR" data-kick="${p.id}">Kick</button></td></tr>`).join('')}</table></div>`;
+   <button class="btnSm btnGhost" data-role="${p.id}">Role</button>
+   <button class="btnSm btnR" data-kick="${p.id}">Kick</button></td></tr>`;}).join('')}</table></div>`;
   if(kind==='logs')el.innerHTML=`<div class="admCard"><h4>Action Log (latest 80)</h4>
    <table><tr><th>Time</th><th>Action</th><th>Target</th><th>Params</th></tr>
    ${data.map(l=>`<tr><td>${new Date(l.t).toLocaleTimeString()}</td><td>${l.action}</td><td>${l.target}</td><td>${l.params}</td></tr>`).join('')}</table></div>`;}};
@@ -4341,7 +4637,11 @@ function admTab(t){
     if(p){player.x=p.x||0;player.z=p.z||0;toast('Teleported.','good');}}
    if(b.dataset.bring)admCmd('teleportPlayer',{targetId:b.dataset.bring,x:player.x,z:player.z});
    if(b.dataset.ntf){const m=prompt('Message to player:');if(m)admCmd('notify',{targetId:b.dataset.ntf,msg:m});}
-   if(b.dataset.kick)confirmDlg('Kick player','Kick this player?',()=>admCmd('kick',{targetId:b.dataset.kick}));};}
+   if(b.dataset.kick)confirmDlg('Kick player','Kick this player?',()=>admCmd('kick',{targetId:b.dataset.kick}));
+   if(b.dataset.role){/* Switch to Roles tab and pre-fill the player ID */
+    if(typeof admTab==='function')admTab('Roles');
+    setTimeout(()=>{const idInp=document.getElementById('ctrlRoleId');if(idInp)idInp.value=b.dataset.role;},100);}
+   };}
  if(t==='Economy')el.innerHTML=`
   <div class="admCard"><h4>Currency</h4><div class="admRow"><label>Amount</label>
    <input id="ecAm" type="number" placeholder="0" style="width:130px">
@@ -4765,8 +5065,169 @@ function animate(){
     ac.textContent=has?(cd>0?Math.ceil(cd/60000)+' min':'READY'):'pet not equipped';}}}
  if(ST.connected&&t*1000-posT>90&&!inputLocked){posT=t*1000;
   send({t:'pos',x:+player.x.toFixed(2),z:+player.z.toFixed(2),ry:+player.ry.toFixed(2)});}
+ if(typeof updateChatBubbles==='function')updateChatBubbles();
  renderer.render(scene,camera);}
 animate();
+/* ============ CHAT SYSTEM ============ */
+const chatBubbles=new Map();
+let chatOpen=false;
+let chatUnread=0;
+const settings={bubbles:true,history:true,volume:0.5};
+/* Load saved settings */
+try{const saved=JSON.parse(localStorage.getItem('lb_settings')||'{}');
+ for(const k in saved)if(k in settings)settings[k]=saved[k];}catch(e){}
+function saveSettings(){try{localStorage.setItem('lb_settings',JSON.stringify(settings));}catch(e){}}
+function applySettings(){
+ const hist=$('#chatHistory');
+ if(hist)hist.style.display=settings.history?'flex':'none';
+ if(!settings.bubbles){for(const[,d]of chatBubbles){if(d.el)d.el.remove();clearTimeout(d.timeout);}chatBubbles.clear();}
+ const vEl=$('#setVol'),vVal=$('#setVolVal');
+ if(vEl)vEl.value=Math.round(settings.volume*100);
+ if(vVal)vVal.textContent=Math.round(settings.volume*100)+'%';
+ $('#setBubbles').classList.toggle('on',settings.bubbles);
+ $('#setHistory').classList.toggle('on',settings.history);
+ /* Audio volume */
+ if(typeof AudioSys!=='undefined'&&AudioSys&&typeof AudioSys.setVolume==='function'){
+  AudioSys.setVolume(settings.volume);}
+}
+function updateChatBadge(){
+ const b=$('#chatBadge');
+ if(!b)return;
+ if(chatUnread>0){b.textContent=chatUnread>99?'99+':chatUnread;b.classList.add('on');}
+ else{b.classList.remove('on');}
+}
+function toggleChat(){
+ chatOpen=!chatOpen;
+ const inp=$('#chatInput');
+ if(chatOpen){
+  inp.classList.add('on');
+  $('#chatTextInput').value='';
+  chatUnread=0;updateChatBadge();
+  setTimeout(()=>$('#chatTextInput').focus(),50);
+ }else{
+  inp.classList.remove('on');
+  $('#chatTextInput').blur();
+ }
+}
+function sendChat(){
+ const text=$('#chatTextInput').value.trim();
+ if(!text){toggleChat();return;}
+ send({t:'chat',text});
+ $('#chatTextInput').value='';
+ toggleChat();
+}
+/* Enter to open chat, Esc to close */
+addEventListener('keydown',e=>{
+ /* Don't interfere with auth panels or text input fields */
+ const inIntro=$('#intro')&&$('#intro').style.display!=='none';
+ if(inIntro)return;
+ if(e.key==='Enter'&&!typing&&!UI.anyOpen()&&!Cin.active&&!IntroSeq.active){
+  if(typeof Portal==='undefined'||!Portal.inPortal){
+   if(!chatOpen){e.preventDefault();toggleChat();}
+  }
+ }
+ if(chatOpen){
+  if(e.key==='Enter'){e.preventDefault();sendChat();}
+  if(e.key==='Escape'){e.preventDefault();toggleChat();}
+ }
+});
+/* Wire up buttons once DOM is ready */
+(function(){
+ const ctb=$('#chatToggleBtn');if(ctb)ctb.onclick=()=>{toggleChat();if(typeof AudioSys!=='undefined')AudioSys.play('click');};
+ const csb=$('#chatSendBtn');if(csb)csb.onclick=()=>sendChat();
+ const sb=$('#settingsBtn');if(sb)sb.onclick=()=>{toggleSettings();if(typeof AudioSys!=='undefined')AudioSys.play('click');};
+ const sc=$('#spClose');if(sc)sc.onclick=()=>toggleSettings();
+ const slogout=$('#setLogout');if(slogout)slogout.onclick=()=>{if(confirm('Log out and return to login screen?'))logout();};
+ /* Toggles */
+ $('#setBubbles').onclick=()=>{settings.bubbles=!settings.bubbles;saveSettings();applySettings();AudioSys.play('click');};
+ $('#setHistory').onclick=()=>{settings.history=!settings.history;saveSettings();applySettings();AudioSys.play('click');};
+ const vEl=$('#setVol');if(vEl)vEl.oninput=()=>{settings.volume=vEl.value/100;saveSettings();applySettings();$('#setVolVal').textContent=vEl.value+'%';};
+ /* Close settings on outside click */
+ addEventListener('click',e=>{
+  const sp=$('#settingsPanel');
+  if(!sp||!sp.classList.contains('on'))return;
+  if(sp.contains(e.target)||($('#settingsBtn')&&$('#settingsBtn').contains(e.target)))return;
+  toggleSettings();
+ });
+ addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#settingsPanel')&&$('#settingsPanel').classList.contains('on'))toggleSettings();});
+ applySettings();
+})();
+function addChatMessage(name,text,role){
+ const hist=$('#chatHistory');
+ if(!hist)return;
+ const msg=document.createElement('div');
+ msg.className='chatMsg';
+ const safeName=String(name).replace(/</g,'&lt;');
+ /* Color the username by role */
+ let cls='';
+ if(role==='admin')cls='admin';
+ else if(role==='special')cls='special';
+ else if(role&&role!=='player')cls=''; /* custom role: keep default gold */
+ msg.innerHTML='<b class="'+cls+'">'+safeName+'</b>: '+text;
+ hist.insertBefore(msg,hist.firstChild);
+ if(hist.children.length>20)hist.removeChild(hist.lastChild);
+ if(!chatOpen){chatUnread++;updateChatBadge();}
+}
+function showChatBubble(playerId,name,text){
+ if(!settings.bubbles)return;
+ if(chatBubbles.has(playerId)){
+  const old=chatBubbles.get(playerId);
+  if(old.el)old.el.remove();
+  clearTimeout(old.timeout);
+ }
+ const el=document.createElement('div');
+ el.className='chatBubble';
+ el.innerHTML='<b>'+String(name).replace(/</g,'&lt;')+'</b><br>'+text;
+ el.style.display='none';
+ document.body.appendChild(el);
+ const timeout=setTimeout(()=>{
+  if(el)el.remove();
+  chatBubbles.delete(playerId);
+ },5000);
+ chatBubbles.set(playerId,{el,timeout});
+}
+function updateChatBubbles(){
+ for(const[playerId,data]of chatBubbles){
+  if(!data.el)continue;
+  let obj=null;
+  if(playerId==='me'&&player&&player.obj){obj=player.obj;}
+  else{const rec=otherObjs.get(playerId);if(rec&&rec.g)obj=rec.g;}
+  if(!obj){data.el.style.display='none';continue;}
+  const pos=new THREE.Vector3();
+  obj.getWorldPosition(pos);
+  pos.y+=3.5;
+  pos.project(camera);
+  if(pos.z>1){data.el.style.display='none';continue;}
+  const x=(pos.x+1)/2*innerWidth;
+  const y=(-pos.y+1)/2*innerHeight;
+  data.el.style.display='block';
+  data.el.style.left=(x-data.el.offsetWidth/2)+'px';
+  data.el.style.top=(y-data.el.offsetHeight+10)+'px';
+ }
+}
+/* ============ SETTINGS PANEL ============ */
+function toggleSettings(){
+ const p=$('#settingsPanel');
+ if(!p)return;
+ const open=!p.classList.contains('on');
+ p.classList.toggle('on',open);
+ if(open){
+  /* Update info section with player's username + ID */
+  const info=$('#spInfo');
+  if(info){
+   const name=ST.me&&ST.me.name?ST.me.name:'Not logged in';
+   const pid=ST.me&&ST.me.pid?ST.me.pid:'--------';
+   const role=ST.me&&ST.me.role&&ST.me.role!=='player'?' ('+ST.me.role+')':'';
+   info.innerHTML='Logged in as: <b>'+String(name).replace(/</g,'&lt;')+'</b>'+role+'<br>Your Player ID: <b>'+pid+'</b>';
+  }
+  applySettings();
+ }
+}
+function logout(){
+ try{if(typeof ST!=='undefined'&&ST&&ST.ws&&ST.ws.close)ST.ws.close();}catch(e){}
+ try{sessionStorage.clear();}catch(e){}
+ location.href=location.pathname;
+}
 /* ============ BATTLE PASS 3D BACKGROUND ANIMATION ============ */
 let _passBgRAF=null;
 function startPassBgAnim(){
@@ -8361,6 +8822,15 @@ const Act2 = {
       A.renderRolesTab();
     };
     tabs.appendChild(rBtn);
+    /* Spawn Plant tab — admin can spawn a plant in someone's garden with mutations */
+    const spBtn = document.createElement('button');
+    spBtn.textContent = 'Spawn Plant';
+    spBtn.dataset.act2 = 'spawnplant';
+    spBtn.onclick = () => {
+      [...tabs.children].forEach(x => x.classList.toggle('on', x === spBtn));
+      A.renderSpawnPlantTab();
+    };
+    tabs.appendChild(spBtn);
     /* Auction tab */
     const aBtn = document.createElement('button');
     aBtn.textContent = 'Auction';
@@ -8470,28 +8940,110 @@ const Act2 = {
       <div class="admCtrlCard">
         <h4 style="color:#a86fd6">ROLES SYSTEM</h4>
         <div class="desc" style="font-size:12px;color:#7c8a98;margin-bottom:14px">
-          Assign roles to players. <b style="color:#ff3010">⚡ Admin</b> = weather control (press N in-game).
-          <b style="color:#a86fd6">★ Special</b> = 1M sheckles/day + benefits. Role shown as a badge above their head.
+          Assign custom roles to players. Choose any role name, color, visual effect (none/glow/neon/spooky/rainbow/fire/ice),
+          and configure what benefits the role offers (cash per day, relics, growth boosts, weather control, and more).
+          Built-in roles: <b style="color:#ff3010">admin</b> = weather control + admin powers,
+          <b style="color:#a86fd6">special</b> = 1M sheckles/day (legacy default).
         </div>
         <div class="admRow">
           <button class="btnSm btnG" id="ctrlRefreshRoles">Refresh list</button>
         </div>
-        <h4 style="margin-top:16px">Players with roles</h4>
+        <h4 style="margin-top:16px">All Players & Their Roles</h4>
         <div id="ctrlRolesList"><p style="color:#6a7885;font-size:13px">Loading...</p></div>
       </div>
       <div class="admCtrlCard">
-        <h4>Assign Role</h4>
+        <h4>Assign / Change Role</h4>
         <div class="desc" style="font-size:12px;color:#7c8a98;margin-bottom:14px">
-          Find a player in the Players tab, or select from the list above. Use the buttons to set/clear roles.
+          Enter a player's ID (from the list above), then configure the role.
         </div>
         <div class="admRow">
-          <label>Player ID</label>
-          <input id="ctrlRoleId" style="flex:1;min-width:200px" placeholder="U4f89...">
+          <label style="min-width:90px">Player ID</label>
+          <input id="ctrlRoleId" style="flex:1;min-width:200px;font-family:monospace" placeholder="U4f89...">
         </div>
         <div class="admRow">
-          <button class="btnSm btnA" data-setrole="admin">⚡ Make Admin</button>
-          <button class="btnSm btnA" data-setrole="special">★ Make Special</button>
-          <button class="btnSm btnR" data-setrole="player">Remove Role</button>
+          <label style="min-width:90px">Role name</label>
+          <input id="ctrlRoleName" style="flex:1;min-width:200px" placeholder="e.g. VIP, Mod, Helper, Admin, Special" maxlength="16">
+        </div>
+        <div class="admRow">
+          <label style="min-width:90px">Color</label>
+          <input type="color" id="ctrlRoleColor" value="#e8a33d" style="width:50px;height:34px;border:none;background:transparent;cursor:pointer">
+          <span style="font-size:11px;color:#7c8a98">Badge background uses a darker shade of this color</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:90px">Visual effect</label>
+          <select id="ctrlRoleEffect" style="flex:1;min-width:200px;padding:6px;background:#1a1f2e;color:#cdd5e0;border:1px solid #3a4258;border-radius:6px">
+            <option value="none">None — plain badge</option>
+            <option value="glow">✨ Glow — soft pulsing aura</option>
+            <option value="neon">💡 Neon — bright double-stroked glow</option>
+            <option value="spooky">👻 Spooky — purple ghost wisps</option>
+            <option value="rainbow">🌈 Rainbow — rainbow gradient text</option>
+            <option value="fire">🔥 Fire — flame flicker on edges</option>
+            <option value="ice">❄️ Ice — crystal shards on edges</option>
+          </select>
+        </div>
+        <h4 style="margin-top:18px;color:#80e890">⚙ Role Benefits</h4>
+        <div class="desc" style="font-size:11px;color:#7c8a98;margin-bottom:10px">
+          Configure what this role offers. Leave blank/zero for none.
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">💵 Cash per day</label>
+          <input id="ctrlBenefitCash" type="number" min="0" max="100000000" placeholder="0" style="width:140px">
+          <span style="font-size:11px;color:#7c8a98">Sheckles paid daily</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">🔮 Relics per day</label>
+          <input id="ctrlBenefitRelics" type="number" min="0" max="100" placeholder="0" style="width:140px">
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">🌱 Growth boost</label>
+          <input id="ctrlBenefitGrow" type="number" min="1" max="10" step="0.1" placeholder="1.0" style="width:80px">
+          <span style="font-size:11px;color:#7c8a98">Multiplier (1=normal, 2=2x, etc.)</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">💰 Sell boost</label>
+          <input id="ctrlBenefitSell" type="number" min="1" max="5" step="0.1" placeholder="1.0" style="width:80px">
+          <span style="font-size:11px;color:#7c8a98">Multiplier on fruit sell value</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">✨ Mutation boost</label>
+          <input id="ctrlBenefitMut" type="number" min="1" max="5" step="0.1" placeholder="1.0" style="width:80px">
+          <span style="font-size:11px;color:#7c8a98">Multiplier on mutation chance</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">🎒 Inv cap boost</label>
+          <input id="ctrlBenefitInv" type="number" min="0" max="500" placeholder="0" style="width:80px">
+          <span style="font-size:11px;color:#7c8a98">Extra inventory slots</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">🏃 Speed boost</label>
+          <input id="ctrlBenefitSpeed" type="number" min="1" max="3" step="0.1" placeholder="1.0" style="width:80px">
+          <span style="font-size:11px;color:#7c8a98">Walk speed multiplier</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">🌦 Weather control</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#cdd5e0">
+            <input type="checkbox" id="ctrlBenefitWeather" style="width:18px;height:18px;cursor:pointer"> Allow player to start/stop weather events (press N)
+          </label>
+        </div>
+        <div class="admRow">
+          <label style="min-width:140px">⚡ Admin powers</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#cdd5e0">
+            <input type="checkbox" id="ctrlBenefitAdmin" style="width:18px;height:18px;cursor:pointer"> Grant full admin powers (use with caution!)
+          </label>
+        </div>
+        <div class="admRow" style="margin-top:14px">
+          <button class="btnSm btnG" id="ctrlSetRole">✓ Set Role</button>
+          <button class="btnSm btnR" id="ctrlClearRole">Remove Role (set to player)</button>
+        </div>
+        <div class="desc" style="font-size:11px;color:#7c8a98;margin-top:10px">
+          Quick presets:
+          <button class="btnSm btnA" data-preset="admin" style="margin-left:6px">⚡ Admin</button>
+          <button class="btnSm btnA" data-preset="special" style="margin-left:4px">★ Special</button>
+          <button class="btnSm btnA" data-preset="VIP" style="margin-left:4px">◆ VIP (gold + glow)</button>
+          <button class="btnSm btnA" data-preset="Mod" style="margin-left:4px">◆ Mod (blue + neon)</button>
+          <button class="btnSm btnA" data-preset="Helper" style="margin-left:4px">◆ Helper (green)</button>
+          <button class="btnSm btnA" data-preset="Booster" style="margin-left:4px">◆ Booster (rainbow + 2x grow)</button>
+          <button class="btnSm btnA" data-preset="Spooky" style="margin-left:4px">👻 Spooky (purple + spooky)</button>
         </div>
       </div>
     `;
@@ -8501,19 +9053,221 @@ const Act2 = {
         send({ t: 'admin', token: ST.adminToken, cmd: 'listRoles', args: {} });
       }
     };
-    el.querySelectorAll('[data-setrole]').forEach(b => {
+    /* Presets — fill role name + color + effect + benefits */
+    el.querySelectorAll('[data-preset]').forEach(b => {
       b.onclick = () => {
-        const targetId = document.getElementById('ctrlRoleId').value.trim();
-        if (!targetId) { if (typeof toast === 'function') toast('Enter a player ID first', 'err'); return; }
-        if (typeof send === 'function' && ST.adminToken) {
-          send({ t: 'admin', token: ST.adminToken, cmd: 'setRole', args: { targetId, role: b.dataset.setrole } });
+        const preset = b.dataset.preset;
+        const presets = {
+          admin:    { color: '#ff3010', effect: 'glow',    cash: 0, relics: 0, grow: 1, sell: 1, mut: 1, inv: 0, speed: 1, weather: true,  admin: true  },
+          special:  { color: '#a86fd6', effect: 'glow',    cash: 1000000, relics: 0, grow: 1, sell: 1, mut: 1, inv: 0, speed: 1, weather: false, admin: false },
+          VIP:      { color: '#ffd24a', effect: 'glow',    cash: 500000, relics: 1, grow: 1.5, sell: 1.5, mut: 1, inv: 50, speed: 1.2, weather: false, admin: false },
+          Mod:      { color: '#3fa9ff', effect: 'neon',    cash: 100000, relics: 0, grow: 1, sell: 1, mut: 1, inv: 20, speed: 1, weather: true,  admin: false },
+          Helper:   { color: '#4fae68', effect: 'none',    cash: 50000,  relics: 0, grow: 1.2, sell: 1, mut: 1, inv: 10, speed: 1.1, weather: false, admin: false },
+          Booster:  { color: '#ff70ff', effect: 'rainbow', cash: 0, relics: 0, grow: 2.5, sell: 2, mut: 2, inv: 0, speed: 1.5, weather: false, admin: false },
+          Spooky:   { color: '#a040ff', effect: 'spooky',  cash: 0, relics: 0, grow: 1, sell: 1.3, mut: 1.5, inv: 0, speed: 1, weather: false, admin: false }
+        };
+        document.getElementById('ctrlRoleName').value = preset;
+        const p = presets[preset];
+        if (p) {
+          document.getElementById('ctrlRoleColor').value = p.color;
+          document.getElementById('ctrlRoleEffect').value = p.effect;
+          document.getElementById('ctrlBenefitCash').value = p.cash || '';
+          document.getElementById('ctrlBenefitRelics').value = p.relics || '';
+          document.getElementById('ctrlBenefitGrow').value = p.grow || '';
+          document.getElementById('ctrlBenefitSell').value = p.sell || '';
+          document.getElementById('ctrlBenefitMut').value = p.mut || '';
+          document.getElementById('ctrlBenefitInv').value = p.inv || '';
+          document.getElementById('ctrlBenefitSpeed').value = p.speed || '';
+          document.getElementById('ctrlBenefitWeather').checked = !!p.weather;
+          document.getElementById('ctrlBenefitAdmin').checked = !!p.admin;
         }
       };
     });
+    /* Set role button — gather all benefits and send */
+    const setBtn = document.getElementById('ctrlSetRole');
+    if (setBtn) setBtn.onclick = () => {
+      const targetId = document.getElementById('ctrlRoleId').value.trim();
+      const role = document.getElementById('ctrlRoleName').value.trim();
+      const color = document.getElementById('ctrlRoleColor').value;
+      const effect = document.getElementById('ctrlRoleEffect').value;
+      if (!targetId) { if (typeof toast === 'function') toast('Enter a player ID first', 'err'); return; }
+      if (!role) { if (typeof toast === 'function') toast('Enter a role name', 'err'); return; }
+      /* Build benefits object */
+      const benefits = {};
+      const cashV = parseFloat(document.getElementById('ctrlBenefitCash').value);
+      if (!isNaN(cashV) && cashV > 0) benefits.cashPerDay = cashV;
+      const relicsV = parseFloat(document.getElementById('ctrlBenefitRelics').value);
+      if (!isNaN(relicsV) && relicsV > 0) benefits.relicsPerDay = relicsV;
+      const growV = parseFloat(document.getElementById('ctrlBenefitGrow').value);
+      if (!isNaN(growV) && growV > 1) benefits.growBoost = growV;
+      const sellV = parseFloat(document.getElementById('ctrlBenefitSell').value);
+      if (!isNaN(sellV) && sellV > 1) benefits.sellBoost = sellV;
+      const mutV = parseFloat(document.getElementById('ctrlBenefitMut').value);
+      if (!isNaN(mutV) && mutV > 1) benefits.mutBoost = mutV;
+      const invV = parseInt(document.getElementById('ctrlBenefitInv').value);
+      if (!isNaN(invV) && invV > 0) benefits.invCap = invV;
+      const speedV = parseFloat(document.getElementById('ctrlBenefitSpeed').value);
+      if (!isNaN(speedV) && speedV > 1) benefits.speedBoost = speedV;
+      if (document.getElementById('ctrlBenefitWeather').checked) benefits.weatherControl = true;
+      if (document.getElementById('ctrlBenefitAdmin').checked) benefits.adminPowers = true;
+      if (typeof send === 'function' && ST.adminToken) {
+        send({ t: 'admin', token: ST.adminToken, cmd: 'setRole', args: { targetId, role, color, effect, benefits } });
+      }
+    };
+    /* Clear role button */
+    const clrBtn = document.getElementById('ctrlClearRole');
+    if (clrBtn) clrBtn.onclick = () => {
+      const targetId = document.getElementById('ctrlRoleId').value.trim();
+      if (!targetId) { if (typeof toast === 'function') toast('Enter a player ID first', 'err'); return; }
+      if (typeof send === 'function' && ST.adminToken) {
+        send({ t: 'admin', token: ST.adminToken, cmd: 'setRole', args: { targetId, role: 'player' } });
+      }
+    };
     /* Auto-load roles */
     if (typeof send === 'function' && ST.adminToken) {
       send({ t: 'admin', token: ST.adminToken, cmd: 'listRoles', args: {} });
     }
+  },
+
+  renderSpawnPlantTab() {
+    const A = this;
+    const el = document.getElementById('admBody');
+    if (!el) return;
+    /* Build seed dropdown from SEEDS data */
+    const seedOpts = (typeof SEEDS !== 'undefined')
+      ? Object.values(SEEDS).map(s => `<option value="${s.id}">${s.n} (${s.rar})</option>`).sort().join('')
+      : '';
+    /* Build mutation checkboxes — show all available mutations */
+    let mutCheckboxes = '';
+    if (typeof MUTS !== 'undefined') {
+      mutCheckboxes = Object.values(MUTS).map(m =>
+        `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#cdd5e0;padding:4px 8px;background:#1a1f2e;border:1px solid #3a4258;border-radius:6px;margin:2px;cursor:pointer">
+          <input type="checkbox" class="ctrl-spawn-mut" value="${m.id}" style="cursor:pointer"> ${m.n||m.id}
+        </label>`
+      ).join('');
+    }
+    el.innerHTML = `
+      <div class="admCtrlCard">
+        <h4 style="color:#80e890">🌱 SPAWN PLANT IN PLAYER'S GARDEN</h4>
+        <div class="desc" style="font-size:12px;color:#7c8a98;margin-bottom:14px">
+          Spawn any plant directly into a player's garden. Optionally apply mutations and choose whether to spawn it mature (ready to harvest) or as a seedling.
+          The plant will appear in their plot at the coordinates you specify (or near their plot center if left blank).
+        </div>
+        <div class="admRow">
+          <label style="min-width:120px">Player ID</label>
+          <input id="ctrlSpawnTargetId" style="flex:1;min-width:200px;font-family:monospace" placeholder="U4f89...">
+          <button class="btnSm btnGhost" id="ctrlSpawnLoadPlayers">📋 Pick from list</button>
+        </div>
+        <div class="admRow">
+          <label style="min-width:120px">Seed</label>
+          <select id="ctrlSpawnSeed" style="flex:1;min-width:200px;padding:6px;background:#1a1f2e;color:#cdd5e0;border:1px solid #3a4258;border-radius:6px">
+            ${seedOpts}
+          </select>
+        </div>
+        <div class="admRow">
+          <label style="min-width:120px">Position (X, Z)</label>
+          <input id="ctrlSpawnX" type="number" step="0.1" placeholder="auto" style="width:100px">
+          <input id="ctrlSpawnZ" type="number" step="0.1" placeholder="auto" style="width:100px">
+          <span style="font-size:11px;color:#7c8a98">Leave blank for random spot in player's plot</span>
+        </div>
+        <div class="admRow">
+          <label style="min-width:120px">Mature?</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#cdd5e0">
+            <input type="checkbox" id="ctrlSpawnMature" checked style="width:18px;height:18px;cursor:pointer"> Spawn fully grown (ready to harvest)
+          </label>
+        </div>
+        <h4 style="margin-top:14px">Mutations (optional)</h4>
+        <div class="desc" style="font-size:11px;color:#7c8a98;margin-bottom:8px">Pick up to 3 mutations to apply to the spawned plant.</div>
+        <div style="display:flex;flex-wrap:wrap;margin-bottom:12px">${mutCheckboxes||'<p style="color:#6a7885;font-size:13px">No mutations data available.</p>'}</div>
+        <div class="admRow" style="margin-top:10px">
+          <button class="btnSm btnG" id="ctrlSpawnPlantBtn" style="padding:12px 24px;font-size:15px">🌱 SPAWN PLANT</button>
+          <button class="btnSm btnA" data-mutpreset="rainbow" style="margin-left:8px">🌈 Rainbow muts</button>
+          <button class="btnSm btnA" data-mutpreset="gold" style="margin-left:4px">💰 Gold muts</button>
+          <button class="btnSm btnA" data-mutpreset="giant" style="margin-left:4px">📏 Giant mut</button>
+          <button class="btnSm btnA" data-mutpreset="clear" style="margin-left:4px">✖ Clear muts</button>
+        </div>
+        <div id="ctrlSpawnResult" style="margin-top:14px"></div>
+      </div>
+      <div class="admCtrlCard">
+        <h4>Players List</h4>
+        <div class="desc" style="font-size:12px;color:#7c8a98;margin-bottom:10px">
+          Click "Use ID" next to a player to load their ID into the spawn form above.
+        </div>
+        <div id="ctrlSpawnPlayersList"><p style="color:#6a7885;font-size:13px">Click "Pick from list" above to load.</p></div>
+      </div>
+    `;
+    /* Load players list button */
+    const loadBtn = document.getElementById('ctrlSpawnLoadPlayers');
+    if (loadBtn) loadBtn.onclick = () => {
+      if (typeof send === 'function' && ST.adminToken) {
+        send({ t: 'admin', token: ST.adminToken, cmd: 'players', args: {} });
+        /* Listen for the response — render into ctrlSpawnPlayersList */
+        const handler = e => {
+          try {
+            const m = JSON.parse(e.data);
+            if (m.t === 'admData' && m.kind === 'players') {
+              const list = document.getElementById('ctrlSpawnPlayersList');
+              if (list) {
+                list.innerHTML = m.data.map(p => `
+                  <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#1a1f2e;border:1px solid #3a4258;border-radius:6px;margin-bottom:6px">
+                    <span style="color:#4fd07f">${p.online?'●':'○'}</span>
+                    <b style="color:#cdd5e0">${p.name}</b>
+                    <span style="font-family:monospace;font-size:11px;color:#80e890">PID: ${p.pid||'--------'}</span>
+                    <span style="font-family:monospace;font-size:10px;color:#5a7080">${p.id}</span>
+                    <button class="btnSm btnGhost" data-useid="${p.id}" style="margin-left:auto">Use ID</button>
+                  </div>
+                `).join('');
+                list.querySelectorAll('[data-useid]').forEach(b => {
+                  b.onclick = () => {
+                    document.getElementById('ctrlSpawnTargetId').value = b.dataset.useid;
+                    if (typeof toast === 'function') toast('ID loaded', 'info');
+                  };
+                });
+              }
+              ST.ws.removeEventListener('message', handler);
+            }
+          } catch (e) {}
+        };
+        ST.ws.addEventListener('message', handler);
+        /* Auto-remove listener after 5 seconds to avoid leak */
+        setTimeout(() => ST.ws.removeEventListener('message', handler), 5000);
+      }
+    };
+    /* Mutation preset buttons */
+    el.querySelectorAll('[data-mutpreset]').forEach(b => {
+      b.onclick = () => {
+        const preset = b.dataset.mutpreset;
+        const checkboxes = el.querySelectorAll('.ctrl-spawn-mut');
+        checkboxes.forEach(cb => cb.checked = false);
+        const presetMuts = {
+          rainbow: ['rainbow','prismatic','galactic'],
+          gold: ['golden','goldenrod'],
+          giant: ['giant'],
+          clear: []
+        };
+        const toCheck = presetMuts[preset] || [];
+        checkboxes.forEach(cb => { if (toCheck.includes(cb.value)) cb.checked = true; });
+      };
+    });
+    /* Spawn plant button */
+    const spawnBtn = document.getElementById('ctrlSpawnPlantBtn');
+    if (spawnBtn) spawnBtn.onclick = () => {
+      const targetId = document.getElementById('ctrlSpawnTargetId').value.trim();
+      const seed = document.getElementById('ctrlSpawnSeed').value;
+      const xVal = document.getElementById('ctrlSpawnX').value;
+      const zVal = document.getElementById('ctrlSpawnZ').value;
+      const mature = document.getElementById('ctrlSpawnMature').checked;
+      const muts = Array.from(el.querySelectorAll('.ctrl-spawn-mut:checked')).map(cb => cb.value);
+      if (!targetId) { if (typeof toast === 'function') toast('Enter a player ID first', 'err'); return; }
+      if (!seed) { if (typeof toast === 'function') toast('Pick a seed', 'err'); return; }
+      const args = { targetId, seed, mature, muts };
+      if (xVal !== '') args.x = parseFloat(xVal);
+      if (zVal !== '') args.z = parseFloat(zVal);
+      if (typeof send === 'function' && ST.adminToken) {
+        send({ t: 'admin', token: ST.adminToken, cmd: 'spawnPlant', args });
+        if (typeof toast === 'function') toast('Spawning plant...', 'info');
+      }
+    };
   },
 
   renderTimerTab() {
@@ -8838,21 +9592,57 @@ const Act2 = {
     const el = document.getElementById('ctrlRolesList');
     if (!el) return;
     if (!list || !list.length) {
-      el.innerHTML = '<p style="color:#6a7885;font-size:13px">No players have roles yet. Assign one below.</p>';
+      el.innerHTML = '<p style="color:#6a7885;font-size:13px">No players found.</p>';
       return;
     }
-    el.innerHTML = list.map(r => `
+    el.innerHTML = list.map(r => {
+      const hasRole = r.role && r.role !== 'player';
+      const roleColor = r.roleColor || (r.role === 'admin' ? '#ff3010' : r.role === 'special' ? '#a86fd6' : '#e8a33d');
+      const effect = r.roleEffect || 'none';
+      const glowStyle = (hasRole && effect !== 'none') ? `text-shadow:0 0 8px ${roleColor}aa,0 0 16px ${roleColor}66;` : '';
+      const roleDisplay = hasRole
+        ? `<span style="color:${roleColor};font-weight:700;${glowStyle}">${String(r.role).toUpperCase()}</span>` +
+          (effect !== 'none' ? ` <span style="font-size:10px;color:#7c8a98">[${effect}]</span>` : '')
+        : '<span style="color:#5a8a6a">player</span>';
+      const onlineDot = r.online ? '<span style="color:#4fd07f">●</span>' : '<span style="color:#5a7060">○</span>';
+      /* Benefits summary */
+      let benChips = '';
+      if (hasRole && r.roleBenefits && typeof r.roleBenefits === 'object') {
+        const b = r.roleBenefits;
+        const chips = [];
+        if (b.cashPerDay) chips.push('💵 ' + b.cashPerDay + '/day');
+        if (b.relicsPerDay) chips.push('🔮 ' + b.relicsPerDay + ' relics/day');
+        if (b.growBoost && b.growBoost > 1) chips.push('🌱 ' + b.growBoost + 'x grow');
+        if (b.sellBoost && b.sellBoost > 1) chips.push('💰 ' + b.sellBoost + 'x sell');
+        if (b.mutBoost && b.mutBoost > 1) chips.push('✨ ' + b.mutBoost + 'x mut');
+        if (b.invCap) chips.push('🎒 +' + b.invCap + ' slots');
+        if (b.speedBoost && b.speedBoost > 1) chips.push('🏃 ' + b.speedBoost + 'x speed');
+        if (b.weatherControl) chips.push('🌦 weather');
+        if (b.adminPowers) chips.push('⚡ admin');
+        if (chips.length) benChips = '<div style="font-size:10px;color:#9ab0a0;margin-top:2px">' + chips.join(' · ') + '</div>';
+      }
+      return `
       <div class="deciderWishRow">
-        <div class="pName" style="color:${r.role==='admin'?'#ff3010':'#a86fd6'}">${r.role==='admin'?'⚡':'★'} ${r.name}</div>
-        <div class="pWish">Role: ${r.role.toUpperCase()}${r.givenBy?(' · by '+r.givenBy):''}</div>
-        <div class="pTime">ID: ${r.id}</div>
-        <button class="btnSm btnGhost" data-copyid="${r.id}">Copy ID</button>
+        <div class="pName" style="color:#f0e8d0">${onlineDot} ${r.name||'(unknown)'}</div>
+        <div class="pWish">Role: ${roleDisplay}${r.givenBy?(' · by '+r.givenBy):''}</div>
+        ${benChips}
+        <div class="pTime" style="font-family:monospace;font-size:12px;color:#80e890">PID: ${r.pid||'--------'}</div>
+        <div class="pTime" style="font-family:monospace;font-size:10px;color:#5a8a6a">Internal ID: ${r.id}</div>
+        <button class="btnSm btnGhost" data-copyid="${r.id}">Use ID</button>
+        ${hasRole?`<button class="btnSm btnR" data-clearrole="${r.id}">Clear Role</button>`:''}
       </div>
-    `).join('');
+    `;}).join('');
     el.querySelectorAll('[data-copyid]').forEach(b => {
       b.onclick = () => {
         const idInput = document.getElementById('ctrlRoleId');
         if (idInput) { idInput.value = b.dataset.copyid; if (typeof toast === 'function') toast('ID copied to field', 'info'); }
+      };
+    });
+    el.querySelectorAll('[data-clearrole]').forEach(b => {
+      b.onclick = () => {
+        if (typeof send === 'function' && ST.adminToken) {
+          send({ t: 'admin', token: ST.adminToken, cmd: 'setRole', args: { targetId: b.dataset.clearrole, role: 'player' } });
+        }
       };
     });
   },

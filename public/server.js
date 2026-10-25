@@ -28,6 +28,15 @@ function cleanName(raw){let n=String(raw||'').replace(/[^A-Za-z0-9 _-]/g,'').tri
  for(const w of BAD)if(low.includes(w))return null;
  if(n.length<2)return null;return n.replace(/\s+/g,' ');}
 
+/* ===== 9-CHARACTER PUBLIC PLAYER ID =====
+   Every player gets a short, human-readable ID like "F4K8X2M9Q" — 9 chars, alphanumeric.
+   Used in the admin panel to identify players. Generated once and saved. */
+function genPlayerId(){
+ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; /* no I,O,0,1 to avoid confusion */
+ let id='';
+ for(let i=0;i<9;i++)id+=chars[Math.floor(Math.random()*chars.length)];
+ return id;}
+
 /* ===== ACCOUNTS DATABASE (separate from farm_save.json) =====
    Stores: username (lowercased), passwordHash (bcrypt), email, emailVerified,
    playerId (links to farm_save.json player), createdAt, verifyToken (temp)
@@ -368,7 +377,7 @@ function rotateEmoteShop(){const pool=EMOTE_CATALOG.slice();const picked=[];
  G.emoteRestockAt=now()+EMOTE_RESTOCK_MS;
  broadcast({t:'emoteStock',stock:G.emoteStock,restockAt:G.emoteRestockAt});}
 
-function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.tokens,relics:p.relics||0,
+function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,cash:p.cash,tokens:p.tokens,relics:p.relics||0,
  plot:p.plot,expansion:p.expansion,seeds:p.seeds,produce:p.produce,gear:p.gear,eggs:p.eggs,pets:p.pets,packs:p.packs||0,
  stats:p.stats,quests:p.quests,daily:p.daily,discovered:p.discovered,
  passXP:p.passXP||0,passLevel:p.passLevel||1,freeClaimed:p.freeClaimed||[],goldOwned:!!p.goldOwned,goldClaimed:p.goldClaimed||[],
@@ -379,7 +388,7 @@ function serializePlayer(p){return{id:p.id,name:p.name,cash:p.cash,tokens:p.toke
  ownedCharBodies:p.ownedCharBodies||['farmer'],
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
- role:p.role||'player',roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
+ role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow,roleBenefits:p.roleBenefits||{},roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
  portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
@@ -426,6 +435,10 @@ function load(){let raw=null;
    if(p.charSkinCol===undefined)p.charSkinCol=0xe8b48a;
    if(!p.ownedCharBodies)p.ownedCharBodies=['farmer'];
    if(!p.role)p.role='player';if(p.lastRolePay===undefined)p.lastRolePay=0;
+   if(p.roleColor===undefined)p.roleColor='';if(p.roleGlow===undefined)p.roleGlow=false;
+   if(p.roleEffect===undefined)p.roleEffect=p.roleGlow?'glow':'none';
+   if(p.roleBenefits===undefined)p.roleBenefits={};
+   if(!p.pid)p.pid=genPlayerId(); /* backfill 9-char player ID for existing saves */
    if(!p.portal)p.portal=defaultPortal();
    if(!p.gear.includes('shovel'))p.gear.push('shovel');
    G.players.set(p.id,p);if(p.plot>=0&&p.plot<6)G.plots[p.plot]=p.id;}
@@ -434,7 +447,7 @@ function load(){let raw=null;
   console.log('[FARM] loaded:',G.players.size,'players | S1:',G.season.status,'| S2:',G.s2.phase);}
  catch(e){console.error('[FARM] corrupt save, fresh start');G.stock=seedStockInit();G.shopConfig=defaultShopConfig();G.restockAt=Date.now()+RESTOCK_MS;rotateEmoteShop();}}
 function newPlayer(id,name){let plot=G.plots.findIndex(o=>o===null);if(plot<0)plot=0;G.plots[plot]=id;
- return{id,name,cash:150,tokens:0,relics:0,plot,expansion:0,seeds:{carrot:5},produce:[],gear:['watercan','shovel'],eggs:{},pets:[],packs:0,
+ return{id,name,pid:genPlayerId(),cash:150,tokens:0,relics:0,plot,expansion:0,seeds:{carrot:5},produce:[],gear:['watercan','shovel'],eggs:{},pets:[],packs:0,
  stats:{plant:0,harvest:0,sell:0,buySeedType:1,mutations:0,eggsBought:0,petsHatched:0,petsEquipped:0,watered:0,weatherSeen:0,mutHarvest:0,expansion:0,earned:0,rareHarvest:0},
  quests:[],daily:{last:'',streak:0},discovered:{seeds:['carrot'],muts:[],pets:[]},
  passXP:0,passLevel:1,freeClaimed:[],goldOwned:false,goldClaimed:[],
@@ -442,7 +455,7 @@ function newPlayer(id,name){let plot=G.plots.findIndex(o=>o===null);if(plot<0)pl
  charBody:'farmer',charHat:null,charShirt:0x4f8a5c,charPants:0x4a5a7a,charSkinCol:0xe8b48a,ownedCharBodies:['farmer'],
  lastAbility:0,relicDay:'',relicDrops:0,
  bloodDrops:0,lastAlienTry:0,deciderBought:false,
- role:'player',roleGivenBy:'',lastRolePay:0,
+ role:'player',roleColor:'',roleEffect:'none',roleGlow:false,roleBenefits:{},roleGivenBy:'',lastRolePay:0,
  x:0,z:26,ry:0,online:false};}
 const now=()=>Date.now(),rand=(a,b)=>a+Math.random()*(b-a),rint=(a,b)=>Math.floor(rand(a,b+1));
 function log(action,target,params){G.logs.push({t:now(),action,target:target||'global',params:params||''});
@@ -450,13 +463,18 @@ function log(action,target,params){G.logs.push({t:now(),action,target:target||'g
 function gearBonus(p,key){let best=0;for(const gid of p.gear){const fx=GEAR_MAP[gid]&&GEAR_MAP[gid].fx;if(fx&&fx[key])best=Math.max(best,fx[key]);}return best;}
 function petBonus(p,type){let v=0;for(const pet of p.pets)if(pet.eq){const d=PET_MAP[pet.pid];if(d&&d.bt===type)v+=d.bv*(1+.05*((pet.lvl||1)-1));}return Math.min(v,.5);}
 function effGrowth(p){let m=(G.event?G.event.def.grow:1)*G.growMul;
- m*=1+gearBonus(p,'grow')+petBonus(p,'growth');const spr=gearBonus(p,'sprinkler');if(spr)m*=spr;return m;}
+ m*=1+gearBonus(p,'grow')+petBonus(p,'growth');const spr=gearBonus(p,'sprinkler');if(spr)m*=spr;
+ /* Role benefit: growBoost (1-10x multiplier) */
+ if(p.roleBenefits&&p.roleBenefits.growBoost)m*=p.roleBenefits.growBoost;
+ return m;}
 function rollMuts(p){const muts=[],boost=(G.event&&G.event.def.boosts)||{},petM=1+petBonus(p,'mut'),beacon=gearBonus(p,'beacon')||1;
+ /* Role benefit: mutBoost (1-5x multiplier on mutation chance) */
+ const roleMutBoost=(p.roleBenefits&&p.roleBenefits.mutBoost)?p.roleBenefits.mutBoost:1;
  /* Godalien passive: boosts alien mutation */
  const hasGA=(p.pets||[]).some(x=>x.pid==='godalien'&&x.eq);
  for(const m of MUTS){if(muts.length>=G.mutCap)break;
   if((m.id==='miniature'&&muts.includes('giant'))||(m.id==='giant'&&muts.includes('miniature')))continue;
-  let ch=(MUT_BASE[m.cat]||.01)*(boost[m.id]||1)*petM*beacon;
+  let ch=(MUT_BASE[m.cat]||.01)*(boost[m.id]||1)*petM*beacon*roleMutBoost;
   if(m.id==='alien'&&hasGA)ch*=2;   /* Godalien doubles alien odds */
   for(const pet of p.pets)if(pet.eq){const d=PET_MAP[pet.pid];if(d&&d.bt===m.id)ch*=1.8;}
   if(Math.random()<Math.min(ch,.6))muts.push(m.id);}
@@ -464,7 +482,9 @@ function rollMuts(p){const muts=[],boost=(G.event&&G.event.def.boosts)||{},petM=
 function mutMult(muts){let t=1;for(const id of muts)t*=MUT_MAP[id]?MUT_MAP[id].mult:1;return Math.min(t,MUT_TOTAL_CAP);}
 function fruitValue(sd,weight,muts,p){const wAvg=(sd.wmin+sd.wmax)/2,wf=.5+.9*(weight/wAvg);
  const sell=1+petBonus(p,'sell')+gearBonus(p,'decor')+(G.event?(G.event.def.sell-1)+gearBonus(p,'charm'):0);
- return Math.max(1,Math.round(sd.sell*wf*mutMult(muts)*sell));}
+ /* Role benefit: sellBoost (1-5x multiplier on sell value) */
+ const roleSellBoost=(p.roleBenefits&&p.roleBenefits.sellBoost)?p.roleBenefits.sellBoost:1;
+ return Math.max(1,Math.round(sd.sell*wf*mutMult(muts)*sell*roleSellBoost));}
 function addPassXP(p,amt){if((p.passLevel||1)>=PASS_MAX)return;
  p.passXP=(p.passXP||0)+amt;let need=passXPNeeded(p.passLevel);
  while(p.passLevel<PASS_MAX&&p.passXP>=need){p.passXP-=need;p.passLevel++;
@@ -477,10 +497,32 @@ function tryRelicDrop(p,muts,sd){
  if((rareMut||['Divine','Demon','Mythical','Alienoic'].includes(sd.rar))&&p.relicDrops<5&&Math.random()<.08){
   p.relics=(p.relics||0)+1;p.relicDrops++;sendTo(p.id,{t:'toast',msg:'You found a RELIC!',kind:'quest'});}}
 function tickPlants(){if(G.paused)return;const dt=2000;
+ /* If an event is active, plants get a chance to gain mutations while growing */
+ const evBoosts=G.event?(G.event.def.boosts||{}):{};
+ const evHasMutBoost=Object.keys(evBoosts).length>0;
  for(const pl of G.plants.values()){const owner=G.players.get(pl.o);if(!owner)continue;
   let m=effGrowth(owner);if(pl.boostUntil>now())m*=gearBonus(owner,'water')||1.6;
-  pl.prog=Math.min(pl.prog+dt*m,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);}}
-function plantPacket(pl){return{id:pl.id,o:pl.o,s:pl.s,x:+pl.x.toFixed(2),z:+pl.z.toFixed(2),p:+Math.min(pl.prog/(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1),1).toFixed(3)};}
+  pl.prog=Math.min(pl.prog+dt*m,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);
+  /* ===== EVENT MUTATION GUARANTEE =====
+     When an event is active, growing plants have a chance to gain a mutation that matches the event's boost.
+     This makes events visually exciting — players SEE their plants mutating in real time. */
+  if(evHasMutBoost&&pl.prog<SEED_MAP[pl.s].grow*0.98&&Math.random()<0.04){
+   /* Pick a mutation from the event's boost list */
+   const evMutIds=Object.keys(evBoosts);
+   const mutId=evMutIds[Math.floor(Math.random()*evMutIds.length)];
+   if(mutId&&MUT_MAP[mutId]){
+    if(!pl.muts)pl.muts=[];
+    if(!pl.muts.includes(mutId)&&pl.muts.length<3){
+     pl.muts.push(mutId);
+     /* Notify the owner so they see it happen */
+     sendTo(owner.id,{t:'plantMutated',plantId:pl.id,mut:mutId,plantName:SEED_MAP[pl.s]?SEED_MAP[pl.s].n:'plant'});
+    }
+   }
+  }
+ }
+ /* Push plant updates to clients so they re-render with mutations */
+ if(evHasMutBoost)pushPlants();}
+function plantPacket(pl){return{id:pl.id,o:pl.o,s:pl.s,x:+pl.x.toFixed(2),z:+pl.z.toFixed(2),p:+Math.min(pl.prog/(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1),1).toFixed(3),muts:pl.muts||[]};}
 function startEvent(def,durMs,byAdmin){if(G.event)endEvent(false);
  const dur=durMs||def.dur;G.event={def,start:now(),end:now()+dur};
  broadcast({t:'event',ev:{id:def.id,end:G.event.end,start:G.event.start}});
@@ -516,19 +558,22 @@ function sendInitData(sock,p){
   emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
   event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
   plots:G.plots,plotPos:PLOT_POS,
-  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,name:x.name,x:x.x||0,z:x.z||0,ry:0,
+  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,pid:x.pid||'',name:x.name,x:x.x||0,z:x.z||0,ry:0,
    cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
-   ac:x.activeCosmetic||null,role:x.role||'player'}))}));
- broadcast({t:'pJoin',id:p.id,name:p.name,
+   ac:x.activeCosmetic||null,role:x.role||'player',roleColor:x.roleColor||'',roleEffect:x.roleEffect||'none',roleGlow:!!x.roleGlow}))}));
+ broadcast({t:'pJoin',id:p.id,pid:p.pid||'',name:p.name,
   cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
-  ac:p.activeCosmetic||null,role:p.role||'player'},p.id);pushPlants();}
+  ac:p.activeCosmetic||null,role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow},p.id);pushPlants();}
 function addStat(p,k,n=1){p.stats[k]=(p.stats[k]||0)+n;}
 function awardReward(p,r){if(r.cash){p.cash+=r.cash;p.stats.earned+=r.cash;}
  if(r.tokens)p.tokens+=r.tokens;if(r.relics)p.relics=(p.relics||0)+r.relics;
  if(r.seeds)for(const k in r.seeds){p.seeds[k]=(p.seeds[k]||0)+r.seeds[k];if(!p.discovered.seeds.includes(k))p.discovered.seeds.push(k);}
  if(r.egg)p.eggs[r.egg]=(p.eggs[r.egg]||0)+1;
  if(r.gear&&!p.gear.includes(r.gear))p.gear.push(r.gear);}
-function cap(p){return 60+gearBonus(p,'cap');}
+function cap(p){let c=60+gearBonus(p,'cap');
+ /* Role benefit: invCap (extra inventory slots) */
+ if(p.roleBenefits&&p.roleBenefits.invCap)c+=p.roleBenefits.invCap;
+ return c;}
 function dist2(ax,az,bx,bz){const dx=ax-bx,dz=az-bz;return dx*dx+dz*dz;}
 function seasonPacket(){return{...G.season,serverTime:now()};}
 function s2Packet(){const{deciderWishes,...rest}=G.s2;return{...rest,serverTime:now()};}
@@ -604,6 +649,23 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
  switch(msg.t){
   case 'pos':{p.x=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.x||0));p.z=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.z||0));
    p.ry=+msg.ry||0;broadcast({t:'ppos',id:p.id,x:p.x,z:p.z,ry:p.ry},p.id);break;}
+  /* ===== CHAT SYSTEM =====
+     Server-side chat: validates input, filters bad words, rate-limits (1s),
+     strips HTML, broadcasts to everyone (including sender for echo confirmation). */
+  case 'chat':{
+   if(!p._lastChat)p._lastChat=0;
+   if(now()-p._lastChat<1000)return sendTo(p.id,{t:'toast',msg:'Wait a moment before sending another message.',kind:'err'});
+   let text=String(msg.text||'').trim().slice(0,200);
+   if(!text)return;
+   /* Filter bad words */
+   const low=' '+text.toLowerCase()+' ';
+   for(const w of BAD){if(low.includes(w)){text='***';break;}}
+   /* Strip HTML to prevent injection */
+   text=text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+   p._lastChat=now();
+   /* Broadcast to EVERYONE (including sender so client can confirm + show bubble) */
+   broadcast({t:'chat',id:p.id,name:p.name,text:text,role:p.role||'player'});
+   break;}
   /* ================= HEART FEEDING (Season 2) ================= */
   case 'feedHeart':{
    if(G.s2.act<1)return sendTo(p.id,{t:'toast',msg:'The Heart is not yet accessible.',kind:'err'});
@@ -785,7 +847,13 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    if(Math.random()<gearBonus(p,'fruit')+petBonus(p,'fruit'))count++;
    count=Math.min(count,cap(p)-p.produce.length);
    const fruits=[];
-   for(let i=0;i<count;i++){let w=rand(sd.wmin,sd.wmax);const muts=rollMuts(p);
+   /* Carry over plant's mutations (gained during event) to ~70% of harvested fruits */
+   const plantMuts=pl.muts||[];
+   for(let i=0;i<count;i++){let w=rand(sd.wmin,sd.wmax);
+    /* Use plant's mutations for most fruits, but roll fresh ones for some variety */
+    let muts;
+    if(plantMuts.length>0&&Math.random()<0.7){muts=plantMuts.slice();}
+    else{muts=rollMuts(p);}
     if(muts.includes('giant')||muts.includes('overgrown'))w*=2.2;
     if(muts.includes('miniature'))w*=.5;
     for(const m of muts)if(!p.discovered.muts.includes(m))p.discovered.muts.push(m);
@@ -795,7 +863,8 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    tryRelicDrop(p,fruits.length?fruits[0].m:[],sd);
    addStat(p,'harvest');addPassXP(p,15+(fruits.some(f=>f.m.length)?20:0));
    if(['Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'].includes(sd.rar))addStat(p,'rareHarvest');
-   if(sd.reg>0)pl.prog=sd.grow*(1-sd.reg);else G.plants.delete(pl.id);
+   if(sd.reg>0){pl.prog=sd.grow*(1-sd.reg);/* Keep mutations on regrowing plants */}
+   else G.plants.delete(pl.id);
    for(const pet of p.pets){pet.xp=(pet.xp||0)+5;pet.lvl=Math.min(10,1+Math.floor(pet.xp/100));}
    pushMe(p);pushPlants();G.dirty=true;save();
    sendTo(p.id,{t:'harvested',fruits,plantId:pl.id,seed:sd.id});break;}
@@ -856,10 +925,12 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    adminCommand(p,msg);break;}
   /* ===== ROLE-ADMIN WEATHER CONTROL (no full admin session needed) ===== */
   case 'roleWeather':{
-   if(p.role!=='admin')return sendTo(p.id,{t:'toast',msg:'You need the Admin role for this.',kind:'err'});
+   /* Admin OR role with weatherControl benefit can use this */
+   const canControl=p.role==='admin'||(p.roleBenefits&&p.roleBenefits.weatherControl)||p.roleBenefits&&p.roleBenefits.adminPowers;
+   if(!canControl)return sendTo(p.id,{t:'toast',msg:'You need a role with weather control for this.',kind:'err'});
    const sub=String(msg.sub||'').slice(0,16);
    if(sub==='start'){const d=EV_MAP[String(msg.ev||'').slice(0,32)];if(d)startEvent(d,+msg.dur?+msg.dur*1000:0,true);
-    sendTo(p.id,{t:'toast',msg:'Weather started: '+d.n,kind:'good'});}
+    sendTo(p.id,{t:'toast',msg:'Weather started: '+(d?d.n:'(invalid)'),kind:'good'});}
    else if(sub==='end'){endEvent(true);sendTo(p.id,{t:'toast',msg:'Weather ended.',kind:'good'});}
    else if(sub==='random'){const pool=EVENTS.filter(e=>e.w>0);startEvent(pool[rint(0,pool.length-1)]);
     sendTo(p.id,{t:'toast',msg:'Random weather rolled.',kind:'good'});}
@@ -990,8 +1061,9 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    online:[...G.players.values()].filter(x=>x.online).length,players:G.players.size,plants:G.plants.size,
    event:G.event?G.event.def.n:'none',paused:G.paused,season:G.season.status,seasonName:G.season.name,
    s2phase:G.s2.phase,s2act:G.s2.act,s2heartFed:G.s2.heartFed}});break;
-  case 'players':sendTo(admin.id,{t:'admData',kind:'players',data:[...G.players.values()].map(x=>({id:x.id,name:x.name,
-   cash:x.cash,tokens:x.tokens,plot:x.plot,exp:x.expansion,online:!!x.online,produce:x.produce.length,pets:x.pets.length}))});break;
+  case 'players':sendTo(admin.id,{t:'admData',kind:'players',data:[...G.players.values()].map(x=>({id:x.id,pid:x.pid||'',name:x.name,
+   cash:x.cash,tokens:x.tokens,plot:x.plot,exp:x.expansion,online:!!x.online,produce:x.produce.length,pets:x.pets.length,
+   role:x.role||'player',roleColor:x.roleColor||'',roleEffect:x.roleEffect||'none',roleGlow:!!x.roleGlow,roleBenefits:x.roleBenefits||{}}))});break;
   /* ===== SEASON 2 ADMIN ===== */
   case 'launchSeason2':{
    if(G.s2.phase!=='idle')return sendTo(admin.id,{t:'toast',msg:'Season 2 already started.',kind:'err'});
@@ -1086,20 +1158,53 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
     target.bloodDrops=(target.bloodDrops||0)+amt;pushMe(target);
     sendTo(admin.id,{t:'toast',msg:'Gave '+amt+' Blood Drops to '+target.name+'.',kind:'good'});}
    break;}
-  /* ===== ROLES SYSTEM ===== */
+  /* ===== ROLES SYSTEM (custom names + colors + effects + benefits) ===== */
   case 'setRole':{
    const t2=G.players.get(a.targetId);if(!t2)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
-   const role=String(a.role||'player').slice(0,16);
-   if(!['player','admin','special'].includes(role))return sendTo(admin.id,{t:'toast',msg:'Invalid role.',kind:'err'});
-   t2.role=role;t2.roleGivenBy=admin.name;
-   if(role==='player'){t2.lastRolePay=0;}
+   /* Allow admin to set ANY custom role name (1-16 chars, alphanumeric + space + -) */
+   const role=String(a.role||'player').trim().slice(0,16);
+   if(!role)return sendTo(admin.id,{t:'toast',msg:'Role name required.',kind:'err'});
+   if(!/^[A-Za-z0-9 \-]+$/.test(role))return sendTo(admin.id,{t:'toast',msg:'Role name: letters/numbers/spaces only.',kind:'err'});
+   /* Color: hex like #ff7020, or empty for default */
+   const color=/^#[0-9a-fA-F]{6}$/.test(String(a.color||''))?String(a.color):'';
+   /* Effect: none | glow | neon | spooky | rainbow */
+   const validEffects=['none','glow','neon','spooky','rainbow','fire','ice'];
+   let effect=String(a.effect||'none').toLowerCase();
+   if(!validEffects.includes(effect))effect='none';
+   /* Benefits object — admin can configure what the role offers */
+   let benefits={};
+   if(a.benefits&&typeof a.benefits==='object'){
+    /* Cash per day (sheckles) */
+    if(typeof a.benefits.cashPerDay==='number')benefits.cashPerDay=Math.max(0,Math.min(100000000,a.benefits.cashPerDay));
+    /* Relics per day */
+    if(typeof a.benefits.relicsPerDay==='number')benefits.relicsPerDay=Math.max(0,Math.min(100,a.benefits.relicsPerDay));
+    /* Weather control (bool) */
+    if(typeof a.benefits.weatherControl==='boolean')benefits.weatherControl=a.benefits.weatherControl;
+    /* Admin powers (bool) — full admin */
+    if(typeof a.benefits.adminPowers==='boolean')benefits.adminPowers=a.benefits.adminPowers;
+    /* Growth boost (multiplier 1-10) */
+    if(typeof a.benefits.growBoost==='number')benefits.growBoost=Math.max(1,Math.min(10,a.benefits.growBoost));
+    /* Sell boost (multiplier 1-5) */
+    if(typeof a.benefits.sellBoost==='number')benefits.sellBoost=Math.max(1,Math.min(5,a.benefits.sellBoost));
+    /* Mutation boost (multiplier 1-5) */
+    if(typeof a.benefits.mutBoost==='number')benefits.mutBoost=Math.max(1,Math.min(5,a.benefits.mutBoost));
+    /* Inventory cap boost (extra slots) */
+    if(typeof a.benefits.invCap==='number')benefits.invCap=Math.max(0,Math.min(500,a.benefits.invCap));
+    /* Walk speed boost (multiplier 1-3) */
+    if(typeof a.benefits.speedBoost==='number')benefits.speedBoost=Math.max(1,Math.min(3,a.benefits.speedBoost));
+   }
+   t2.role=role;t2.roleColor=color;t2.roleEffect=effect;t2.roleBenefits=benefits;t2.roleGivenBy=admin.name;
+   /* For backward compat: roleGlow=true if effect!=='none' */
+   t2.roleGlow=(effect!=='none');
+   if(role==='player'){t2.lastRolePay=0;t2.roleColor='';t2.roleEffect='none';t2.roleGlow=false;t2.roleBenefits={};}
    pushMe(t2);save();
-   broadcast({t:'pRoleUpdate',id:t2.id,role:t2.role},t2.id);
-   sendTo(admin.id,{t:'toast',msg:t2.name+' is now '+role.toUpperCase(),kind:'good'});
-   sendTo(t2.id,{t:'toast',msg:'You are now a '+role.toUpperCase()+'. '+(role==='admin'?'Press N to control weather.':role==='special'?'You receive 1M sheckles/day + 5 benefits.':''),kind:'quest'});
-   log('role:set',t2.id,role);break;}
+   broadcast({t:'pRoleUpdate',id:t2.id,role:t2.role,roleColor:t2.roleColor,roleEffect:t2.roleEffect,roleGlow:t2.roleGlow},t2.id);
+   sendTo(admin.id,{t:'toast',msg:t2.name+' is now '+role.toUpperCase()+(color?' ('+color+')':'')+(effect!=='none'?' ['+effect.toUpperCase()+']':''),kind:'good'});
+   sendTo(t2.id,{t:'toast',msg:'You are now a '+role.toUpperCase()+'.',kind:'quest'});
+   log('role:set',t2.id,role+'/'+effect+(color?'/'+color:'')+' benefits:'+JSON.stringify(benefits));break;}
   case 'listRoles':{
-   const list=[...G.players.values()].filter(p=>p.role&&p.role!=='player').map(p=>({id:p.id,name:p.name,role:p.role,givenBy:p.roleGivenBy||''}));
+   /* Return ALL players with their roles, IDs, effects, benefits — admin can see everyone */
+   const list=[...G.players.values()].map(p=>({id:p.id,pid:p.pid||'',name:p.name,role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow,roleBenefits:p.roleBenefits||{},givenBy:p.roleGivenBy||'',online:!!p.online}));
    sendTo(admin.id,{t:'admData',kind:'roles',data:list});break;}
   case 'getDeciderWishes':{
    sendTo(admin.id,{t:'admData',kind:'deciderWishes',data:G.s2.deciderWishes||[]});break;}
@@ -1169,6 +1274,46 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
   case 'matureAll':{for(const pl of G.plants.values())if(a.ownerOnly?pl.o===target.id:true)
     if(SEED_MAP[pl.s])pl.prog=SEED_MAP[pl.s].grow;
    pushPlants();break;}
+  /* ===== ADMIN SPAWN PLANT IN A PLAYER'S GARDEN =====
+     Args: targetId, seed (seedId), x, z, mature (bool), muts (array of mutation IDs)
+     The plant spawns in the target's plot at the given coordinates with optional mutations. */
+  case 'spawnPlant':{
+   if(!target)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
+   const sd=SEED_MAP[a.seed];
+   if(!sd)return sendTo(admin.id,{t:'toast',msg:'Invalid seed ID.',kind:'err'});
+   /* Use target's plot position */
+   const tp=PLOT_POS[target.plot]||[0,0];
+   const tx=+a.x||tp[0]+(Math.random()-.5)*4;
+   const tz=+a.z||tp[1]+(Math.random()-.5)*4;
+   /* Validate it's inside the target's plot */
+   const half=PLOT_HALF[target.expansion]||6;
+   if(Math.abs(tx-tp[0])>half||Math.abs(tz-tp[1])>half){
+    /* If outside plot, snap to plot center */
+    return sendTo(admin.id,{t:'toast',msg:'Coordinates outside player\'s plot. Use their plot area.',kind:'err'});
+   }
+   /* Check for collisions */
+   for(const pl of G.plants.values()){
+    if(pl.o===target.id&&dist2(pl.x,pl.z,tx,tz)<.81){
+     return sendTo(admin.id,{t:'toast',msg:'Too close to an existing plant.',kind:'err'});
+    }
+   }
+   /* Parse mutations — comma-separated string OR array, validated against MUT_MAP */
+   let muts=[];
+   if(a.muts){
+    const rawMuts=Array.isArray(a.muts)?a.muts:String(a.muts).split(',');
+    for(const m of rawMuts){const mt=String(m).trim();if(mt&&MUT_MAP[mt]&&!muts.includes(mt))muts.push(mt);}
+    if(muts.length>3)muts=muts.slice(0,3);
+   }
+   /* Create the plant */
+   const newPl={id:'P'+(G.nextId++),o:target.id,s:sd.id,x:tx,z:tz,prog:0,boostUntil:0,muts};
+   if(a.mute){newPl.prog=0;}
+   else if(a.mature||a.mature===undefined){newPl.prog=sd.grow;} /* default to mature */
+   G.plants.set(newPl.id,newPl);
+   pushPlants();G.dirty=true;save();
+   log('admin:spawnPlant',target.id,sd.id+' muts:'+muts.join(','));
+   sendTo(admin.id,{t:'toast',msg:'Spawned '+sd.n+(muts.length?(' ['+muts.join(', ')+']'):'')+' in '+target.name+'\'s garden.',kind:'good'});
+   sendTo(target.id,{t:'toast',msg:'A '+sd.n+' appeared in your garden'+(muts.length?' with mutations!':'!'),kind:'quest'});
+   break;}
   case 'chaos':{const map={goldenrain:'goldenhour',supergrowth:'giantgrowth',rainbowburst:'rainboww',
    meteorshower:'meteors',nightfall:'eclipse',cosmicbloom:'cosmicbloom',luckyharvest:'luckyharvest',
    worldtreeawake:'worldtree',petparade:'superbloom',crystalstorm:'crystalrain'};
@@ -1465,12 +1610,24 @@ if(WebSocketServer){
    G.maintenance={active:false,until:0,msg:'',fix:'',by:''};G.dirty=true;
    broadcast({t:'maintenance',until:0,msg:'',fix:'',by:''});}
   if(G.season.status==='scheduled'&&G.season.launchAt&&now()>=G.season.launchAt)launchSeason();
-  /* ===== DAILY ROLE PAYMENTS (Special role = 1M sheckles/day) ===== */
+  /* ===== DAILY ROLE PAYMENTS =====
+     Special role gets 1M sheckles/day (legacy default).
+     Custom roles with roleBenefits.cashPerDay / relicsPerDay also pay out daily. */
   const dayKey=new Date().toDateString();
   for(const p of G.players.values()){
-   if(p.role==='special'&&p.lastRolePayKey!==dayKey){
-    p.cash=(p.cash||0)+1000000;p.lastRolePayKey=dayKey;G.dirty=true;
-    if(p.online){pushMe(p);sendTo(p.id,{t:'toast',msg:'☕ Daily Special Role bonus: +1,000,000 sheckles!',kind:'quest'});}
+   if(p.lastRolePayKey===dayKey)continue;
+   let payCash=0,payRelics=0,msgs=[];
+   /* Legacy: 'special' role = 1M sheckles/day */
+   if(p.role==='special'){payCash+=1000000;msgs.push('+1,000,000 sheckles (Special Role)');}
+   /* Custom role benefits */
+   if(p.roleBenefits&&typeof p.roleBenefits==='object'){
+    if(p.roleBenefits.cashPerDay){payCash+=p.roleBenefits.cashPerDay;msgs.push('+'+p.roleBenefits.cashPerDay+' sheckles');}
+    if(p.roleBenefits.relicsPerDay){payRelics+=p.roleBenefits.relicsPerDay;msgs.push('+'+p.roleBenefits.relicsPerDay+' relics');}
+   }
+   if(payCash||payRelics){
+    p.cash=(p.cash||0)+payCash;p.relics=(p.relics||0)+payRelics;
+    p.lastRolePayKey=dayKey;G.dirty=true;
+    if(p.online){pushMe(p);sendTo(p.id,{t:'toast',msg:'☕ Daily '+p.role+' bonus: '+msgs.join(', '),kind:'quest'});}
    }
   }
  },2000);
