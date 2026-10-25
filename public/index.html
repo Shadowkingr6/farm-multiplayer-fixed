@@ -5067,12 +5067,12 @@ function animate(){
   send({t:'pos',x:+player.x.toFixed(2),z:+player.z.toFixed(2),ry:+player.ry.toFixed(2)});}
  if(typeof updateChatBubbles==='function')updateChatBubbles();
  renderer.render(scene,camera);}
-animate();
-/* ============ CHAT SYSTEM ============ */
+/* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============ */
 const chatBubbles=new Map();
 let chatOpen=false;
 let chatUnread=0;
 const settings={bubbles:true,history:true,volume:0.5};
+animate();
 /* Load saved settings */
 try{const saved=JSON.parse(localStorage.getItem('lb_settings')||'{}');
  for(const k in saved)if(k in settings)settings[k]=saved[k];}catch(e){}
