@@ -825,6 +825,47 @@ html.touch .seedCfgRow .sname{font-size:12px}
 .timerActiveCard .taTime{font-family:'Fredoka';font-size:32px;color:#e8a33d;line-height:1;font-variant-numeric:tabular-nums}
 .timerActiveCard .taText{font-size:13px;color:#f0e0c0;margin:6px 0}
 .timerActiveCard .taBy{font-size:10px;color:#8a7a60;letter-spacing:.2em;text-transform:uppercase}
+/* ============ CHAOS CINEMATIC (Sammy Snap-style) ============ */
+#chaosCinematic{position:fixed;inset:0;z-index:9000;display:none;pointer-events:none;overflow:hidden}
+#chaosCinematic.on{display:block}
+#chaosCinematicCanvas{position:absolute;inset:0;width:100%;height:100%}
+#chaosCinematicTitle{position:absolute;top:18%;left:50%;transform:translateX(-50%);
+ font-family:'Fredoka',sans-serif;font-weight:800;font-size:clamp(28px,6vw,72px);
+ color:#ff7020;text-shadow:0 0 30px #ff301066,0 0 60px #ff200044,0 4px 0 #200;
+ letter-spacing:.06em;opacity:0;text-align:center;white-space:nowrap;
+ transition:opacity .5s,transform .5s cubic-bezier(.2,1.4,.3,1)}
+#chaosCinematicTitle.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#chaosCinematicTitle .sub{display:block;font-size:clamp(14px,2.5vw,28px);color:#ffd8c0;
+ text-shadow:0 0 14px #ff301044;margin-top:8px;letter-spacing:.15em}
+#chaosCinematicSkip{position:absolute;bottom:20px;right:20px;background:#00000088;color:#ffd8c0;
+ border:1px solid #ff301055;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;
+ pointer-events:auto;font-family:'Fredoka'}
+#chaosCinematicSkip:hover{background:#000000cc}
+#chaosFlash{position:fixed;inset:0;background:#fff;z-index:9001;opacity:0;pointer-events:none}
+#chaosFlash.on{animation:chaosFlash .4s ease-out}
+@keyframes chaosFlash{0%{opacity:0}10%{opacity:.95}100%{opacity:0}}
+/* ============ HAUNTED HARVEST UI ============ */
+#hhOverlay{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:340;display:none;
+ flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:min(560px,92vw)}
+#hhOverlay.on{display:flex}
+#hhTitle{font-family:'Fredoka';font-weight:800;font-size:18px;color:#ff7020;
+ text-shadow:0 0 14px #ff301066,0 2px 0 #200;letter-spacing:.06em;text-align:center}
+#hhPhase{font-size:12px;color:#ffd8c0;letter-spacing:.2em;text-transform:uppercase;font-weight:700}
+#hhProgressBar{width:100%;height:18px;background:#1a0a0a;border:2px solid #ff301055;border-radius:9px;overflow:hidden;position:relative}
+#hhProgressBarFill{height:100%;background:linear-gradient(90deg,#ff3010,#ff8040);width:0%;transition:width .3s}
+#hhProgressBarText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+ font-size:11px;color:#fff;font-weight:700;text-shadow:0 1px 2px #000}
+#hhBossBar{width:100%;height:24px;background:#1a0a0a;border:2px solid #ff3010;border-radius:12px;overflow:hidden;position:relative;display:none}
+#hhBossBar.on{display:block}
+#hhBossBarFill{height:100%;background:linear-gradient(90deg,#c00010,#ff4020);width:100%;transition:width .2s}
+#hhBossBarText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+ font-size:13px;color:#fff;font-weight:800;text-shadow:0 1px 2px #000;font-family:'Fredoka'}
+#hhTimer{font-family:'Fredoka';font-size:14px;color:#ffd8c0;font-variant-numeric:tabular-nums}
+#hhActions{display:flex;gap:8px;pointer-events:auto}
+#hhActions button{background:linear-gradient(180deg,#ff3010,#a01010);color:#fff;border:1px solid #ff503055;
+ padding:8px 16px;border-radius:8px;font-family:'Fredoka';font-weight:600;font-size:13px;cursor:pointer}
+#hhActions button:hover{filter:brightness(1.12)}
+#hhActions button:disabled{opacity:.4;cursor:not-allowed}
 /* ============ CHAT SYSTEM + SETTINGS BUTTON (top-left corner) ============ */
 #chatHistory{position:fixed;left:14px;top:60px;width:300px;max-height:240px;overflow-y:auto;
  z-index:50;pointer-events:none;display:flex;flex-direction:column-reverse;gap:4px;opacity:.85}
@@ -942,6 +983,26 @@ html.touch #settingsBtn{left:54px}
  </div>
 </div>
 <button id="skipIntro">Skip Intro</button>
+<!-- ============ CHAOS CINEMATIC (Sammy Snap-style) ============ -->
+<div id="chaosCinematic">
+ <canvas id="chaosCinematicCanvas"></canvas>
+ <div id="chaosCinematicTitle"></div>
+ <button id="chaosCinematicSkip">Skip</button>
+</div>
+<div id="chaosFlash"></div>
+<!-- ============ HAUNTED HARVEST OVERLAY ============ -->
+<div id="hhOverlay">
+ <div id="hhTitle">🎃 THE HAUNTED HARVEST</div>
+ <div id="hhPhase">Phase 1 — The Arrival</div>
+ <div id="hhProgressBar"><div id="hhProgressBarFill"></div><div id="hhProgressBarText">Altar: 0 / 50</div></div>
+ <div id="hhBossBar"><div id="hhBossBarFill"></div><div id="hhBossBarText">Pumpkin King — 1000 HP</div></div>
+ <div id="hhTimer">--:--</div>
+ <div id="hhActions">
+  <button id="hhBtnCollect" disabled>Collect Pumpkin</button>
+  <button id="hhBtnAltar" disabled>Deliver to Altar</button>
+  <button id="hhBtnAttack" disabled>Attack Boss</button>
+ </div>
+</div>
 <canvas id="c3d"></canvas>
 <div id="navFade"></div>
 <!-- ============ CHAT SYSTEM (top-left) ============ -->
@@ -3799,6 +3860,12 @@ function handleNet(m){
    refreshPlants(m.plants);ST.stock=m.stock;ST.restockAt=m.restockAt;
    if(m.event)weather.set(m.event,true);
    updateOthers(m.players.map(p=>({...p})));
+   /* Late joiner: if HH is active, sync state */
+   if(m.hh&&typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
+   /* Late joiner: if a chaos cinematic is mid-flight, replay it */
+   if(m.chaosActivation&&m.chaosActivation.active&&m.chaosActivation.snapScheduledAt>Date.now()){
+    if(typeof ChaosCinematic!=='undefined')ChaosCinematic.start(m.chaosActivation.events,m.chaosActivation.snapScheduledAt,Date.now(),(m.chaosActivation.adminName||'Admin'));
+   }
    $('#introBar').style.width='100%';
    setTimeout(()=>{$('#intro').style.transition='opacity .7s';$('#intro').style.opacity=0;
     setTimeout(()=>{$('#intro').style.display='none';
@@ -3904,6 +3971,18 @@ function handleNet(m){
    const mutName=(typeof MUTS!=='undefined'&&MUTS[m.mut])?MUTS[m.mut].n:m.mut;
    toast('✨ Your '+m.plantName+' mutated: '+mutName+'!','quest');
    if(typeof AudioSys!=='undefined')AudioSys.play('mut');
+   break;}
+  /* ===== CHAOS CINEMATIC — Sammy Snap-style activation ===== */
+  case 'chaosCinematicStart':{
+   if(typeof ChaosCinematic!=='undefined')ChaosCinematic.start(m.events,m.snapAt,m.serverTime,m.adminName);
+   break;}
+  case 'chaosSnap':{
+   /* The snap moment happened server-side — clients play the shockwave effect */
+   if(typeof ChaosCinematic!=='undefined')ChaosCinematic.onSnap();
+   break;}
+  /* ===== HAUNTED HARVEST state updates ===== */
+  case 'hhState':{
+   if(typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
    break;}
   case 'toast':
    if(String(m.msg).startsWith('[Admin]'))showAnnounce(String(m.msg).replace('[Admin] ',''),{targeted:true});
@@ -4830,11 +4909,50 @@ function admTab(t){
    'nightfall|Nightfall','cosmicbloom|Cosmic Bloom','mutFrenzy|Mutation Frenzy','luckyharvest|Lucky Harvest',
    'petparade|Pet Parade','crystalstorm|Crystal Storm','worldtreeawake|World Tree Awakening','giantgarden|Giant Garden']
    .map(x=>{const[id,n]=x.split('|');
-    return `<button class="chaosBtn" onclick="if(confirm('Trigger ${n} for everyone?'))admCmd('chaos',{mode:'${id}'})">⚡ ${n}</button>`;}).join('')}</div></div>`;
+    return `<button class="chaosBtn" onclick="if(confirm('Trigger ${n} for everyone?'))admCmd('chaos',{mode:'${id}'})">⚡ ${n}</button>`;}).join('')}</div></div>
+  <div class="admCard" style="margin-top:18px;border:2px solid #ff301055;background:linear-gradient(135deg,#1a0a14,#0a0408)">
+   <h4 style="color:#ff7020">🎬 CHAOS ACTIVATION (Sammy Snap-style)</h4>
+   <div class="desc" style="margin-bottom:14px">Pick multiple events, then click <b>GO</b> to trigger a dramatic cinematic for ALL players.
+    A glowing figure rises from beneath the farm, snaps its fingers, and the selected events start simultaneously after the snap.</div>
+   <div id="chaosEventPicker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;margin-bottom:14px">
+    ${Object.values(EVENTS).map(e=>`<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#1a0a14;border:1px solid #ff301033;border-radius:6px;cursor:pointer;font-size:12px;color:#ffd8c0">
+      <input type="checkbox" class="chaosEventChk" value="${e.id}" style="cursor:pointer"> ${e.n}
+    </label>`).join('')}
+   </div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btnSm btnA" id="chaosSelectAll" style="background:linear-gradient(180deg,#4f9a5c,#2f5d3a)">Select All</button>
+    <button class="btnSm btnGhost" id="chaosSelectNone">Clear Selection</button>
+    <button class="btnSm btnA" id="chaosGoBtn" style="background:linear-gradient(180deg,#ff3010,#a01010);color:#fff;padding:12px 24px;font-size:15px;flex:1">🎬 GO — ACTIVATE CHAOS</button>
+   </div>
+   <div id="chaosGoResult" style="margin-top:12px"></div>
+  </div>
+  <div class="admCard" style="margin-top:18px;border:2px solid #ff602055;background:linear-gradient(135deg,#1a0a0a,#0a0408)">
+   <h4 style="color:#ff7020">🎃 HAUNTED HARVEST — Pumpkin King Invasion</h4>
+   <div class="desc" style="margin-bottom:14px">Manually trigger the 4-phase Halloween world event. Auto-triggers every 20 minutes otherwise.</div>
+   <button class="btnSm btnA" id="hhStartBtn" style="background:linear-gradient(180deg,#ff6020,#a02010);color:#fff;padding:12px 24px;font-size:15px">🎃 START HAUNTED HARVEST</button>
+  </div>`;
+ /* Wire up chaos event picker */
+ const selectAll=$('#chaosSelectAll');
+ const selectNone=$('#chaosSelectNone');
+ const goBtn=$('#chaosGoBtn');
+ if(selectAll)selectAll.onclick=()=>{document.querySelectorAll('.chaosEventChk').forEach(c=>c.checked=true);};
+ if(selectNone)selectNone.onclick=()=>{document.querySelectorAll('.chaosEventChk').forEach(c=>c.checked=false);};
+ if(goBtn)goBtn.onclick=()=>{
+  const selected=Array.from(document.querySelectorAll('.chaosEventChk:checked')).map(c=>c.value);
+  if(selected.length===0){toast('Select at least one event','err');return;}
+  if(!confirm('Trigger CHAOS ACTIVATION for ALL players with '+selected.length+' event(s)?\n\nA cinematic will play, then the events will start after the snap (~6 seconds).'))return;
+  admCmd('chaosActivate',{events:selected});
+  const res=$('#chaosGoResult');if(res)res.innerHTML='<div style="color:#80e890;font-size:13px">🎬 Chaos cinematic started! Events will trigger in ~6 seconds.</div>';
+ };
+ const hhBtn=$('#hhStartBtn');
+ if(hhBtn)hhBtn.onclick=()=>{
+  if(!confirm('Start THE HAUNTED HARVEST event for ALL players?'))return;
+  admCmd('hhStart',{});
+ };
  if(t==='Announce')el.innerHTML=`
-  <div class="admCard"><h4>Broadcast Announcement</h4>
-   <div class="admRow"><label>Message</label><input id="admAnnMsg" style="flex:1;min-width:280px" placeholder="Write your announcement…"></div>
-   <div class="admRow"><label>Color</label><input type="color" id="admAnnColor" value="#e8a33d">
+ <div class="admCard"><h4>Broadcast Announcement</h4>
+  <div class="admRow"><label>Message</label><input id="admAnnMsg" style="flex:1;min-width:280px" placeholder="Write your announcement…"></div>
+  <div class="admRow"><label>Color</label><input type="color" id="admAnnColor" value="#e8a33d">
     <label style="min-width:60px">Style</label>
     <select id="admAnnStyle"><option value="classic">Classic</option><option value="spooky">Spooky</option><option value="neon">Neon</option><option value="elegant">Elegant</option></select>
     <label style="min-width:90px">Duration (sec)</label><input type="number" id="admAnnDur" value="6" min="2" max="120" style="width:90px"></div>
@@ -5216,7 +5334,340 @@ function animate(){
   send({t:'pos',x:+player.x.toFixed(2),z:+player.z.toFixed(2),ry:+player.ry.toFixed(2)});}
  /* Throttle updateChatBubbles to every 4 frames (~15fps) — saves a lot of CPU on slow devices */
  if(typeof updateChatBubbles==='function'&&(Math.floor(t*60)&3)===0)updateChatBubbles();
+ /* Tick the Haunted Harvest UI timer every frame */
+ if(typeof HauntedHarvest!=='undefined'&&HauntedHarvest.active)HauntedHarvest.tick();
  renderer.render(scene,camera);}
+/* ============ CHAOS CINEMATIC (Sammy Snap-style) ============
+   A dramatic 6-second cinematic that plays for ALL connected players when an admin
+   triggers chaos activation. A glowing figure rises from beneath the farm, snaps its
+   fingers, and triggers a shockwave + screen flash + event title. */
+const ChaosCinematic={
+ active:false,startTime:0,snapAt:0,events:[],adminName:'',canvas:null,ctx:null,particles:[],figurY:-200,figurRot:0,
+ start(events,snapAt,srvTime,adminName){
+  if(this.active){/* already playing — ignore duplicate */return;}
+  this.active=true;this.events=events||[];this.adminName=adminName||'Admin';
+  this.startTime=Date.now();
+  /* Sync the snap time using server time offset */
+  this.snapAt=this.startTime+(snapAt-srvTime);
+  const overlay=$('#chaosCinematic');
+  if(overlay)overlay.classList.add('on');
+  this.canvas=$('#chaosCinematicCanvas');
+  if(this.canvas){
+   this.canvas.width=innerWidth;this.canvas.height=innerHeight;
+   this.ctx=this.canvas.getContext('2d');
+  }
+  /* Reset figure position — starts below the ground */
+  this.figurY=innerHeight+200;this.figurRot=0;
+  /* Generate rising particles */
+  this.particles=[];
+  for(let i=0;i<60;i++){
+   this.particles.push({x:innerWidth/2+(Math.random()-.5)*200,y:innerHeight+50+Math.random()*100,
+    vy:-2-Math.random()*4,vx:(Math.random()-.5)*1,r:1+Math.random()*3,life:Math.random(),hue:Math.random()<.5?20:280});
+  }
+  /* Play dramatic sound */
+  if(typeof AudioSys!=='undefined'){AudioSys.play('rumble');}
+  /* Tick the animation */
+  this.tick();
+  /* Skip button */
+  const skip=$('#chaosCinematicSkip');
+  if(skip)skip.onclick=()=>this.end();
+ },
+ tick(){
+  if(!this.active)return;
+  const now=Date.now();
+  const elapsed=now-this.startTime;
+  const snapElapsed=this.snapAt-this.startTime;
+  /* Phase 1 (0-3s): figure rises from below */
+  /* Phase 2 (3-5s): figure reaches pose, raises hand */
+  /* Phase 3 (5-5.5s): snap + shockwave */
+  /* Phase 4 (5.5-7s): title shows */
+  /* Phase 5 (7s+): end */
+  const ctx=this.ctx;
+  if(ctx&&this.canvas){
+   /* Fade background to dark */
+   ctx.fillStyle='rgba(10,4,8,0.3)';
+   ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+   /* Draw rising particles */
+   this.particles.forEach(p=>{
+    p.y+=p.vy;p.x+=p.vx;p.life+=0.01;
+    if(p.y<-10){p.y=innerHeight+10;p.x=innerWidth/2+(Math.random()-.5)*200;}
+    const alpha=0.4+0.4*Math.sin(p.life*5);
+    ctx.fillStyle='hsla('+p.hue+',80%,'+(50+20*Math.sin(p.life*3))+'%,'+alpha+')';
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
+   });
+   /* Draw the rising figure — a glowing humanoid silhouette */
+   const targetY=innerHeight*0.4;
+   if(elapsed<snapElapsed-1500){
+    /* Rising phase — ease out */
+    const t=Math.min(1,elapsed/(snapElapsed-1500));
+    const easeT=1-Math.pow(1-t,3);
+    this.figurY=innerHeight+200-(innerHeight+200-targetY)*easeT;
+   }else{
+    this.figurY=targetY+Math.sin(elapsed*0.005)*5;
+   }
+   /* Draw figure glow */
+   const glowGrad=ctx.createRadialGradient(innerWidth/2,this.figurY,10,innerWidth/2,this.figurY,180);
+   glowGrad.addColorStop(0,'rgba(255,80,30,0.6)');
+   glowGrad.addColorStop(0.5,'rgba(255,40,0,0.2)');
+   glowGrad.addColorStop(1,'rgba(255,40,0,0)');
+   ctx.fillStyle=glowGrad;
+   ctx.fillRect(innerWidth/2-200,this.figurY-200,400,400);
+   /* Draw figure body — hooded silhouette */
+   ctx.fillStyle='#1a0608';
+   ctx.beginPath();
+   ctx.ellipse(innerWidth/2,this.figurY,40,80,0,0,7);
+   ctx.fill();
+   /* Head */
+   ctx.beginPath();ctx.arc(innerWidth/2,this.figurY-60,28,0,7);ctx.fill();
+   /* Glowing eyes */
+   ctx.fillStyle='#ff3010';
+   ctx.shadowColor='#ff3010';ctx.shadowBlur=14;
+   ctx.beginPath();ctx.arc(innerWidth/2-10,this.figurY-65,3.5,0,7);ctx.fill();
+   ctx.beginPath();ctx.arc(innerWidth/2+10,this.figurY-65,3.5,0,7);ctx.fill();
+   ctx.shadowBlur=0;
+   /* Arm — raises before snap */
+   if(elapsed>snapElapsed-2000){
+    const armT=Math.min(1,(elapsed-(snapElapsed-2000))/1500);
+    const armAngle=-Math.PI/2*armT;
+    ctx.strokeStyle='#1a0608';ctx.lineWidth=14;
+    ctx.beginPath();
+    ctx.moveTo(innerWidth/2,this.figurY-20);
+    ctx.lineTo(innerWidth/2+Math.cos(armAngle)*50,this.figurY-20+Math.sin(armAngle)*50);
+    ctx.stroke();
+    /* Glowing hand */
+    if(armT>0.5){
+     ctx.fillStyle='#ff5020';ctx.shadowColor='#ff5020';ctx.shadowBlur=20;
+     ctx.beginPath();
+     ctx.arc(innerWidth/2+Math.cos(armAngle)*50,this.figurY-20+Math.sin(armAngle)*50,8,0,7);
+     ctx.fill();ctx.shadowBlur=0;
+    }
+   }
+  }
+  /* Snap moment — trigger shockwave */
+  if(elapsed>=snapElapsed&&!this._snapped){
+   this._snapped=true;
+   this.onSnap();
+  }
+  /* Show title after snap */
+  if(elapsed>=snapElapsed+500&&!this._titleShown){
+   this._titleShown=true;
+   const title=$('#chaosCinematicTitle');
+   if(title){
+    const evNames=this.events.map(id=>(typeof EVENTS!=='undefined'&&EVENTS[id])?EVENTS[id].n:id).join(' · ');
+    title.innerHTML='CHAOS EVENT ACTIVATED!<span class="sub">'+evNames+'</span>';
+    title.classList.add('show');
+   }
+  }
+  /* End after 8 seconds */
+  if(elapsed>8000){this.end();return;}
+  requestAnimationFrame(()=>this.tick());
+ },
+ onSnap(){
+  /* Screen flash */
+  const flash=$('#chaosFlash');
+  if(flash){flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),400);}
+  /* Shockwave particles */
+  if(this.ctx){
+   for(let i=0;i<40;i++){
+    const ang=i/40*6.28;
+    this.particles.push({x:innerWidth/2,y:this.figurY,
+     vy:Math.sin(ang)*8,vx:Math.cos(ang)*8,r:3+Math.random()*4,life:0,hue:20});
+   }
+  }
+  /* Camera shake */
+  if(typeof doShake!=='undefined')doShake(0.8,0.6);
+  /* Sound */
+  if(typeof AudioSys!=='undefined'){AudioSys.play('thunder');AudioSys.play('mut');}
+ },
+ end(){
+  this.active=false;this._snapped=false;this._titleShown=false;
+  const overlay=$('#chaosCinematic');
+  if(overlay)overlay.classList.remove('on');
+  const title=$('#chaosCinematicTitle');
+  if(title)title.classList.remove('show');
+ }
+};
+
+/* ============ HAUNTED HARVEST — Pumpkin King Invasion ============
+   4-phase world event. Server-authoritative state synced via 'hhState' messages. */
+const HauntedHarvest={
+ active:false,phase:0,phaseEnd:0,bossHealth:0,bossMaxHealth:1000,
+ altarProgress:0,altarTarget:50,pumpkins:[],treasures:[],
+ updateState(hh){
+  this.active=hh.active;this.phase=hh.phase;this.phaseEnd=hh.phaseEnd;
+  this.bossHealth=hh.bossHealth;this.bossMaxHealth=hh.bossMaxHealth;
+  this.altarProgress=hh.altarProgress;this.altarTarget=hh.altarTarget;
+  this.pumpkins=hh.pumpkins||[];this.treasures=hh.treasures||[];
+  this.render();
+ },
+ render(){
+  const overlay=$('#hhOverlay');
+  if(!overlay)return;
+  if(!this.active){overlay.classList.remove('on');return;}
+  overlay.classList.add('on');
+  /* Phase label */
+  const phaseNames=['Phase 1 — The Arrival','Phase 2 — The Hunt','Phase 3 — The Boss','Phase 4 — The Finale'];
+  const ph=$('#hhPhase');if(ph)ph.textContent=phaseNames[this.phase]||'Unknown';
+  /* Progress bar (altar) — only in Hunt phase */
+  const pb=$('#hhProgressBar');
+  if(pb){
+   if(this.phase===1){
+    pb.style.display='block';
+    const fill=$('#hhProgressBarFill');if(fill)fill.style.width=Math.min(100,this.altarProgress/this.altarTarget*100)+'%';
+    const txt=$('#hhProgressBarText');if(txt)txt.textContent='Altar: '+this.altarProgress+' / '+this.altarTarget;
+   }else{pb.style.display='none';}
+  }
+  /* Boss bar — only in Boss phase */
+  const bb=$('#hhBossBar');
+  if(bb){
+   if(this.phase===2){
+    bb.classList.add('on');
+    const fill=$('#hhBossBarFill');
+    if(fill){const pct=this.bossMaxHealth>0?this.bossHealth/this.bossMaxHealth*100:0;fill.style.width=Math.max(0,pct)+'%';}
+    const txt=$('#hhBossBarText');if(txt)txt.textContent='Pumpkin King — '+Math.max(0,this.bossHealth)+' HP';
+   }else{bb.classList.remove('on');}
+  }
+  /* Action buttons */
+  const btnCollect=$('#hhBtnCollect');
+  const btnAltar=$('#hhBtnAltar');
+  const btnAttack=$('#hhBtnAttack');
+  if(btnCollect)btnCollect.disabled=this.phase!==1;
+  if(btnAltar)btnAltar.disabled=this.phase!==1;
+  if(btnAttack)btnAttack.disabled=this.phase!==2;
+  /* Render 3D pumpkins / boss / treasures in the scene */
+  this.render3D();
+ },
+ tick(){
+  /* Update the timer */
+  const tmr=$('#hhTimer');
+  if(tmr&&this.active){
+   const rem=Math.max(0,this.phaseEnd-Date.now()-(ST.srvOffset||0));
+   const s=Math.floor(rem/1000);
+   tmr.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }
+  /* Animate boss if in boss phase */
+  if(this.active&&this.phase===2&&this._bossMesh){
+   const t=performance.now()*0.001;
+   this._bossMesh.position.y=20+Math.sin(t*1.5)*1.5;
+   this._bossMesh.rotation.y+=0.005;
+  }
+ },
+ render3D(){
+  /* Spawn/despawn 3D objects based on phase */
+  /* Cursed pumpkins — visible in Hunt phase */
+  if(this.phase===1){
+   if(!this._pumpkinMeshes){
+    this._pumpkinMeshes=new Map();
+    this.pumpkins.forEach(p=>{
+     if(p.taken)return;
+     const g=this.makePumpkin(0xff3010);
+     g.position.set(p.x,0,p.z);
+     scene.add(g);
+     this._pumpkinMeshes.set(p.id,g);
+    });
+   }
+  }else if(this._pumpkinMeshes){
+   /* Remove pumpkins */
+   for(const[,g]of this._pumpkinMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
+   this._pumpkinMeshes=null;
+  }
+  /* Boss — visible in Boss phase */
+  if(this.phase===2){
+   if(!this._bossMesh){
+    this._bossMesh=this.makePumpkinKing();
+    this._bossMesh.position.set(0,20,0);
+    scene.add(this._bossMesh);
+   }
+  }else if(this._bossMesh){
+   scene.remove(this._bossMesh);if(typeof disposeGroup==='function')disposeGroup(this._bossMesh);
+   this._bossMesh=null;
+  }
+  /* Treasures — visible in Finale phase */
+  if(this.phase===3){
+   if(!this._treasureMeshes){
+    this._treasureMeshes=new Map();
+    this.treasures.forEach(t=>{
+     if(t.taken)return;
+     const g=this.makeTreasure(t.rarity);
+     g.position.set(t.x,0.5,t.z);
+     scene.add(g);
+     this._treasureMeshes.set(t.id,g);
+    });
+   }
+  }else if(this._treasureMeshes){
+   for(const[,g]of this._treasureMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
+   this._treasureMeshes=null;
+  }
+ },
+ makePumpkin(color){
+  const g=new THREE.Group();
+  /* Pumpkin body — 8 segments around */
+  const bodyMat=new THREE.MeshLambertMaterial({color:color,emissive:new THREE.Color(color),emissiveIntensity:0.3});
+  for(let i=0;i<8;i++){
+   const seg=new THREE.Mesh(new THREE.SphereGeometry(0.7,8,8),bodyMat);
+   const ang=i/8*6.28;
+   seg.position.set(Math.cos(ang)*0.4,0.6,Math.sin(ang)*0.4);
+   seg.scale.set(0.7,1,0.5);
+   g.add(seg);
+  }
+  /* Stem */
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.15,0.4,6),new THREE.MeshLambertMaterial({color:0x4a3a1a}));
+  stem.position.y=1.3;g.add(stem);
+  /* Glowing eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xffff00});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,4),eyeMat);e1.position.set(-0.2,0.7,0.6);g.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,4),eyeMat);e2.position.set(0.2,0.7,0.6);g.add(e2);
+  return g;
+ },
+ makePumpkinKing(){
+  const g=new THREE.Group();
+  /* Enormous pumpkin body */
+  const bodyMat=new THREE.MeshLambertMaterial({color:0xff4010,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.4});
+  for(let i=0;i<12;i++){
+   const seg=new THREE.Mesh(new THREE.SphereGeometry(3,10,8),bodyMat);
+   const ang=i/12*6.28;
+   seg.position.set(Math.cos(ang)*1.8,0,Math.sin(ang)*1.8);
+   seg.scale.set(0.7,1,0.5);
+   g.add(seg);
+  }
+  /* Crown */
+  const crownMat=new THREE.MeshLambertMaterial({color:0xffd24a,emissive:new THREE.Color(0xffa020),emissiveIntensity:0.3});
+  for(let i=0;i<5;i++){
+   const spike=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.5,6),crownMat);
+   const ang=i/5*6.28;
+   spike.position.set(Math.cos(ang)*1.4,3.5,Math.sin(ang)*1.4);
+   g.add(spike);
+  }
+  /* Glowing eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xffff00});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),eyeMat);e1.position.set(-1,0.5,2.5);g.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),eyeMat);e2.position.set(1,0.5,2.5);g.add(e2);
+  /* Mouth */
+  const mouth=new THREE.Mesh(new THREE.TorusGeometry(1.2,0.2,6,12,Math.PI),new THREE.MeshBasicMaterial({color:0xffff00}));
+  mouth.position.set(0,-1,2.5);mouth.rotation.z=Math.PI;g.add(mouth);
+  return g;
+ },
+ makeTreasure(rarity){
+  const g=new THREE.Group();
+  const colors={Common:0x80c0ff,Rare:0xc080ff,Epic:0xff80c0,Legendary:0xffc040};
+  const col=colors[rarity]||0x80c0ff;
+  const mat=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:0.5});
+  /* Chest body */
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.5,0.6),mat);body.position.y=0.3;g.add(body);
+  /* Lid */
+  const lid=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.25,0.6),mat);lid.position.y=0.65;g.add(lid);
+  /* Glow */
+  const glow=new THREE.PointLight(col,2,8);glow.position.y=0.5;g.add(glow);
+  return g;
+ }
+};
+/* Wire up HH action buttons */
+(function(){
+ const bc=$('#hhBtnCollect');if(bc)bc.onclick=()=>{send({t:'hhCollectPumpkin',pumpkinId:HauntedHarvest._nearestPumpkinId||''});};
+ const ba=$('#hhBtnAltar');if(ba)ba.onclick=()=>{send({t:'hhDeliverAltar'});};
+ const bat=$('#hhBtnAttack');if(bat)bat.onclick=()=>{send({t:'hhAttackBoss'});};
+})();
+
 /* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============
    Without this, updateChatBubbles() throws "Cannot access 'chatBubbles' before initialization"
    because const is in the temporal dead zone until its declaration line executes. */
