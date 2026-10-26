@@ -219,6 +219,46 @@ const EVENTS=[
 ];
 const EV_MAP=Object.fromEntries(EVENTS.map(e=>[e.id,e]));
 
+/* ================= ROLE SHOP (purchasable roles) =================
+   Players can buy these roles from the Game Shop. Each role has a price + benefits.
+   - VIP: 2x speed + 2k sheckles/day for 2 relics
+   - Novice: 10k sheckles/day + 0.5 relics/day for 20 relics
+   - Scuba: 5x money multiplier for 1 billion sheckles (LIMITED — only available for 24 hours after first server start, then gone forever) */
+const SHOP_ROLES=[
+ {id:'vip',n:'VIP',icon:'◆',color:'#ffd24a',effect:'glow',
+  cur:'relics',price:2,
+  benefits:{speedBoost:2,cashPerDay:2000},
+  desc:'2x speed boost + 2,000 sheckles/day',
+  bg:'#3a2810',bgAccent:'#ffd24a'},
+ {id:'novice',n:'Novice',icon:'★',color:'#a86fd6',effect:'neon',
+  cur:'relics',price:20,
+  benefits:{cashPerDay:10000,relicsPerDay:0.5},
+  desc:'10,000 sheckles/day + 0.5 relics/day',
+  bg:'#1a0a3a',bgAccent:'#a86fd6'},
+ {id:'scuba',n:'Scuba',icon:'🏊',color:'#3ac0e0',effect:'ice',
+  cur:'cash',price:1000000000,
+  benefits:{sellBoost:5},
+  desc:'5x money multiplier on all fruit sales',
+  bg:'#0a2a3a',bgAccent:'#3ac0e0',
+  limited:true,limitedDurationMs:24*60*60*1000 /* 24 hours */}
+];
+const SHOP_ROLE_MAP=Object.fromEntries(SHOP_ROLES.map(r=>[r.id,r]));
+/* When the server first starts, set the Scuba limited timer */
+if(!global._scubaExpiresAt){
+ global._scubaExpiresAt=Date.now()+24*60*60*1000;
+}
+function getShopRolesState(){
+ /* Returns the list of available shop roles, with Scuba's expiry timestamp if limited */
+ return SHOP_ROLES.map(r=>{
+  const out={...r};
+  if(r.limited){
+   out.expiresAt=global._scubaExpiresAt;
+   out.expired=Date.now()>global._scubaExpiresAt;
+  }
+  return out;
+ });
+}
+
 /* ================= GEAR / PETS / EGGS ================= */
 const GEAR=[
  {id:'watercan',n:'Basic Watering Can',pr:100,fx:{water:1.6}},{id:'watercan2',n:'Improved Watering Can',pr:800,fx:{water:1.8}},
@@ -394,6 +434,7 @@ function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
+ scubaExpiresAt:global._scubaExpiresAt||0, /* persist Scuba limited-time timer across server restarts */
  players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
  fs.writeFileSync(SAVE_FILE+'.tmp',JSON.stringify(data));fs.renameSync(SAVE_FILE+'.tmp',SAVE_FILE);
@@ -427,6 +468,9 @@ function load(){let raw=null;
   if(!Array.isArray(G.s2.deciderWishes))G.s2.deciderWishes=[];
   if(d.event&&EV_MAP[d.event.id]&&d.event.end>Date.now())G.event={def:EV_MAP[d.event.id],start:d.event.start,end:d.event.end};
   else G.nextEventRoll=Date.now()+20000;
+  /* Restore Scuba limited-time expiry from save (so it persists across server restarts) */
+  if(d.scubaExpiresAt&&d.scubaExpiresAt>Date.now()){global._scubaExpiresAt=d.scubaExpiresAt;}
+  else if(d.scubaExpiresAt&&d.scubaExpiresAt<=Date.now()){global._scubaExpiresAt=d.scubaExpiresAt; /* already expired — keep it expired forever */}
   for(const p of d.players||[]){
    if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
    if(p.lastAlienTry===undefined)p.lastAlienTry=0;if(p.deciderBought===undefined)p.deciderBought=false;
@@ -556,6 +600,7 @@ function sendInitData(sock,p){
   plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
   prices:priceMap(),cfg:G.shopConfig,
   emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
+  shopRoles:getShopRolesState(),
   event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
   plots:G.plots,plotPos:PLOT_POS,
   players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,pid:x.pid||'',name:x.name,x:x.x||0,z:x.z||0,ry:0,
@@ -663,8 +708,8 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    /* Strip HTML to prevent injection */
    text=text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
    p._lastChat=now();
-   /* Broadcast to EVERYONE (including sender so client can confirm + show bubble) */
-   broadcast({t:'chat',id:p.id,name:p.name,text:text,role:p.role||'player'});
+   /* Broadcast to EVERYONE with a unique message ID (prevents client-side duplicates) */
+   broadcast({t:'chat',mid:'M'+(G.nextId++),id:p.id,name:p.name,text:text,role:p.role||'player'});
    break;}
   /* ================= HEART FEEDING (Season 2) ================= */
   case 'feedHeart':{
@@ -805,6 +850,34 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    pushMe(p);save();
    broadcast({t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
    sendTo(p.id,{t:'toast',msg:'Unlocked '+b.n+'! Equipped.',kind:'quest'});break;}
+  /* ===== BUY ROLE FROM GAME SHOP =====
+     Players can purchase roles with relics or sheckles. Limited-time roles (Scuba) become
+     unavailable forever after their timer expires. */
+  case 'buyRole':{
+   const r=SHOP_ROLE_MAP[msg.roleId];
+   if(!r)return sendTo(p.id,{t:'toast',msg:'Role not found.',kind:'err'});
+   /* Check limited-time expiry */
+   if(r.limited&&Date.now()>global._scubaExpiresAt){
+    return sendTo(p.id,{t:'toast',msg:'This role is no longer available — it was limited-time only.',kind:'err'});
+   }
+   /* Check if player already has this role */
+   if(p.role===r.n)return sendTo(p.id,{t:'toast',msg:'You already have the '+r.n+' role.',kind:'err'});
+   /* Check currency */
+   if(r.cur==='relics'){
+    if((p.relics||0)<r.price)return sendTo(p.id,{t:'toast',msg:'Need '+r.price+' relics to buy '+r.n+'.',kind:'err'});
+    p.relics-=r.price;
+   }else{
+    if(p.cash<r.price)return sendTo(p.id,{t:'toast',msg:'Need '+r.price+' sheckles to buy '+r.n+'.',kind:'err'});
+    p.cash-=r.price;
+   }
+   /* Apply the role */
+   p.role=r.n;p.roleColor=r.color;p.roleEffect=r.effect;p.roleGlow=(r.effect!=='none');
+   p.roleBenefits={...r.benefits};p.roleGivenBy='Shop Purchase';
+   pushMe(p);save();
+   broadcast({t:'pRoleUpdate',id:p.id,role:p.role,roleColor:p.roleColor,roleEffect:p.roleEffect,roleGlow:p.roleGlow},p.id);
+   sendTo(p.id,{t:'toast',msg:'✓ You are now a '+r.n+'! '+r.desc,kind:'quest'});
+   log('role:buy',p.id,r.n);
+   break;}
   /* ================= EXISTING GAMEPLAY ================= */
   case 'buySeed':{const sd=SEED_MAP[msg.seedId];if(!sd)return;
    const cfg=G.shopConfig[sd.id];

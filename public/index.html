@@ -53,17 +53,23 @@ input[type=color]{padding:2px;width:52px;height:38px;cursor:pointer}
 .spkWinHead h2{font-family:'Creepster',cursive!important;letter-spacing:.05em!important;text-shadow:0 0 14px #ff300055!important}
 .spkWinHead button{background:#ffffff14;color:#ffb070}
 .spkWinBody{background:transparent!important;color:#d8c0d0!important}
-.spkSec{margin-bottom:22px;animation:fadeIn .5s both}
-.spkSecH{font-family:'Creepster',cursive;font-size:26px;color:#ff8a40;letter-spacing:.06em;
- text-shadow:0 0 14px #ff300066;margin-bottom:4px}
-.spkSecS{font-size:11px;color:#9a7090;letter-spacing:.3em;text-transform:uppercase;font-weight:800;margin-bottom:14px}
+.spkSec{margin-bottom:24px;animation:fadeIn .5s both;padding:16px;background:rgba(20,12,28,.4);border-radius:14px;border:1px solid #2a1838}
+.spkSecH{font-family:'Fredoka',sans-serif;font-weight:700;font-size:18px;color:#80e890;letter-spacing:.04em;
+ margin-bottom:2px;text-shadow:0 0 10px #4fae6844}
+.spkSecS{font-size:11px;color:#5a8a6a;letter-spacing:.18em;text-transform:uppercase;font-weight:700;margin-bottom:14px}
 .spkCard{background:linear-gradient(160deg,#1e1028ee,#120818ee);border:1px solid #3a2048;border-radius:12px;
  padding:14px;display:flex;flex-direction:column;gap:6px;transition:transform .18s,border-color .18s,box-shadow .18s}
-.spkCard:hover{transform:translateY(-4px);border-color:#ff702088;box-shadow:0 10px 26px #00000088}
+.spkCard:hover{transform:translateY(-4px);border-color:#4fae6888;box-shadow:0 10px 26px #00000088}
 .spkCard .nm{font-family:'Fredoka';font-size:14px;color:#e8d8f0}
 .spkCard .mt{font-size:11px;color:#9a80a0;line-height:1.5}
 .spkCard button{font-size:12px;padding:7px 12px;border-radius:8px}
-.spkGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.spkGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+/* Role shop card */
+.roleCard{overflow:hidden;position:relative}
+.roleCard .btnA{background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;border:1px solid #4fae6855;font-family:'Fredoka';font-weight:600;cursor:pointer;padding:9px;border-radius:8px;font-size:13px}
+.roleCard .btnA:hover{filter:brightness(1.12)}
+.roleCard .btnA:disabled{opacity:.5;cursor:not-allowed}
+.roleCard .btnG{background:linear-gradient(180deg,#2f5d3a,#1a3a22);color:#80e890;border:1px solid #4fae6855;font-family:'Fredoka';font-weight:600;cursor:default;padding:9px;border-radius:8px;font-size:13px}
 .emotePrev{width:44px;height:44px;border-radius:11px;background:radial-gradient(circle at 40% 35%,#3a2a4a,#180a20);
  border:2px solid #4a3060;display:flex;align-items:center;justify-content:center;margin-bottom:4px}
 .emotePrev svg{width:26px;height:26px}
@@ -131,6 +137,7 @@ input[type=color]{padding:2px;width:52px;height:38px;cursor:pointer}
 @keyframes logoIn{from{transform:scale(.5);opacity:0;letter-spacing:.3em}}
 #introCard .tag{color:#80c090;letter-spacing:.4em;font-size:12px;text-transform:uppercase;margin:10px 0 30px;animation:fadeIn 1s .4s both;font-family:'Fredoka';font-weight:600}
 @keyframes fadeIn{from{opacity:0}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.85}}
 .iField{background:linear-gradient(180deg,#0e2418,#06120c);border:2px solid #2f5d3a;border-radius:16px;padding:26px 30px;
  box-shadow:0 20px 60px #000a,0 0 40px #2f5d3a22;animation:fadeIn 1s .7s both}
 .iField label{display:block;font-family:'Fredoka',sans-serif;font-weight:700;font-size:20px;color:#80e890;margin-bottom:10px;letter-spacing:.05em}
@@ -1251,33 +1258,15 @@ function mat(c,o={}){const k=c+JSON.stringify(o);if(!MAT[k])MAT[k]=new THREE.Mes
 function um(c){return new THREE.MeshLambertMaterial({color:c});}   /* unique material — for skinnable farmers */
 function box(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);return m;}
 function ubox(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),um(c));m.position.set(x,y,z);return m;}
-/* Higher-poly defaults for smoother look — was 16/12, now 24/16 */
-function sph(r,c,x=0,y=0,z=0,s=24){const m=new THREE.Mesh(new THREE.SphereGeometry(r,s,Math.max(14,s-6)),mat(c));m.position.set(x,y,z);return m;}
-function cyl(rt,rb,h,c,x=0,y=0,z=0,s=16){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c));m.position.set(x,y,z);return m;}
-function cone(r,h,c,x=0,y=0,z=0,s=16){const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c));m.position.set(x,y,z);return m;}
-/* Rounded box — bevelled edges using BoxGeometry with high segments + bevel via scale trick (no, simpler: use a sphere stretch)
-   For chunky-smooth look we use a slightly smaller box + overlay sphere corners. Cheap & effective. */
+/* Sphere/cylinder/cone helpers — moderate poly count for performance vs visual quality balance */
+function sph(r,c,x=0,y=0,z=0,s=14){const m=new THREE.Mesh(new THREE.SphereGeometry(r,s,Math.max(10,s-4)),mat(c));m.position.set(x,y,z);return m;}
+function cyl(rt,rb,h,c,x=0,y=0,z=0,s=10){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),mat(c));m.position.set(x,y,z);return m;}
+function cone(r,h,c,x=0,y=0,z=0,s=10){const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,s),mat(c));m.position.set(x,y,z);return m;}
+/* Rounded box — PERFORMANCE-OPTIMIZED: just a regular box with bevel shader-like normal smoothing
+   is too expensive. Instead we use a simple BoxGeometry — the chunky look is fine and saves draw calls. */
 function rbox(w,h,d,c,x=0,y=0,z=0){
- const g=new THREE.Group();
- const core=new THREE.Mesh(new THREE.BoxGeometry(w*.92,h*.92,d*.92),um(c));g.add(core);
- /* Add 8 corner spheres for a rounded look */
- const r=Math.min(w,h,d)*.18;
- const hw=w*.46,hh=h*.46,hd=d*.46;
- for(const sx of[-1,1])for(const sy of[-1,1])for(const sz of[-1,1]){
-  const cs=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),um(c));
-  cs.position.set(sx*hw,sy*hh,sz*hd);g.add(cs);
- }
- /* Edge cylinders along each axis */
- const er=r*.7;
- for(const sx of[-1,1])for(const sy of[-1,1]){
-  const ex=new THREE.Mesh(new THREE.CylinderGeometry(er,er,w*.92,10),um(c));
-  ex.rotation.z=Math.PI/2;ex.position.set(0,sy*hh,sx*hd);g.add(ex);
-  const ey=new THREE.Mesh(new THREE.CylinderGeometry(er,er,h*.92,10),um(c));
-  ey.position.set(sx*hw,0,sy*hd);g.add(ey);
-  const ez=new THREE.Mesh(new THREE.CylinderGeometry(er,er,d*.92,10),um(c));
-  ez.rotation.x=Math.PI/2;ez.position.set(sx*hw,sy*hh,0);g.add(ez);
- }
- g.position.set(x,y,z);g.children.forEach(ch=>{ch.castShadow=true;});return g;
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),um(c));
+ m.position.set(x,y,z);m.castShadow=true;return m;
 }
 function disposeGroup(g){g.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
 function distTo(a,b,c,d){return Math.hypot(a-c,b-d);}
@@ -1957,17 +1946,17 @@ function makeFarmer(shirtCol,skinCol,hatCol,hairCol,pantsCol){
  P.armR.add(sph(.11,skinCol,0,-.6,0));
  /* Head — sphere instead of box for smooth look */
  P.head=new THREE.Group();P.head.position.set(0,2.36,0);
- const skull=new THREE.Mesh(new THREE.SphereGeometry(.32,24,18),um(skinCol));
+ const skull=new THREE.Mesh(new THREE.SphereGeometry(.32,14,11),um(skinCol));
  skull.scale.set(.95,1,.95);P.head.add(skull);P.head.userData.skull=skull;
  /* Hair cap */
- const hair=new THREE.Mesh(new THREE.SphereGeometry(.34,20,14,0,Math.PI*2,0,Math.PI/2),um(hairCol));
+ const hair=new THREE.Mesh(new THREE.SphereGeometry(.34,12,9,0,Math.PI*2,0,Math.PI/2),um(hairCol));
  hair.position.y=.04;P.head.add(hair);hair.userData.isHat=true;
  /* Hat — wide flat-brimmed farmer hat */
- const brim=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.06,24),um(hatCol));
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.06,14),um(hatCol));
  brim.position.y=.22;P.head.add(brim);brim.userData.isHat=true;
- const crown=new THREE.Mesh(new THREE.CylinderGeometry(.28,.32,.28,20),um(hatCol));
+ const crown=new THREE.Mesh(new THREE.CylinderGeometry(.28,.32,.28,12),um(hatCol));
  crown.position.y=.38;P.head.add(crown);crown.userData.isHat=true;
- const band=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.06,20),um(0x6a4426));
+ const band=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.06,12),um(0x6a4426));
  band.position.y=.28;P.head.add(band);band.userData.isHat=true;
  /* Eyes */
  P.head.add(sph(.045,0x2a2a2a,-.12,.02,.05));
@@ -2103,12 +2092,12 @@ function makeVampire(){
  g.add(P.torso);
  /* Head — sphere for smooth look */
  P.head=new THREE.Group();P.head.position.y=2.36;
- const skull=mk(new THREE.SphereGeometry(.32,24,18),skinMat);skull.scale.set(.95,1,.95);P.head.add(skull);
+ const skull=mk(new THREE.SphereGeometry(.32,14,11),skinMat);skull.scale.set(.95,1,.95);P.head.add(skull);
  /* Slicked-back hair */
- const hair=mk(new THREE.SphereGeometry(.34,20,14,0,Math.PI*2,0,Math.PI/2.2),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ const hair=mk(new THREE.SphereGeometry(.34,12,9,0,Math.PI*2,0,Math.PI/2.2),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
  hair.position.y=.04;P.head.add(hair);
  /* Widow's peak */
- const peak=mk(new THREE.ConeGeometry(.1,.12,12),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ const peak=mk(new THREE.ConeGeometry(.1,.12,8),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
  peak.position.set(0,.1,.22);peak.rotation.x=Math.PI;P.head.add(peak);
  /* Red glowing eyes */
  P.head.add(mk(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(-.12,.04,.28);
@@ -2472,7 +2461,7 @@ function packetTexture(sd){
  c.fillText(sd.n,96,216);
  return new THREE.CanvasTexture(cv);}
 const VGeo={};
-function gFruit(){if(!VGeo.fruit)VGeo.fruit=new THREE.SphereGeometry(1,18,14);return VGeo.fruit;}
+function gFruit(){if(!VGeo.fruit)VGeo.fruit=new THREE.SphereGeometry(1,12,9);return VGeo.fruit;}
 const flyAnims=[],flyTmp=new THREE.Vector3();
 const easeOutCubic=k=>1-Math.pow(1-k,3);
 const HandItem={
@@ -3074,10 +3063,10 @@ function updateSky(t){
  hemi.intensity=ST.halloween?.3:.42;
  sun.target.position.set(player.x,0,player.z);
  sun.position.set(player.x+30,60,player.z-40);}
-/* PLANT MODELS — smoother geometry for non-chunky look */
+/* PLANT MODELS — moderate-poly geometry for performance */
 const VGeo2={},VMat={};
-function gLeaf(){if(!VGeo2.leaf){VGeo2.leaf=new THREE.SphereGeometry(1,16,10);VGeo2.leaf.scale(.55,1,.14);}return VGeo2.leaf;}
-function gStem(seg){if(!VGeo2['st'+seg])VGeo2['st'+seg]=new THREE.CylinderGeometry(1,1,1,Math.max(seg,8));return VGeo2['st'+seg];}
+function gLeaf(){if(!VGeo2.leaf){VGeo2.leaf=new THREE.SphereGeometry(1,10,7);VGeo2.leaf.scale(.55,1,.14);}return VGeo2.leaf;}
+function gStem(seg){if(!VGeo2['st'+seg])VGeo2['st'+seg]=new THREE.CylinderGeometry(1,1,1,Math.max(seg,6));return VGeo2['st'+seg];}
 function vmat(c,e){const k=c+'|'+(e||'');
  if(!VMat[k])VMat[k]=new THREE.MeshLambertMaterial({color:c,
   emissive:e?new THREE.Color(e):new THREE.Color(0)});return VMat[k];}
@@ -3805,6 +3794,7 @@ function handleNet(m){
    ST.season=m.season||{status:'inactive'};
    ST.prices=m.prices||{};ST.shopCfg=m.cfg||{};
    ST.emoteStock=m.emoteStock||{};ST.emoteRestockAt=m.emoteRestockAt||0;
+   ST.shopRoles=m.shopRoles||[];
    setMyTag(ST.me.name);updateGameShopBtn();
    refreshPlants(m.plants);ST.stock=m.stock;ST.restockAt=m.restockAt;
    if(m.event)weather.set(m.event,true);
@@ -3897,6 +3887,14 @@ function handleNet(m){
    break;}
   case 'chat':{
    /* Chat message from another player (or ourselves — echo from server) */
+   /* Deduplicate by message ID — prevents the same message appearing multiple times
+      if multiple WebSocket listeners are attached (e.g. after reconnects) */
+   if(m.mid){
+    if(chatSeenMids.has(m.mid))break; /* already processed — skip */
+    chatSeenMids.add(m.mid);
+    /* Keep the set from growing forever — keep last 100 message IDs */
+    if(chatSeenMids.size>100){const arr=[...chatSeenMids];chatSeenMids=new Set(arr.slice(-100));}
+   }
    const isMe=ST.me&&m.id===ST.me.id;
    addChatMessage(m.name,m.text,m.role);
    if(settings.bubbles||typeof settings==='undefined')showChatBubble(isMe?'me':m.id,m.name,m.text);
@@ -4178,6 +4176,8 @@ const UI={openWins:[],
    <p>Something is sealed inside… only an administrator can break the seal.</p></div>`;
   const body=this.showSpk('Game Shop',`
    <div class="spkSec"><div class="spkSecH">Seed Packs</div><div class="spkSecS">the sealed vault</div>${packHtml}</div>
+   <div class="spkSec"><div class="spkSecH">Roles</div><div class="spkSecS">purchase permanent role perks — limited-time roles disappear forever after their timer ends</div>
+    <div id="roleShopGrid" class="spkGrid"></div></div>
    <div class="spkSec"><div class="spkSecH">Emote Shop</div>
     <div class="spkSecS">global stock · every player sees the same wares · rotates every 2 hours</div>
     ${emRows||'<div class="mt">Restocking…</div>'}</div>
@@ -4190,6 +4190,8 @@ const UI={openWins:[],
     <h3>THE REBIRTH</h3><div class="dots">· · · · ·</div>
     <p>something stirs beneath the island · season two approaches</p>
    </div></div>`);
+  /* ===== Build Role Shop cards with 3D animated backgrounds ===== */
+  this.buildRoleShopCards($('#roleShopGrid'),me);
   const bp=$('#buyPackBtn');
   if(bp)bp.onclick=()=>{AudioSys.play('click');send({t:'buyPack'});};
   body.querySelectorAll('button[data-emote]').forEach(b=>{
@@ -4202,6 +4204,153 @@ const UI={openWins:[],
    b.onclick=()=>{AudioSys.play('click');send({t:'equipSkin',skinId:me.activeSkin===b.dataset.skin?null:b.dataset.skin});};});
   const be=$('#buyExpand');
   if(be)be.onclick=()=>{AudioSys.play('click');send({t:'expandPlot'});};},
+
+ /* ===== BUILD ROLE SHOP CARDS with 3D animated backgrounds =====
+    Each role card has a small 3D canvas behind it matching the role's theme.
+    VIP = golden particles floating up; Novice = purple swirl; Scuba = blue bubbles. */
+ buildRoleShopCards(grid,me){
+  if(!grid)return;
+  const roles=ST.shopRoles||[];
+  if(!roles.length){grid.innerHTML='<div class="mt" style="grid-column:1/-1">No roles available.</div>';return;}
+  grid.innerHTML='';
+  /* Tick the Scuba timer every second */
+  if(this._roleShopTimer)clearInterval(this._roleShopTimer);
+  this._roleShopTimer=setInterval(()=>{
+   const now=Date.now();
+   roles.forEach(r=>{
+    if(r.limited){
+     const cd=document.getElementById('roleCd_'+r.id);
+     const card=document.getElementById('roleCard_'+r.id);
+     if(r.expired||(r.expiresAt&&now>r.expiresAt)){
+      if(cd)cd.textContent='EXPIRED';
+      if(card){card.style.opacity='.4';const b=card.querySelector('button');if(b){b.disabled=true;b.textContent='No longer available';}}
+     }else if(r.expiresAt){
+      const rem=r.expiresAt-now;
+      const h=Math.floor(rem/3600000),m=Math.floor(rem%3600000/60000),s=Math.floor(rem%60000/1000);
+      if(cd)cd.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+     }
+    }
+   });
+  },1000);
+  roles.forEach(r=>{
+   const owned=me.role===r.n;
+   const expired=r.limited&&(r.expired||(r.expiresAt&&Date.now()>r.expiresAt));
+   const card=document.createElement('div');
+   card.id='roleCard_'+r.id;
+   card.className='spkCard roleCard';
+   card.style.cssText='position:relative;overflow:hidden;border:2px solid '+r.color+'66;background:linear-gradient(160deg,'+r.bg+',#04060a);min-height:220px;padding:0';
+   /* Build the 3D background canvas */
+   const bg=document.createElement('canvas');
+   bg.width=200;bg.height=120;
+   bg.style.cssText='position:absolute;inset:0;width:100%;height:140px;pointer-events:none;opacity:.6';
+   card.appendChild(bg);
+   this.renderRoleBg(bg,r);
+   /* Content overlay */
+   const content=document.createElement('div');
+   content.style.cssText='position:relative;z-index:2;padding:14px;display:flex;flex-direction:column;height:100%;min-height:220px';
+   /* Limited badge for Scuba */
+   let limitedHtml='';
+   if(r.limited&&!expired){
+    limitedHtml='<div style="position:absolute;top:10px;right:10px;background:#ff3010;color:#fff;font-family:Fredoka;font-weight:800;font-size:10px;padding:4px 10px;border-radius:8px;letter-spacing:.15em;animation:pulse 1.2s infinite;z-index:3">LIMITED</div>';
+   }
+   if(r.limited&&expired){
+    limitedHtml='<div style="position:absolute;top:10px;right:10px;background:#5a3020;color:#ffd0a0;font-family:Fredoka;font-weight:800;font-size:10px;padding:4px 10px;border-radius:8px;z-index:3">EXPIRED</div>';
+   }
+   const priceTxt=r.cur==='relics'?(r.price+' Relics'):fmt(r.price)+' Sheckles';
+   let btnHtml;
+   if(expired){btnHtml='<button class="btnGhost" disabled style="opacity:.5">No longer available</button>';}
+   else if(owned){btnHtml='<button class="btnG" disabled>✓ Owned</button>';}
+   else{btnHtml='<button class="btnA" data-rolebuy="'+r.id+'">Buy — '+priceTxt+'</button>';}
+   const cdHtml=r.limited&&!expired?'<div style="font-size:11px;color:#ff8060;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums">⏱ <span id="roleCd_'+r.id+'">--:--:--</span></div>':'';
+   content.innerHTML=`
+    ${limitedHtml}
+    <div style="font-size:42px;color:${r.color};text-shadow:0 0 14px ${r.color}aa;line-height:1;margin-bottom:6px">${r.icon}</div>
+    <div class="nm" style="color:${r.color};font-size:20px;font-weight:700;letter-spacing:.04em">${r.n.toUpperCase()}</div>
+    <div class="mt" style="color:#cdd5e0;font-size:12px;line-height:1.5;margin:6px 0">${r.desc}</div>
+    <div style="flex:1"></div>
+    ${cdHtml}
+    <div style="margin-top:8px">${btnHtml}</div>`;
+   card.appendChild(content);
+   grid.appendChild(card);
+  });
+  /* Wire up buy buttons */
+  grid.querySelectorAll('button[data-rolebuy]').forEach(b=>{
+   b.onclick=()=>{AudioSys.play('click');send({t:'buyRole',roleId:b.dataset.rolebuy});};
+  });
+ },
+
+ /* ===== Render a small 3D animated background canvas for each role card =====
+    VIP: golden particles rising; Novice: purple swirling stars; Scuba: blue bubbles floating up */
+ renderRoleBg(canvas,r){
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  /* Particle array */
+  const particles=[];
+  const N=24;
+  for(let i=0;i<N;i++){
+   particles.push({
+    x:Math.random()*W,y:Math.random()*H,
+    vx:(Math.random()-.5)*0.4,vy:-0.3-Math.random()*0.6,
+    r:1+Math.random()*2.5,life:Math.random(),
+    hue:0
+   });
+  }
+  /* Animation loop */
+  let running=true;
+  const _rafKey='_roleBgRAF_'+r.id;
+  if(this[_rafKey])cancelAnimationFrame(this[_rafKey]);
+  const tick=()=>{
+   if(!running)return;
+   /* Fade background */
+   ctx.fillStyle=r.bg;
+   ctx.fillRect(0,0,W,H);
+   /* Role-specific particles */
+   if(r.id==='vip'){
+    /* Golden particles rising */
+    particles.forEach(p=>{
+     p.y+=p.vy;p.x+=Math.sin(p.life*3)*0.4;
+     if(p.y<-5){p.y=H+5;p.x=Math.random()*W;}
+     p.life+=0.01;
+     ctx.fillStyle='rgba(255,210,74,'+(0.4+0.4*Math.sin(p.life*5))+')';
+     ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
+    });
+   }else if(r.id==='novice'){
+    /* Purple swirling stars */
+    particles.forEach(p=>{
+     const cx=W/2,cy=H/2;
+     p.life+=0.01;
+     const ang=p.life*2+p.r*3;
+     const rad=20+p.r*15;
+     p.x=cx+Math.cos(ang)*rad;p.y=cy+Math.sin(ang)*rad*0.6;
+     ctx.fillStyle='rgba(168,111,214,'+(0.5+0.4*Math.sin(p.life*4))+')';
+     ctx.beginPath();ctx.arc(p.x,p.y,p.r*0.8,0,7);ctx.fill();
+    });
+   }else if(r.id==='scuba'){
+    /* Blue bubbles floating up */
+    particles.forEach(p=>{
+     p.y+=p.vy*1.5;p.x+=Math.sin(p.life*4)*0.6;
+     if(p.y<-5){p.y=H+5;p.x=Math.random()*W;p.r=2+Math.random()*4;}
+     p.life+=0.02;
+     ctx.strokeStyle='rgba(58,192,224,'+(0.5+0.3*Math.sin(p.life*3))+')';
+     ctx.lineWidth=1.2;
+     ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.stroke();
+     ctx.fillStyle='rgba(58,192,224,0.1)';
+     ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
+    });
+   }
+   /* Glow accent at bottom */
+   const grad=ctx.createLinearGradient(0,H,0,H-40);
+   grad.addColorStop(0,r.bgAccent+'66');
+   grad.addColorStop(1,'transparent');
+   ctx.fillStyle=grad;ctx.fillRect(0,H-40,W,40);
+   this[_rafKey]=requestAnimationFrame(tick);
+  };
+  tick();
+  /* Stop animation when the shop window closes — checked via canvas being in DOM */
+  const _checkAlive=setInterval(()=>{
+   if(!document.body.contains(canvas)){running=false;clearInterval(_checkAlive);cancelAnimationFrame(this[_rafKey]);}
+  },1000);
+ },
  openSeedShop(){
   this.showSpk('Seed Shop — Sam\u2019s Stall',`<div class="spkSec"><div class="spkSecH">SPOOKY SEEDS</div>
    <div class="spkSecS">season 1 · halloween harvest</div></div>
@@ -5065,12 +5214,16 @@ function animate(){
     ac.textContent=has?(cd>0?Math.ceil(cd/60000)+' min':'READY'):'pet not equipped';}}}
  if(ST.connected&&t*1000-posT>90&&!inputLocked){posT=t*1000;
   send({t:'pos',x:+player.x.toFixed(2),z:+player.z.toFixed(2),ry:+player.ry.toFixed(2)});}
- if(typeof updateChatBubbles==='function')updateChatBubbles();
+ /* Throttle updateChatBubbles to every 4 frames (~15fps) — saves a lot of CPU on slow devices */
+ if(typeof updateChatBubbles==='function'&&(Math.floor(t*60)&3)===0)updateChatBubbles();
  renderer.render(scene,camera);}
-/* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============ */
+/* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============
+   Without this, updateChatBubbles() throws "Cannot access 'chatBubbles' before initialization"
+   because const is in the temporal dead zone until its declaration line executes. */
 const chatBubbles=new Map();
 let chatOpen=false;
 let chatUnread=0;
+const chatSeenMids=new Set(); /* deduplication set — prevents chat messages appearing multiple times */
 const settings={bubbles:true,history:true,volume:0.5};
 animate();
 /* Load saved settings */
