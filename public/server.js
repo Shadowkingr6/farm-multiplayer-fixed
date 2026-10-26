@@ -305,6 +305,83 @@ setInterval(()=>{
  hhStart(false);
 },HH_AUTO_INTERVAL);
 
+/* ================= SEASON 3: THE CRYSTAL INCURSION =================
+   4-phase cinematic world event with story, dialogue, and gameplay.
+   Phases: ARRIVAL (12s) → CORRUPTION (15s) → DEFENSE (20s) → ALLIANCE (10s)
+   Admin-activated via the CHAOS → Season 3 → GO workflow. */
+const S3_PHASES={ARRIVAL:0,CORRUPTION:1,DEFENSE:2,ALLIANCE:3};
+const S3_DURATION={arrival:12000,corruption:15000,defense:20000,alliance:10000};
+/* Crystal crash locations — 5 crystals at fixed positions */
+const S3_CRYSTAL_SPOTS=[[-40,-20],[40,-20],[-40,20],[40,20],[0,0]];
+function s3StatePacket(){return{
+  active:!!G.season3.active,
+  phase:G.season3.phase,
+  phaseEnd:G.season3.phaseEnd,
+  crystals:G.season3.crystals||[],
+  minions:G.season3.minions||[],
+  shadowHealth:G.season3.shadowHealth||0,
+  shadowMaxHealth:G.season3.shadowMaxHealth||0,
+  defenseGrid:G.season3.defenseGrid||0,
+  defenseTarget:G.season3.defenseTarget||100,
+  participants:[...(G.season3.participants||[])],
+  serverTime:now()
+};}
+function s3Start(byAdmin){
+ if(G.season3.active)return false;
+ G.season3={
+  active:true,phase:S3_PHASES.ARRIVAL,phaseEnd:now()+S3_DURATION.arrival,
+  crystals:S3_CRYSTAL_SPOTS.map((p,i)=>({id:'S3c'+i,x:p[0],z:p[1],corrupted:false,secured:false})),
+  minions:[],shadowHealth:0,shadowMaxHealth:500,defenseGrid:0,defenseTarget:100,
+  participants:[],rewarded:[],startedBy:byAdmin?'admin':'auto',startedAt:now()
+ };
+ /* Spawn 8 corrupted minions at crystal locations for the Defense phase */
+ G.season3.minions=[];
+ S3_CRYSTAL_SPOTS.forEach((spot,i)=>{
+  for(let j=0;j<2;j++){
+   const a=Math.random()*6.28,d=4+Math.random()*4;
+   G.season3.minions.push({id:'S3m'+i+'_'+j,x:spot[0]+Math.cos(a)*d,z:spot[1]+Math.sin(a)*d,health:30,maxHealth:30,taken:false});
+  }
+ });
+ broadcast({t:'s3State',s3:s3StatePacket()});
+ broadcast({t:'toast',msg:'💎 SEASON 3: THE CRYSTAL INCURSION has begun...',kind:'event'});
+ log(byAdmin?'admin:s3:start':'s3:start','global','');
+ G.dirty=true;
+ return true;}
+function s3End(){
+ G.season3={active:false,phase:0,phaseEnd:0,crystals:[],minions:[],shadowHealth:0,shadowMaxHealth:500,defenseGrid:0,defenseTarget:100,participants:[],rewarded:[]};
+ broadcast({t:'s3State',s3:s3StatePacket()});
+ G.dirty=true;}
+function s3AdvancePhase(){
+ if(!G.season3.active)return;
+ const ph=G.season3.phase;
+ if(ph===S3_PHASES.ARRIVAL){
+  G.season3.phase=S3_PHASES.CORRUPTION;
+  G.season3.phaseEnd=now()+S3_DURATION.corruption;
+  broadcast({t:'s3Dialogue',speaker:'shadow',text:'These crystals... their power will be MINE.',phase:1});
+ }else if(ph===S3_PHASES.CORRUPTION){
+  G.season3.phase=S3_PHASES.DEFENSE;
+  G.season3.phaseEnd=now()+S3_DURATION.defense;
+  G.season3.shadowHealth=G.season3.shadowMaxHealth;
+  broadcast({t:'s3Dialogue',speaker:'farmer',text:'Not this time, Shadow! Activating the crop grid!',phase:2});
+ }else if(ph===S3_PHASES.DEFENSE){
+  G.season3.phase=S3_PHASES.ALLIANCE;
+  G.season3.phaseEnd=now()+S3_DURATION.alliance;
+  broadcast({t:'s3Dialogue',speaker:'raven',text:'You fight well... for a farmer. Shadow is the enemy. Not you.',phase:3});
+  /* Drop rewards at crystal locations */
+  G.season3.crystals.forEach(c=>{c.secured=true;});
+ }else if(ph===S3_PHASES.ALLIANCE){
+  broadcast({t:'toast',msg:'💎 Season 3 complete! An uneasy alliance is born.',kind:'info'});
+  s3End();
+  return;
+ }
+ broadcast({t:'s3State',s3:s3StatePacket()});
+ G.dirty=true;}
+/* Tick Season 3 every 1 second */
+setInterval(()=>{
+ if(!G.season3||!G.season3.active)return;
+ if(now()>=G.season3.phaseEnd)s3AdvancePhase();
+},1000);
+
 /* ================= ROLE SHOP (purchasable roles) =================
    Players can buy these roles from the Game Shop. Each role has a price + benefits.
    - VIP: 2x speed + 2k sheckles/day for 2 relics
@@ -492,6 +569,8 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
   highestBid:0,highestBidder:null,highestBidderName:'',bids:[],endAt:0,extensionsUsed:0,by:''},
  /* ===== HAUNTED HARVEST state machine (4 phases, server-authoritative) ===== */
  hauntedHarvest:{active:false,phase:0,phaseEnd:0,bossHealth:0,bossMaxHealth:1000,altarProgress:0,altarTarget:50,cursedSeeds:{},pumpkins:[],minions:[],treasures:[],participants:[],rewarded:[]},
+ /* ===== SEASON 3: THE CRYSTAL INCURSION state machine ===== */
+ season3:{active:false,phase:0,phaseEnd:0,crystals:[],minions:[],shadowHealth:0,shadowMaxHealth:500,defenseGrid:0,defenseTarget:100,participants:[],rewarded:[]},
  /* ===== CHAOS ACTIVATION state — prevents duplicate chaos triggers during cinematic ===== */
  chaosActivation:{active:false,startedAt:0,events:[],snapScheduledAt:0},
  adminSessions:new Map(),authFails:new Map(),logs:[],startedAt:Date.now(),savedAt:Date.now(),dirty:false,nextId:1};
@@ -693,6 +772,7 @@ function sendInitData(sock,p){
   emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
   shopRoles:getShopRolesState(),
   hh:hhStatePacket(),
+  s3:s3StatePacket(),
   chaosActivation:{active:G.chaosActivation.active,events:G.chaosActivation.events,snapScheduledAt:G.chaosActivation.snapScheduledAt},
   event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
   plots:G.plots,plotPos:PLOT_POS,
@@ -891,6 +971,40 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    pushMe(p);
    sendTo(p.id,{t:'toast',msg:'🎃 Treasure! +'+cashReward+' sheckles, +'+relicReward+' relics'+(seedReward?', +1 '+seedReward.n:''),kind:'quest'});
    broadcast({t:'hhState',hh:hhStatePacket()});
+   break;}
+  /* ===== SEASON 3: player commands =====
+     Phase 2 (Defense): players hit corrupted minions with their shovel, and
+     walk up to crystals to charge the defense grid. */
+  case 's3AttackMinion':{
+   if(!G.season3.active||G.season3.phase!==S3_PHASES.DEFENSE)return;
+   if(!p.gear.includes('shovel'))return sendTo(p.id,{t:'toast',msg:'Need a Shovel to fight!',kind:'err'});
+   const minion=G.season3.minions.find(m=>m.id===msg.minionId&&!m.taken);
+   if(!minion)return;
+   if(dist2(p.x,p.z,minion.x,minion.z)>400)return sendTo(p.id,{t:'toast',msg:'Get closer to the minion!',kind:'err'});
+   const dmg=10+Math.floor(Math.random()*15);
+   minion.health=Math.max(0,minion.health-dmg);
+   if(minion.health<=0){minion.taken=true;G.season3.defenseGrid+=10;}
+   if(!G.season3.participants.includes(p.id))G.season3.participants.push(p.id);
+   p.cash=(p.cash||0)+50;pushMe(p);
+   sendTo(p.id,{t:'toast',msg:'💎 Hit minion for '+dmg+'!'+(minion.health<=0?' Minion destroyed! +10 grid power.':''),kind:'quest'});
+   broadcast({t:'s3State',s3:s3StatePacket()});
+   break;}
+  case 's3ChargeCrystal':{
+   if(!G.season3.active||G.season3.phase!==S3_PHASES.DEFENSE)return;
+   const crystal=G.season3.crystals.find(c=>c.id===msg.crystalId&&!c.secured);
+   if(!crystal)return;
+   if(dist2(p.x,p.z,crystal.x,crystal.z)>144)return sendTo(p.id,{t:'toast',msg:'Get closer to the crystal!',kind:'err'});
+   crystal.secured=true;G.season3.defenseGrid+=20;
+   if(!G.season3.participants.includes(p.id))G.season3.participants.push(p.id);
+   p.relics=(p.relics||0)+1;pushMe(p);
+   sendTo(p.id,{t:'toast',msg:'💎 Crystal secured! +1 relic, +20 grid power.',kind:'quest'});
+   /* If all crystals secured, advance to alliance */
+   if(G.season3.crystals.every(c=>c.secured)){
+    G.season3.phase=S3_PHASES.ALLIANCE;
+    G.season3.phaseEnd=now()+S3_DURATION.alliance;
+    broadcast({t:'s3Dialogue',speaker:'raven',text:'You fight well... for a farmer. Shadow is the enemy. Not you.',phase:3});
+   }
+   broadcast({t:'s3State',s3:s3StatePacket()});
    break;}
   /* ================= HEART FEEDING (Season 2) ================= */
   case 'feedHeart':{
@@ -1618,6 +1732,12 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    if(G.hauntedHarvest.active)return sendTo(admin.id,{t:'toast',msg:'Haunted Harvest already active.',kind:'err'});
    hhStart(true);
    sendTo(admin.id,{t:'toast',msg:'🎃 The Haunted Harvest has been started!',kind:'good'});
+   break;}
+  /* ===== SEASON 3: THE CRYSTAL INCURSION — manual start via admin ===== */
+  case 's3Start':{
+   if(G.season3.active)return sendTo(admin.id,{t:'toast',msg:'Season 3 already active.',kind:'err'});
+   s3Start(true);
+   sendTo(admin.id,{t:'toast',msg:'💎 Season 3: The Crystal Incursion has started!',kind:'good'});
    break;}
   case 'teleportPlayer':if(target)sendTo(target.id,{t:'teleport',x:a.x||0,z:a.z||0});break;
   case 'kick':{const t2=G.players.get(a.targetId);if(t2){

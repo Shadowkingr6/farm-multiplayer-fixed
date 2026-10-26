@@ -866,6 +866,50 @@ html.touch .seedCfgRow .sname{font-size:12px}
  padding:8px 16px;border-radius:8px;font-family:'Fredoka';font-weight:600;font-size:13px;cursor:pointer}
 #hhActions button:hover{filter:brightness(1.12)}
 #hhActions button:disabled{opacity:.4;cursor:not-allowed}
+/* ============ SEASON 3: THE CRYSTAL INCURSION — Cinematic + UI ============ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+#s3Cinematic{position:fixed;inset:0;z-index:9100;display:none;pointer-events:none;overflow:hidden}
+#s3Cinematic.on{display:block}
+#s3TitleCard{position:absolute;top:25%;left:50%;transform:translate(-50%,-50%) scale(.8);
+ font-family:'Cinzel',serif;font-weight:900;font-size:clamp(32px,7vw,84px);
+ color:#80f0ff;text-shadow:0 0 30px #40c0ff88,0 0 60px #2080ff44,0 4px 0 #001830;
+ letter-spacing:.08em;opacity:0;text-align:center;white-space:nowrap;
+ transition:opacity 1s,transform 1.2s cubic-bezier(.2,1.4,.3,1)}
+#s3TitleCard.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#s3TitleCard .sub{display:block;font-family:'Cormorant Garamond',serif;font-style:italic;
+ font-size:clamp(16px,3vw,32px);color:#c0e8ff;text-shadow:0 0 14px #40c0ff44;
+ margin-top:12px;letter-spacing:.2em;font-weight:400}
+#s3DialogueBox{position:absolute;bottom:15%;left:50%;transform:translateX(-50%);
+ width:min(700px,90vw);background:linear-gradient(180deg,rgba(8,4,20,.92),rgba(4,2,12,.96));
+ border:2px solid #40c0ff44;border-radius:14px;padding:18px 24px;display:none;pointer-events:none;
+ box-shadow:0 0 40px #2080ff22,0 12px 40px #000a}
+#s3DialogueBox.on{display:block;animation:s3DlgIn .4s cubic-bezier(.2,1.4,.3,1)}
+@keyframes s3DlgIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}}
+#s3Speaker{font-family:'Cinzel',serif;font-weight:700;font-size:14px;letter-spacing:.15em;
+ text-transform:uppercase;margin-bottom:6px}
+#s3Speaker.shadow{color:#a040ff;text-shadow:0 0 10px #a040ff66}
+#s3Speaker.farmer{color:#80e890;text-shadow:0 0 10px #4fae6866}
+#s3Speaker.raven{color:#6080a0;text-shadow:0 0 10px #40608066}
+#s3DialogueText{font-family:'Cormorant Garamond',serif;font-size:18px;line-height:1.5;color:#e0e8f0;font-style:italic}
+#s3Skip{position:absolute;bottom:20px;right:20px;background:#00000088;color:#c0e8ff;
+ border:1px solid #40c0ff55;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;
+ pointer-events:auto;font-family:'Cinzel',serif;letter-spacing:.1em}
+#s3Skip:hover{background:#000000cc}
+#s3Overlay{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:340;display:none;
+ flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:min(560px,92vw)}
+#s3Overlay.on{display:flex}
+#s3PhaseLabel{font-family:'Cinzel',serif;font-weight:700;font-size:14px;color:#80f0ff;
+ text-shadow:0 0 10px #40c0ff66;letter-spacing:.2em;text-transform:uppercase}
+#s3GridBar{width:100%;height:18px;background:#081820;border:2px solid #40c0ff55;border-radius:9px;overflow:hidden;position:relative}
+#s3GridBarFill{height:100%;background:linear-gradient(90deg,#2080ff,#80f0ff);width:0%;transition:width .3s}
+#s3GridBarText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+ font-size:11px;color:#fff;font-weight:700;text-shadow:0 1px 2px #000;font-family:'Cinzel',serif}
+#s3Timer{font-family:'Cinzel',serif;font-size:14px;color:#c0e8ff;font-variant-numeric:tabular-nums}
+#s3Actions{display:flex;gap:8px;pointer-events:auto}
+#s3Actions button{background:linear-gradient(180deg,#2080ff,#1040a0);color:#fff;border:1px solid #40c0ff55;
+ padding:8px 16px;border-radius:8px;font-family:'Cinzel',serif;font-weight:600;font-size:13px;cursor:pointer;letter-spacing:.05em}
+#s3Actions button:hover{filter:brightness(1.12)}
+#s3Actions button:disabled{opacity:.4;cursor:not-allowed}
 /* ============ CHAT SYSTEM + SETTINGS BUTTON (top-left corner) ============ */
 #chatHistory{position:fixed;left:14px;top:60px;width:300px;max-height:240px;overflow-y:auto;
  z-index:50;pointer-events:none;display:flex;flex-direction:column-reverse;gap:4px;opacity:.85}
@@ -990,6 +1034,24 @@ html.touch #settingsBtn{left:54px}
  <button id="chaosCinematicSkip">Skip</button>
 </div>
 <div id="chaosFlash"></div>
+<!-- ============ SEASON 3: THE CRYSTAL INCURSION ============ -->
+<div id="s3Cinematic">
+ <div id="s3TitleCard"></div>
+ <div id="s3DialogueBox">
+  <div id="s3Speaker"></div>
+  <div id="s3DialogueText"></div>
+ </div>
+ <button id="s3Skip">Skip</button>
+</div>
+<div id="s3Overlay">
+ <div id="s3PhaseLabel">Phase 1 — The Arrival</div>
+ <div id="s3GridBar"><div id="s3GridBarFill"></div><div id="s3GridBarText">Defense Grid: 0 / 100</div></div>
+ <div id="s3Timer">--:--</div>
+ <div id="s3Actions">
+  <button id="s3BtnAttack" disabled>⚔ Hit Minion</button>
+  <button id="s3BtnCharge" disabled>💎 Secure Crystal</button>
+ </div>
+</div>
 <!-- ============ HAUNTED HARVEST OVERLAY ============ -->
 <div id="hhOverlay">
  <div id="hhTitle">🎃 THE HAUNTED HARVEST</div>
@@ -3923,6 +3985,8 @@ function handleNet(m){
    updateOthers(m.players.map(p=>({...p})));
    /* Late joiner: if HH is active, sync state */
    if(m.hh&&typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
+   /* Late joiner: if Season 3 is active, sync state */
+   if(m.s3&&typeof Season3!=='undefined')Season3.updateState(m.s3);
    /* Late joiner: if a chaos cinematic is mid-flight, replay it */
    if(m.chaosActivation&&m.chaosActivation.active&&m.chaosActivation.snapScheduledAt>Date.now()){
     if(typeof ChaosCinematic!=='undefined')ChaosCinematic.start(m.chaosActivation.events,m.chaosActivation.snapScheduledAt,Date.now(),(m.chaosActivation.adminName||'Admin'));
@@ -4044,6 +4108,13 @@ function handleNet(m){
   /* ===== HAUNTED HARVEST state updates ===== */
   case 'hhState':{
    if(typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
+   break;}
+  /* ===== SEASON 3: state updates + dialogue ===== */
+  case 's3State':{
+   if(typeof Season3!=='undefined')Season3.updateState(m.s3);
+   break;}
+  case 's3Dialogue':{
+   if(typeof Season3!=='undefined')Season3.showDialogue(m.speaker,m.text,m.phase);
    break;}
   case 'toast':
    if(String(m.msg).startsWith('[Admin]'))showAnnounce(String(m.msg).replace('[Admin] ',''),{targeted:true});
@@ -4991,6 +5062,15 @@ function admTab(t){
    <h4 style="color:#ff7020">🎃 HAUNTED HARVEST — Pumpkin King Invasion</h4>
    <div class="desc" style="margin-bottom:14px">Manually trigger the 4-phase Halloween world event. Auto-triggers every 20 minutes otherwise.</div>
    <button class="btnSm btnA" id="hhStartBtn" style="background:linear-gradient(180deg,#ff6020,#a02010);color:#fff;padding:12px 24px;font-size:15px">🎃 START HAUNTED HARVEST</button>
+  </div>
+  <div class="admCard" style="margin-top:18px;border:2px solid #40c0ff55;background:linear-gradient(135deg,#081420,#040810)">
+   <h4 style="color:#80f0ff">💎 SEASON 3: THE CRYSTAL INCURSION</h4>
+   <div class="desc" style="margin-bottom:14px;color:#80a0b0">Trigger the full 4-phase cinematic story event.
+    <b style="color:#80f0ff">Phase 1</b>: Crystals crash, Shadow emerges from a dark rift.<br>
+    <b style="color:#a040ff">Phase 2</b>: Shadow corrupts the crystals, minions spawn.<br>
+    <b style="color:#80e890">Phase 3</b>: Farmer activates the defense grid, Raven arrives. Players fight minions + secure crystals.<br>
+    <b style="color:#60a0ff">Phase 4</b>: An uneasy alliance is born. Crystals secured.</div>
+   <button class="btnSm btnA" id="s3StartBtn" style="background:linear-gradient(180deg,#2080ff,#1040a0);color:#fff;padding:12px 24px;font-size:15px;font-family:'Cinzel',serif;letter-spacing:.1em">💎 START SEASON 3</button>
   </div>`;
  /* Wire up chaos event picker */
  const selectAll=$('#chaosSelectAll');
@@ -5009,6 +5089,11 @@ function admTab(t){
  if(hhBtn)hhBtn.onclick=()=>{
   if(!confirm('Start THE HAUNTED HARVEST event for ALL players?'))return;
   admCmd('hhStart',{});
+ };
+ const s3Btn=$('#s3StartBtn');
+ if(s3Btn)s3Btn.onclick=()=>{
+  if(!confirm('Start SEASON 3: THE CRYSTAL INCURSION for ALL players?\n\nThis will play a full cinematic story event with 4 phases (~57 seconds total).'))return;
+  admCmd('s3Start',{});
  };
  if(t==='Announce')el.innerHTML=`
  <div class="admCard"><h4>Broadcast Announcement</h4>
@@ -5404,6 +5489,8 @@ function animate(){
  if(typeof updateChatBubbles==='function'&&(Math.floor(t*60)&3)===0)updateChatBubbles();
  /* Tick the Haunted Harvest UI timer every frame */
  if(typeof HauntedHarvest!=='undefined'&&HauntedHarvest.active)HauntedHarvest.tick();
+ /* Tick Season 3 every frame */
+ if(typeof Season3!=='undefined'&&Season3.active)Season3.tick();
  renderer.render(scene,camera);}
 /* ============ CHAOS CINEMATIC (Sammy Snap-style — 3D) ============
    A dramatic 6-second 3D cinematic that plays for ALL connected players when an admin
@@ -5774,6 +5861,424 @@ const HauntedHarvest={
   send({t:'hhAttackBoss'});
   /* Swing the shovel visually */
   if(typeof ShovelItem!=='undefined')ShovelItem.swing();
+ };
+})();
+
+/* ============ SEASON 3: THE CRYSTAL INCURSION ============
+   Full cinematic world event with 3D character models (Shadow, Raven, Crystals, Minions),
+   VFX (crystal crash, dark rift, corruption particles, crop grid), dialogue UI, and gameplay.
+   4 phases: ARRIVAL → CORRUPTION → DEFENSE → ALLIANCE */
+const Season3={
+ active:false,phase:0,phaseEnd:0,crystals:[],minions:[],
+ defenseGrid:0,defenseTarget:100,
+ shadowMesh:null,ravenMesh:null,crystalMeshes:null,minionMeshes:null,
+ vfxParticles:[],riftMesh:null,gridMesh:null,_cinematicActive:false,
+ /* Phase names for the UI */
+ phaseNames:['Phase 1 — The Arrival','Phase 2 — Shadow\'s Corruption','Phase 3 — The Defense','Phase 4 — The Alliance'],
+
+ /* ===== Update state from server ===== */
+ updateState(s3){
+  this.active=s3.active;this.phase=s3.phase;this.phaseEnd=s3.phaseEnd;
+  this.crystals=s3.crystals||[];this.minions=s3.minions||[];
+  this.defenseGrid=s3.defenseGrid||0;this.defenseTarget=s3.defenseTarget||100;
+  if(this.active){
+   this.render();
+   /* Start cinematic on first activation */
+   if(this.phase===0&&!this._cinematicActive){
+    this.startCinematic();
+   }
+  }else{
+   this.cleanup();
+  }
+ },
+
+ /* ===== Render the UI overlay ===== */
+ render(){
+  const overlay=$('#s3Overlay');
+  if(!overlay)return;
+  if(!this.active){overlay.classList.remove('on');return;}
+  overlay.classList.add('on');
+  const pl=$('#s3PhaseLabel');if(pl)pl.textContent=this.phaseNames[this.phase]||'Unknown';
+  /* Grid bar */
+  const gb=$('#s3GridBar');
+  if(gb){
+   const fill=$('#s3GridBarFill');if(fill)fill.style.width=Math.min(100,this.defenseGrid/this.defenseTarget*100)+'%';
+   const txt=$('#s3GridBarText');if(txt)txt.textContent='Defense Grid: '+this.defenseGrid+' / '+this.defenseTarget;
+  }
+  /* Action buttons */
+  const btnAttack=$('#s3BtnAttack');
+  const btnCharge=$('#s3BtnCharge');
+  if(btnAttack)btnAttack.disabled=this.phase!==2;
+  if(btnCharge)btnCharge.disabled=this.phase!==2;
+  /* Render 3D objects */
+  this.render3D();
+ },
+
+ /* ===== Tick — update timer + animate 3D objects ===== */
+ tick(){
+  const tmr=$('#s3Timer');
+  if(tmr&&this.active){
+   const rem=Math.max(0,this.phaseEnd-Date.now()-(ST.srvOffset||0));
+   const s=Math.floor(rem/1000);
+   tmr.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  }
+  /* Animate 3D objects */
+  const t=performance.now()*0.001;
+  if(this.shadowMesh){
+   this.shadowMesh.position.y=8+Math.sin(t*1.2)*0.5;
+   this.shadowMesh.rotation.y+=0.008;
+  }
+  if(this.ravenMesh){
+   this.ravenMesh.position.y=6+Math.sin(t*1.5)*0.4;
+   this.ravenMesh.rotation.y+=0.006;
+  }
+  if(this.crystalMeshes){
+   for(const[,g]of this.crystalMeshes){
+    g.rotation.y+=0.01;
+    g.position.y=1+Math.sin(t*2+g.userData.phase)*0.2;
+   }
+  }
+  if(this.minionMeshes){
+   for(const[,g]of this.minionMeshes){
+    g.position.y=0.5+Math.sin(t*3+g.userData.phase)*0.15;
+    g.rotation.y+=0.02;
+   }
+  }
+  /* Animate VFX particles */
+  for(let i=this.vfxParticles.length-1;i>=0;i--){
+   const p=this.vfxParticles[i];
+   p.position.x+=p.userData.vx*0.016;
+   p.position.y+=p.userData.vy*0.016;
+   p.position.z+=p.userData.vz*0.016;
+   p.userData.life-=0.016;
+   if(p.userData.life<=0){
+    scene.remove(p);if(typeof disposeGroup==='function')disposeGroup(p);
+    this.vfxParticles.splice(i,1);
+   }
+  }
+  /* Animate rift */
+  if(this.riftMesh){
+   this.riftMesh.rotation.z+=0.02;
+   this.riftMesh.scale.setScalar(1+Math.sin(t*2)*0.1);
+  }
+  /* Animate grid */
+  if(this.gridMesh){
+   this.gridMesh.material.opacity=0.2+0.15*Math.sin(t*3);
+  }
+ },
+
+ /* ===== Show dialogue box ===== */
+ showDialogue(speaker,text,phase){
+  const box=$('#s3DialogueBox');
+  const sp=$('#s3Speaker');
+  const tx=$('#s3DialogueText');
+  if(!box||!sp||!tx)return;
+  sp.className=speaker;
+  sp.textContent=speaker.charAt(0).toUpperCase()+speaker.slice(1);
+  tx.textContent=text;
+  box.classList.add('on');
+  /* Auto-hide after 5 seconds */
+  clearTimeout(this._dlgTimer);
+  this._dlgTimer=setTimeout(()=>{box.classList.remove('on');},5000);
+ },
+
+ /* ===== Start the cinematic sequence ===== */
+ startCinematic(){
+  this._cinematicActive=true;
+  const overlay=$('#s3Cinematic');
+  if(overlay)overlay.classList.add('on');
+  /* Title card */
+  const title=$('#s3TitleCard');
+  if(title){
+   title.innerHTML='SEASON 3<span class="sub">The Crystal Incursion</span>';
+   setTimeout(()=>title.classList.add('show'),200);
+  }
+  /* Build Shadow + rift immediately */
+  this.buildShadow();
+  this.buildRift();
+  /* Play dramatic sound */
+  if(typeof AudioSys!=='undefined'){AudioSys.play('rumble');}
+  /* Skip button */
+  const skip=$('#s3Skip');
+  if(skip)skip.onclick=()=>this.endCinematic();
+  /* End cinematic after phase 1 (12s) */
+  setTimeout(()=>{this.endCinematic();},12000);
+ },
+
+ /* ===== End the cinematic (keep gameplay running) ===== */
+ endCinematic(){
+  this._cinematicActive=false;
+  const overlay=$('#s3Cinematic');
+  if(overlay)overlay.classList.remove('on');
+  const title=$('#s3TitleCard');
+  if(title)title.classList.remove('show');
+  const dlg=$('#s3DialogueBox');
+  if(dlg)dlg.classList.remove('on');
+ },
+
+ /* ===== Build 3D objects per phase ===== */
+ render3D(){
+  /* Crystals — visible from phase 0 onward */
+  if(this.crystals.length>0&&!this.crystalMeshes){
+   this.crystalMeshes=new Map();
+   this.crystals.forEach(c=>{
+    const g=this.makeCrystal(c.corrupted?'corrupted':'normal');
+    g.position.set(c.x,1,c.z);
+    g.userData.phase=Math.random()*6.28;
+    scene.add(g);
+    this.crystalMeshes.set(c.id,g);
+   });
+  }
+  /* Update crystal appearance based on corrupted/secured state */
+  if(this.crystalMeshes){
+   this.crystals.forEach(c=>{
+    const g=this.crystalMeshes.get(c.id);
+    if(!g)return;
+    if(c.secured){
+     g.children.forEach(ch=>{if(ch.material){ch.material.color.setHex(0x80ff80);ch.material.emissive.setHex(0x40ff40);}});
+    }else if(c.corrupted){
+     g.children.forEach(ch=>{if(ch.material){ch.material.color.setHex(0xa040ff);ch.material.emissive.setHex(0x6020a0);}});
+    }
+   });
+  }
+  /* Shadow — visible from phase 1 (corruption) onward */
+  if(this.phase>=1&&!this.shadowMesh){
+   this.buildShadow();
+  }
+  /* Raven — visible from phase 2 (defense) onward */
+  if(this.phase>=2&&!this.ravenMesh){
+   this.buildRaven();
+  }
+  /* Minions — visible in phase 2 (defense) */
+  if(this.phase===2){
+   if(!this.minionMeshes){
+    this.minionMeshes=new Map();
+    this.minions.forEach(m=>{
+     if(m.taken)return;
+     const g=this.makeMinion();
+     g.position.set(m.x,0.5,m.z);
+     g.userData.phase=Math.random()*6.28;
+     scene.add(g);
+     this.minionMeshes.set(m.id,g);
+    });
+   }
+  }else if(this.minionMeshes){
+   for(const[,g]of this.minionMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
+   this.minionMeshes=null;
+  }
+  /* Defense grid — visible in phase 2 */
+  if(this.phase===2&&!this.gridMesh){
+   this.buildGrid();
+  }else if(this.phase!==2&&this.gridMesh){
+   scene.remove(this.gridMesh);if(typeof disposeGroup==='function')disposeGroup(this.gridMesh);
+   this.gridMesh=null;
+  }
+ },
+
+ /* ===== 3D Model: Crystal ===== */
+ makeCrystal(type){
+  const g=new THREE.Group();
+  const col=type==='corrupted'?0xa040ff:0x40c0ff;
+  const emCol=type==='corrupted'?0x6020a0:0x2080ff;
+  const mat=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(emCol),emissiveIntensity:0.5,transparent:true,opacity:0.85});
+  /* Main crystal — tall octahedron */
+  const main=new THREE.Mesh(new THREE.ConeGeometry(0.6,2.2,6),mat);
+  main.position.y=1.1;g.add(main);
+  /* Smaller crystals around base */
+  for(let i=0;i<4;i++){
+   const a=i/4*6.28;
+   const small=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.8,5),mat);
+   small.position.set(Math.cos(a)*0.5,0.3,Math.sin(a)*0.5);
+   small.rotation.set(Math.cos(a)*0.4,0,Math.sin(a)*0.4);
+   g.add(small);
+  }
+  /* Point light for glow */
+  const light=new THREE.PointLight(col,2,10);
+  light.position.y=1.5;g.add(light);
+  return g;
+ },
+
+ /* ===== 3D Model: Shadow (dark hooded figure with purple aura) ===== */
+ buildShadow(){
+  if(this.shadowMesh)return;
+  const g=new THREE.Group();
+  const darkMat=new THREE.MeshLambertMaterial({color:0x1a0a2a,emissive:new THREE.Color(0x6020a0),emissiveIntensity:0.3});
+  /* Body — tall tapered cylinder */
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.7,1.5,5,10),darkMat);
+  body.position.y=0;g.add(body);
+  /* Head — sphere */
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.6,12,10),darkMat);
+  head.position.y=3;g.add(head);
+  /* Hood — large cone */
+  const hood=new THREE.Mesh(new THREE.ConeGeometry(1.2,2,8),darkMat);
+  hood.position.y=3.8;g.add(hood);
+  /* Glowing purple eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xa040ff});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),eyeMat);e1.position.set(-0.2,3.1,0.5);g.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),eyeMat);e2.position.set(0.2,3.1,0.5);g.add(e2);
+  /* Floating arms — two tapered cylinders */
+  const armL=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.1,2,6),darkMat);
+  armL.position.set(-1.2,1,0);armL.rotation.z=0.5;g.add(armL);
+  const armR=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.1,2,6),darkMat);
+  armR.position.set(1.2,1,0);armR.rotation.z=-0.5;g.add(armR);
+  /* Purple aura light */
+  const aura=new THREE.PointLight(0xa040ff,4,25);
+  aura.position.y=2;g.add(aura);
+  /* Position floating above the center */
+  g.position.set(0,8,0);
+  scene.add(g);
+  this.shadowMesh=g;
+ },
+
+ /* ===== 3D Model: Raven (dark warrior with cloak and wings) ===== */
+ buildRaven(){
+  if(this.ravenMesh)return;
+  const g=new THREE.Group();
+  const darkMat=new THREE.MeshLambertMaterial({color:0x2a2a3a,emissive:new THREE.Color(0x202040),emissiveIntensity:0.2});
+  const cloakMat=new THREE.MeshLambertMaterial({color:0x1a1a2a,side:THREE.DoubleSide});
+  /* Body — cylinder */
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,2.5,8),darkMat);
+  body.position.y=0;g.add(body);
+  /* Head — sphere */
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.4,10,8),darkMat);
+  head.position.y=1.6;g.add(head);
+  /* Mask — half sphere covering face */
+  const mask=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshLambertMaterial({color:0x101020}));
+  mask.position.y=1.7;g.add(mask);
+  /* Glowing blue eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0x60a0ff});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.06,6,4),eyeMat);e1.position.set(-0.14,1.65,0.35);g.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.06,6,4),eyeMat);e2.position.set(0.14,1.65,0.35);g.add(e2);
+  /* Cloak — flat plane behind body */
+  const cloak=new THREE.Mesh(new THREE.PlaneGeometry(2.5,3),cloakMat);
+  cloak.position.set(0,0.5,-0.3);g.add(cloak);
+  /* Wings — two flat planes on sides */
+  const wingL=new THREE.Mesh(new THREE.PlaneGeometry(1.5,2),cloakMat);
+  wingL.position.set(-1,1,0);wingL.rotation.y=0.3;g.add(wingL);
+  const wingR=new THREE.Mesh(new THREE.PlaneGeometry(1.5,2),cloakMat);
+  wingR.position.set(1,1,0);wingR.rotation.y=-0.3;g.add(wingR);
+  /* Sword — cylinder in right hand */
+  const sword=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.5,6),new THREE.MeshLambertMaterial({color:0x808090,metal:true}));
+  sword.position.set(0.8,0.5,0.3);sword.rotation.z=-0.3;g.add(sword);
+  /* Blue aura light */
+  const aura=new THREE.PointLight(0x60a0ff,3,20);
+  aura.position.y=1.5;g.add(aura);
+  /* Position to the side */
+  g.position.set(-15,6,0);
+  scene.add(g);
+  this.ravenMesh=g;
+ },
+
+ /* ===== 3D Model: Corrupted Minion (small dark creature) ===== */
+ makeMinion(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshLambertMaterial({color:0x2a0a3a,emissive:new THREE.Color(0x401060),emissiveIntensity:0.4});
+  /* Body — small sphere */
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),mat);
+  body.position.y=0.3;g.add(body);
+  /* Head — smaller sphere */
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.3,8,6),mat);
+  head.position.y=0.9;g.add(head);
+  /* Glowing purple eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff40ff});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.06,5,4),eyeMat);e1.position.set(-0.1,0.95,0.25);g.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.06,5,4),eyeMat);e2.position.set(0.1,0.95,0.25);g.add(e2);
+  /* Spikes on back — small cones */
+  for(let i=0;i<3;i++){
+   const spike=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.3,5),mat);
+   spike.position.set(0,0.4+i*0.15,-0.3);spike.rotation.x=-0.5;g.add(spike);
+  }
+  return g;
+ },
+
+ /* ===== 3D Model: Dark Rift (where Shadow emerges) ===== */
+ buildRift(){
+  if(this.riftMesh)return;
+  const g=new THREE.Mesh(
+   new THREE.RingGeometry(2,4,24),
+   new THREE.MeshBasicMaterial({color:0xa040ff,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false})
+  );
+  g.rotation.x=-Math.PI/2;
+  g.position.set(0,0.1,0);
+  scene.add(g);
+  this.riftMesh=g;
+  /* Spawn corruption particles */
+  for(let i=0;i<20;i++){
+   const p=new THREE.Mesh(
+    new THREE.SphereGeometry(0.15,5,4),
+    new THREE.MeshBasicMaterial({color:0xa040ff,transparent:true,opacity:0.7})
+   );
+   const a=Math.random()*6.28;
+   p.position.set(Math.cos(a)*3,0.5,Math.sin(a)*3);
+   p.userData={vx:Math.cos(a)*1,vy:2+Math.random()*2,vz:Math.sin(a)*1,life:2+Math.random()*2};
+   scene.add(p);this.vfxParticles.push(p);
+  }
+ },
+
+ /* ===== 3D Model: Defense Grid (glowing ground circles) ===== */
+ buildGrid(){
+  if(this.gridMesh)return;
+  const g=new THREE.Group();
+  for(let i=0;i<5;i++){
+   const ring=new THREE.Mesh(
+    new THREE.RingGeometry(8+i*3,8.5+i*3,32),
+    new THREE.MeshBasicMaterial({color:0x40c0ff,transparent:true,opacity:0.3,side:THREE.DoubleSide,depthWrite:false})
+   );
+   ring.rotation.x=-Math.PI/2;
+   ring.position.y=0.1;
+   g.add(ring);
+  }
+  scene.add(g);
+  this.gridMesh=g;
+ },
+
+ /* ===== Cleanup all 3D objects ===== */
+ cleanup(){
+  if(this.shadowMesh){scene.remove(this.shadowMesh);if(typeof disposeGroup==='function')disposeGroup(this.shadowMesh);this.shadowMesh=null;}
+  if(this.ravenMesh){scene.remove(this.ravenMesh);if(typeof disposeGroup==='function')disposeGroup(this.ravenMesh);this.ravenMesh=null;}
+  if(this.riftMesh){scene.remove(this.riftMesh);if(typeof disposeGroup==='function')disposeGroup(this.riftMesh);this.riftMesh=null;}
+  if(this.gridMesh){scene.remove(this.gridMesh);if(typeof disposeGroup==='function')disposeGroup(this.gridMesh);this.gridMesh=null;}
+  if(this.crystalMeshes){
+   for(const[,g]of this.crystalMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
+   this.crystalMeshes=null;
+  }
+  if(this.minionMeshes){
+   for(const[,g]of this.minionMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
+   this.minionMeshes=null;
+  }
+  this.vfxParticles.forEach(p=>{scene.remove(p);if(typeof disposeGroup==='function')disposeGroup(p);});
+  this.vfxParticles=[];
+  this.endCinematic();
+  const overlay=$('#s3Overlay');if(overlay)overlay.classList.remove('on');
+ }
+};
+/* Wire up Season 3 action buttons */
+(function(){
+ const ba=$('#s3BtnAttack');if(ba)ba.onclick=()=>{
+  /* Find nearest minion */
+  let nearest=null,nd=999;
+  if(Season3.minions){
+   for(const m of Season3.minions){
+    if(m.taken)continue;
+    const d=Math.hypot((m.x-player.x),(m.z-player.z));
+    if(d<nd){nd=d;nearest=m;}
+   }
+  }
+  if(nearest){send({t:'s3AttackMinion',minionId:nearest.id});if(typeof ShovelItem!=='undefined')ShovelItem.swing();}
+  else toast('No minions nearby!','err');
+ };
+ const bc=$('#s3BtnCharge');if(bc)bc.onclick=()=>{
+  /* Find nearest unsecured crystal */
+  let nearest=null,nd=999;
+  if(Season3.crystals){
+   for(const c of Season3.crystals){
+    if(c.secured)continue;
+    const d=Math.hypot((c.x-player.x),(c.z-player.z));
+    if(d<nd){nd=d;nearest=c;}
+   }
+  }
+  if(nearest)send({t:'s3ChargeCrystal',crystalId:nearest.id});
+  else toast('No crystals to secure!','err');
  };
 })();
 
