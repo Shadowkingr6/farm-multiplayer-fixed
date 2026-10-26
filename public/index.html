@@ -998,9 +998,9 @@ html.touch #settingsBtn{left:54px}
  <div id="hhBossBar"><div id="hhBossBarFill"></div><div id="hhBossBarText">Pumpkin King — 1000 HP</div></div>
  <div id="hhTimer">--:--</div>
  <div id="hhActions">
-  <button id="hhBtnCollect" disabled>Collect Pumpkin</button>
-  <button id="hhBtnAltar" disabled>Deliver to Altar</button>
-  <button id="hhBtnAttack" disabled>Attack Boss</button>
+  <button id="hhBtnCollect" disabled>🪤 Catch Pumpkin</button>
+  <button id="hhBtnAltar" disabled>🪔 Deliver to Altar</button>
+  <button id="hhBtnAttack" disabled>🔨 Hit Boss (Shovel)</button>
  </div>
 </div>
 <canvas id="c3d"></canvas>
@@ -2525,6 +2525,67 @@ const VGeo={};
 function gFruit(){if(!VGeo.fruit)VGeo.fruit=new THREE.SphereGeometry(1,12,9);return VGeo.fruit;}
 const flyAnims=[],flyTmp=new THREE.Vector3();
 const easeOutCubic=k=>1-Math.pow(1-k,3);
+/* ============ 3D SHOVEL MODEL — shown in player's right hand when shovel is equipped ============ */
+const ShovelItem={
+ grp:null,visible:false,swingT:0,
+ build(){
+  if(this.grp)return;
+  this.grp=new THREE.Group();
+  /* Handle — wooden cylinder */
+  const handleMat=new THREE.MeshLambertMaterial({color:0x8a5a2a});
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.045,1.4,8),handleMat);
+  handle.position.y=0.7;this.grp.add(handle);
+  /* Grip — darker section at top of handle */
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.25,8),new THREE.MeshLambertMaterial({color:0x4a2a10}));
+  grip.position.y=1.4;this.grp.add(grip);
+  /* Shaft connector — small metal ring where handle meets blade */
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8),new THREE.MeshLambertMaterial({color:0x808080}));
+  ring.position.y=0.05;this.grp.add(ring);
+  /* Blade — shovel head (flattened cone shape) */
+  const bladeMat=new THREE.MeshLambertMaterial({color:0xa0a0a8,metal:true});
+  const blade=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.35,8),bladeMat);
+  blade.position.y=-0.15;blade.scale.set(1,1,0.25); /* flatten the cone into a spade shape */
+  this.grp.add(blade);
+  /* Blade edge — small flat box at the bottom for the cutting edge */
+  const edge=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.04,0.06),bladeMat);
+  edge.position.y=-0.32;this.grp.add(edge);
+  /* Position in the player's right hand */
+  this.grp.position.set(0.5,0.1,0.1);
+  this.grp.rotation.set(0.3,0.2,0.1);
+  /* Add to the player's right arm */
+  if(player.obj&&player.obj.userData.parts&&player.obj.userData.parts.armR){
+   player.obj.userData.parts.armR.add(this.grp);
+  }
+  this.grp.visible=false;
+ },
+ show(){
+  if(!this.grp)this.build();
+  if(!this.grp)return;
+  this.grp.visible=true;
+  this.visible=true;
+ },
+ hide(){
+  if(this.grp)this.grp.visible=false;
+  this.visible=false;
+ },
+ /* Swing animation — called when the player hits something with the shovel */
+ swing(){
+  if(!this.grp)return;
+  this.swingT=1; /* 1 = just started swinging, 0 = done */
+ },
+ tick(dt){
+  if(!this.grp||!this.visible)return;
+  /* Swing animation — rotate the shovel forward then back */
+  if(this.swingT>0){
+   this.swingT=Math.max(0,this.swingT-dt*4); /* 0.25s swing */
+   const sw=Math.sin(this.swingT*Math.PI); /* 0 → 1 → 0 */
+   this.grp.rotation.x=0.3-sw*1.5; /* swing forward */
+  }else{
+   this.grp.rotation.x=0.3;
+  }
+ }
+};
+
 const HandItem={
  grp:null,pkt:null,crimp:null,state:'none',t0:0,curId:null,queuedId:null,
  busy(){return this.state==='use'||this.state==='plant'||this.state==='return';},
@@ -5061,7 +5122,13 @@ function rebuildHotbar(){
   el.appendChild(d);});}
 function selectHotbar(i){const h=ST.hotbar[i];if(!h)return;
  ST.sel={kind:h.kind,id:h.id};rebuildHotbar();AudioSys.play('click');
- if(h.kind==='seed')HandItem.set(h.id);else HandItem.clear();}
+ if(h.kind==='seed')HandItem.set(h.id);
+ else{HandItem.clear();
+  /* Show the shovel model when shovel is selected */
+  if(h.kind==='tool'&&h.id==='shovel'){ShovelItem.show();}
+  else{ShovelItem.hide();}
+ }
+}
 function tryInteract(){
  if(Cin.active||IntroSeq.active)return;
  for(const it of interactables){if(distTo(player.x,player.z,it.x,it.z)<it.r){AudioSys.play('click');it.action();return;}}
@@ -5197,6 +5264,7 @@ function animate(){
  player.obj.position.set(player.x,player.y+myLift,player.z);
  player.obj.rotation.y=player.ry+myYaw;
  HandItem.tick(dt,t);
+ if(typeof ShovelItem!=='undefined')ShovelItem.tick(dt);
  Countdown.tick();
  swayingProps.forEach(p=>{p.rotation.z=Math.sin(t*1.3+p.userData.swayP)*.05;});
  /* camera */
@@ -5337,113 +5405,115 @@ function animate(){
  /* Tick the Haunted Harvest UI timer every frame */
  if(typeof HauntedHarvest!=='undefined'&&HauntedHarvest.active)HauntedHarvest.tick();
  renderer.render(scene,camera);}
-/* ============ CHAOS CINEMATIC (Sammy Snap-style) ============
-   A dramatic 6-second cinematic that plays for ALL connected players when an admin
-   triggers chaos activation. A glowing figure rises from beneath the farm, snaps its
-   fingers, and triggers a shockwave + screen flash + event title. */
+/* ============ CHAOS CINEMATIC (Sammy Snap-style — 3D) ============
+   A dramatic 6-second 3D cinematic that plays for ALL connected players when an admin
+   triggers chaos activation. A glowing hooded figure rises from BENEATH the ground into
+   the sky, raises its arm, snaps its fingers → shockwave + screen flash + event title.
+   Uses the existing Three.js scene/camera — no 2D canvas. */
 const ChaosCinematic={
- active:false,startTime:0,snapAt:0,events:[],adminName:'',canvas:null,ctx:null,particles:[],figurY:-200,figurRot:0,
+ active:false,startTime:0,snapAt:0,events:[],adminName:'',
+ figure:null,glowLight:null,particles:[],_snapped:false,_titleShown:false,
  start(events,snapAt,srvTime,adminName){
-  if(this.active){/* already playing — ignore duplicate */return;}
+  if(this.active)return;
   this.active=true;this.events=events||[];this.adminName=adminName||'Admin';
   this.startTime=Date.now();
-  /* Sync the snap time using server time offset */
   this.snapAt=this.startTime+(snapAt-srvTime);
+  this._snapped=false;this._titleShown=false;
+  /* Show the overlay (for the title text + skip button) */
   const overlay=$('#chaosCinematic');
   if(overlay)overlay.classList.add('on');
-  this.canvas=$('#chaosCinematicCanvas');
-  if(this.canvas){
-   this.canvas.width=innerWidth;this.canvas.height=innerHeight;
-   this.ctx=this.canvas.getContext('2d');
-  }
-  /* Reset figure position — starts below the ground */
-  this.figurY=innerHeight+200;this.figurRot=0;
+  /* Hide the 2D canvas — we're using 3D now */
+  const cv=$('#chaosCinematicCanvas');
+  if(cv)cv.style.display='none';
+  /* Build the 3D figure — a hooded glowing humanoid that rises from below */
+  this.figure=new THREE.Group();
+  /* Body — dark hooded robe (tapered cylinder) */
+  const robeMat=new THREE.MeshLambertMaterial({color:0x1a0608,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.15});
+  const robe=new THREE.Mesh(new THREE.CylinderGeometry(0.8,1.8,4,12),robeMat);
+  robe.position.y=0;this.figure.add(robe);
+  /* Head — sphere */
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.7,14,12),robeMat);
+  head.position.y=2.4;this.figure.add(head);
+  /* Hood — cone over the head */
+  const hood=new THREE.Mesh(new THREE.ConeGeometry(1.1,1.6,10),robeMat);
+  hood.position.y=3;this.figure.add(hood);
+  /* Glowing eyes */
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff3010});
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6),eyeMat);e1.position.set(-0.25,2.5,0.55);this.figure.add(e1);
+  const e2=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6),eyeMat);e2.position.set(0.25,2.5,0.55);this.figure.add(e2);
+  /* Arm group — rotates for the snap */
+  this.arm=new THREE.Group();this.arm.position.set(0.6,1.8,0);
+  const armMesh=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.14,2,8),robeMat);
+  armMesh.position.y=-1;this.arm.add(armMesh);
+  /* Glowing hand */
+  const handMat=new THREE.MeshBasicMaterial({color:0xff5020});
+  const hand=new THREE.Mesh(new THREE.SphereGeometry(0.25,10,8),handMat);
+  hand.position.y=-2;this.arm.add(hand);
+  this.figure.add(this.arm);
+  /* Point light for glow effect */
+  this.glowLight=new THREE.PointLight(0xff3010,3,30);
+  this.glowLight.position.set(0,2,0);
+  this.figure.add(this.glowLight);
+  /* Position the figure at the center of the map, starting BELOW the ground */
+  this.figure.position.set(0,-15,0);
+  scene.add(this.figure);
   /* Generate rising particles */
   this.particles=[];
-  for(let i=0;i<60;i++){
-   this.particles.push({x:innerWidth/2+(Math.random()-.5)*200,y:innerHeight+50+Math.random()*100,
-    vy:-2-Math.random()*4,vx:(Math.random()-.5)*1,r:1+Math.random()*3,life:Math.random(),hue:Math.random()<.5?20:280});
+  for(let i=0;i<40;i++){
+   const p=new THREE.Mesh(
+    new THREE.SphereGeometry(0.15,6,4),
+    new THREE.MeshBasicMaterial({color:Math.random()<0.5?0xff5020:0xff8040,transparent:true,opacity:0.8})
+   );
+   p.position.set((Math.random()-.5)*8,-2-Math.random()*4,(Math.random()-.5)*8);
+   p.userData={vy:2+Math.random()*3,vx:(Math.random()-.5)*1,life:Math.random()};
+   scene.add(p);this.particles.push(p);
   }
   /* Play dramatic sound */
-  if(typeof AudioSys!=='undefined'){AudioSys.play('rumble');}
-  /* Tick the animation */
-  this.tick();
+  if(typeof AudioSys!=='undefined')AudioSys.play('rumble');
+  /* Camera will be controlled by the animate loop — store original camera target */
+  this._origCamTarget={x:camTarget.x,y:camTarget.y,z:camTarget.z};
   /* Skip button */
   const skip=$('#chaosCinematicSkip');
   if(skip)skip.onclick=()=>this.end();
+  /* Start ticking */
+  this.tick();
  },
  tick(){
   if(!this.active)return;
   const now=Date.now();
   const elapsed=now-this.startTime;
   const snapElapsed=this.snapAt-this.startTime;
-  /* Phase 1 (0-3s): figure rises from below */
-  /* Phase 2 (3-5s): figure reaches pose, raises hand */
-  /* Phase 3 (5-5.5s): snap + shockwave */
-  /* Phase 4 (5.5-7s): title shows */
-  /* Phase 5 (7s+): end */
-  const ctx=this.ctx;
-  if(ctx&&this.canvas){
-   /* Fade background to dark */
-   ctx.fillStyle='rgba(10,4,8,0.3)';
-   ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-   /* Draw rising particles */
-   this.particles.forEach(p=>{
-    p.y+=p.vy;p.x+=p.vx;p.life+=0.01;
-    if(p.y<-10){p.y=innerHeight+10;p.x=innerWidth/2+(Math.random()-.5)*200;}
-    const alpha=0.4+0.4*Math.sin(p.life*5);
-    ctx.fillStyle='hsla('+p.hue+',80%,'+(50+20*Math.sin(p.life*3))+'%,'+alpha+')';
-    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();
-   });
-   /* Draw the rising figure — a glowing humanoid silhouette */
-   const targetY=innerHeight*0.4;
-   if(elapsed<snapElapsed-1500){
-    /* Rising phase — ease out */
-    const t=Math.min(1,elapsed/(snapElapsed-1500));
-    const easeT=1-Math.pow(1-t,3);
-    this.figurY=innerHeight+200-(innerHeight+200-targetY)*easeT;
-   }else{
-    this.figurY=targetY+Math.sin(elapsed*0.005)*5;
-   }
-   /* Draw figure glow */
-   const glowGrad=ctx.createRadialGradient(innerWidth/2,this.figurY,10,innerWidth/2,this.figurY,180);
-   glowGrad.addColorStop(0,'rgba(255,80,30,0.6)');
-   glowGrad.addColorStop(0.5,'rgba(255,40,0,0.2)');
-   glowGrad.addColorStop(1,'rgba(255,40,0,0)');
-   ctx.fillStyle=glowGrad;
-   ctx.fillRect(innerWidth/2-200,this.figurY-200,400,400);
-   /* Draw figure body — hooded silhouette */
-   ctx.fillStyle='#1a0608';
-   ctx.beginPath();
-   ctx.ellipse(innerWidth/2,this.figurY,40,80,0,0,7);
-   ctx.fill();
-   /* Head */
-   ctx.beginPath();ctx.arc(innerWidth/2,this.figurY-60,28,0,7);ctx.fill();
-   /* Glowing eyes */
-   ctx.fillStyle='#ff3010';
-   ctx.shadowColor='#ff3010';ctx.shadowBlur=14;
-   ctx.beginPath();ctx.arc(innerWidth/2-10,this.figurY-65,3.5,0,7);ctx.fill();
-   ctx.beginPath();ctx.arc(innerWidth/2+10,this.figurY-65,3.5,0,7);ctx.fill();
-   ctx.shadowBlur=0;
-   /* Arm — raises before snap */
-   if(elapsed>snapElapsed-2000){
-    const armT=Math.min(1,(elapsed-(snapElapsed-2000))/1500);
-    const armAngle=-Math.PI/2*armT;
-    ctx.strokeStyle='#1a0608';ctx.lineWidth=14;
-    ctx.beginPath();
-    ctx.moveTo(innerWidth/2,this.figurY-20);
-    ctx.lineTo(innerWidth/2+Math.cos(armAngle)*50,this.figurY-20+Math.sin(armAngle)*50);
-    ctx.stroke();
-    /* Glowing hand */
-    if(armT>0.5){
-     ctx.fillStyle='#ff5020';ctx.shadowColor='#ff5020';ctx.shadowBlur=20;
-     ctx.beginPath();
-     ctx.arc(innerWidth/2+Math.cos(armAngle)*50,this.figurY-20+Math.sin(armAngle)*50,8,0,7);
-     ctx.fill();ctx.shadowBlur=0;
-    }
-   }
+  /* Phase 1 (0 to snap-1.5s): figure rises from below ground to y=0 */
+  if(elapsed<snapElapsed-1500){
+   const t=Math.min(1,elapsed/(snapElapsed-1500));
+   const easeT=1-Math.pow(1-t,3); /* ease out cubic */
+   this.figure.position.y=-15+15*easeT; /* rises from -15 to 0 */
+  }else{
+   /* Float gently at ground level */
+   this.figure.position.y=Math.sin(elapsed*0.005)*0.3;
   }
-  /* Snap moment — trigger shockwave */
+  /* Rotate the figure slowly */
+  this.figure.rotation.y+=0.008;
+  /* Phase 2 (snap-2s to snap): raise the arm */
+  if(elapsed>snapElapsed-2000){
+   const armT=Math.min(1,(elapsed-(snapElapsed-2000))/1500);
+   this.arm.rotation.z=-Math.PI/2*armT; /* raises from down to sideways */
+   this.arm.rotation.x=-Math.PI/3*armT; /* raises forward */
+  }
+  /* Animate particles */
+  this.particles.forEach(p=>{
+   p.position.y+=p.userData.vy*0.016;
+   p.position.x+=p.userData.vx*0.016;
+   p.userData.life+=0.016;
+   if(p.position.y>15){p.position.y=-2;p.position.x=(Math.random()-.5)*8;p.position.z=(Math.random()-.5)*8;}
+   p.material.opacity=0.4+0.4*Math.sin(p.userData.life*5);
+  });
+  /* Camera looks at the figure */
+  if(this.figure){
+   camTarget.set(0,2,0);
+   camera.lookAt(this.figure.position.x,2,this.figure.position.z);
+  }
+  /* Snap moment */
   if(elapsed>=snapElapsed&&!this._snapped){
    this._snapped=true;
    this.onSnap();
@@ -5466,18 +5536,24 @@ const ChaosCinematic={
   /* Screen flash */
   const flash=$('#chaosFlash');
   if(flash){flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),400);}
-  /* Shockwave particles */
-  if(this.ctx){
-   for(let i=0;i<40;i++){
-    const ang=i/40*6.28;
-    this.particles.push({x:innerWidth/2,y:this.figurY,
-     vy:Math.sin(ang)*8,vx:Math.cos(ang)*8,r:3+Math.random()*4,life:0,hue:20});
-   }
+  /* 3D Shockwave — expanding ring of particles */
+  for(let i=0;i<30;i++){
+   const ang=i/30*6.28;
+   const p=new THREE.Mesh(
+    new THREE.SphereGeometry(0.3,6,4),
+    new THREE.MeshBasicMaterial({color:0xff6030,transparent:true,opacity:0.9})
+   );
+   p.position.set(0,2,0);
+   p.userData={vx:Math.cos(ang)*8,vy:Math.sin(ang)*4+2,vz:Math.sin(ang)*8,life:0};
+   scene.add(p);this.particles.push(p);
   }
   /* Camera shake */
   if(typeof doShake!=='undefined')doShake(0.8,0.6);
   /* Sound */
   if(typeof AudioSys!=='undefined'){AudioSys.play('thunder');AudioSys.play('mut');}
+  /* Flash the figure's glow */
+  if(this.glowLight)this.glowLight.intensity=8;
+  setTimeout(()=>{if(this.glowLight)this.glowLight.intensity=3;},300);
  },
  end(){
   this.active=false;this._snapped=false;this._titleShown=false;
@@ -5485,6 +5561,19 @@ const ChaosCinematic={
   if(overlay)overlay.classList.remove('on');
   const title=$('#chaosCinematicTitle');
   if(title)title.classList.remove('show');
+  /* Remove 3D figure */
+  if(this.figure){
+   scene.remove(this.figure);
+   if(typeof disposeGroup==='function')disposeGroup(this.figure);
+   this.figure=null;
+  }
+  /* Remove particles */
+  this.particles.forEach(p=>{scene.remove(p);if(typeof disposeGroup==='function')disposeGroup(p);});
+  this.particles=[];
+  /* Restore camera target */
+  if(this._origCamTarget){
+   camTarget.set(this._origCamTarget.x,this._origCamTarget.y,this._origCamTarget.z);
+  }
  }
 };
 
@@ -5534,6 +5623,10 @@ const HauntedHarvest={
   if(btnCollect)btnCollect.disabled=this.phase!==1;
   if(btnAltar)btnAltar.disabled=this.phase!==1;
   if(btnAttack)btnAttack.disabled=this.phase!==2;
+  /* Auto-show the shovel when boss phase starts */
+  if(this.phase===2&&typeof ShovelItem!=='undefined'){
+   if(ST.me&&ST.me.gear&&ST.me.gear.includes('shovel'))ShovelItem.show();
+  }
   /* Render 3D pumpkins / boss / treasures in the scene */
   this.render3D();
  },
@@ -5545,10 +5638,10 @@ const HauntedHarvest={
    const s=Math.floor(rem/1000);
    tmr.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
   }
-  /* Animate boss if in boss phase */
+  /* Animate boss if in boss phase — stays on the ground, rotates slowly */
   if(this.active&&this.phase===2&&this._bossMesh){
    const t=performance.now()*0.001;
-   this._bossMesh.position.y=20+Math.sin(t*1.5)*1.5;
+   this._bossMesh.position.y=Math.sin(t*1.5)*0.3; /* gentle bob, stays on ground */
    this._bossMesh.rotation.y+=0.005;
   }
  },
@@ -5571,11 +5664,11 @@ const HauntedHarvest={
    for(const[,g]of this._pumpkinMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
    this._pumpkinMeshes=null;
   }
-  /* Boss — visible in Boss phase */
+  /* Boss — visible in Boss phase. Boss is ON THE GROUND so players can walk up and hit it. */
   if(this.phase===2){
    if(!this._bossMesh){
     this._bossMesh=this.makePumpkinKing();
-    this._bossMesh.position.set(0,20,0);
+    this._bossMesh.position.set(0,0,0); /* ON THE GROUND — not floating */
     scene.add(this._bossMesh);
    }
   }else if(this._bossMesh){
@@ -5663,9 +5756,25 @@ const HauntedHarvest={
 };
 /* Wire up HH action buttons */
 (function(){
- const bc=$('#hhBtnCollect');if(bc)bc.onclick=()=>{send({t:'hhCollectPumpkin',pumpkinId:HauntedHarvest._nearestPumpkinId||''});};
+ const bc=$('#hhBtnCollect');if(bc)bc.onclick=()=>{
+  /* Find nearest pumpkin to the player */
+  let nearest=null,nd=999;
+  if(HauntedHarvest.pumpkins){
+   for(const p of HauntedHarvest.pumpkins){
+    if(p.taken)continue;
+    const d=Math.hypot((p.x-player.x),(p.z-player.z));
+    if(d<nd){nd=d;nearest=p;}
+   }
+  }
+  if(nearest)send({t:'hhCollectPumpkin',pumpkinId:nearest.id});
+  else toast('No Cursed Pumpkins nearby!','err');
+ };
  const ba=$('#hhBtnAltar');if(ba)ba.onclick=()=>{send({t:'hhDeliverAltar'});};
- const bat=$('#hhBtnAttack');if(bat)bat.onclick=()=>{send({t:'hhAttackBoss'});};
+ const bat=$('#hhBtnAttack');if(bat)bat.onclick=()=>{
+  send({t:'hhAttackBoss'});
+  /* Swing the shovel visually */
+  if(typeof ShovelItem!=='undefined')ShovelItem.swing();
+ };
 })();
 
 /* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============

@@ -518,6 +518,7 @@ function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,cash:p.cash
  ownedCharBodies:p.ownedCharBodies||['farmer'],
  lastAbility:p.lastAbility||0,relicDay:p.relicDay||'',relicDrops:p.relicDrops||0,
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
+ hhPumpkins:p.hhPumpkins||0,
  role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow,roleBenefits:p.roleBenefits||{},roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
  portal:p.portal||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
@@ -803,56 +804,58 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    /* Broadcast to EVERYONE with a unique message ID (prevents client-side duplicates) */
    broadcast({t:'chat',mid:'M'+(G.nextId++),id:p.id,name:p.name,text:text,role:p.role||'player'});
    break;}
-  /* ===== HAUNTED HARVEST — player commands (not admin) ===== */
+  /* ===== HAUNTED HARVEST — player commands (not admin) =====
+     Phase 2 (Hunt): players walk up to Cursed Pumpkins and collect them directly.
+     They carry the pumpkins and deliver them to the altar (center of map) to fill the meter.
+     Phase 3 (Boss): players hit the boss with their SHOVEL (press E near the boss). */
   case 'hhCollectPumpkin':{
    if(!G.hauntedHarvest.active||G.hauntedHarvest.phase!==HH_PHASES.HUNT)return;
    const pumpkin=G.hauntedHarvest.pumpkins.find(pp=>pp.id===msg.pumpkinId&&!pp.taken);
    if(!pumpkin)return;
    /* Player must be near the pumpkin (within ~12 units) */
    if(dist2(p.x,p.z,pumpkin.x,pumpkin.z)>144)return sendTo(p.id,{t:'toast',msg:'Get closer to the Cursed Pumpkin!',kind:'err'});
-   /* Mark pumpkin as taken */
+   /* Mark pumpkin as taken — player now carries it */
    pumpkin.taken=true;
-   /* Give player a Cursed Seed + track participation */
-   p.cursedSeeds=(p.cursedSeeds||0)+1;
+   p.hhPumpkins=(p.hhPumpkins||0)+1;
    if(!G.hauntedHarvest.participants.includes(p.id))G.hauntedHarvest.participants.push(p.id);
-   /* Pick a random rarity seed as reward */
-   const seedPool=Object.values(SEED_MAP).filter(s=>['Uncommon','Rare','Epic'].includes(s.rar));
-   const rewardSeed=seedPool[Math.floor(Math.random()*seedPool.length)];
-   if(rewardSeed){p.seeds[rewardSeed.id]=(p.seeds[rewardSeed.id]||0)+1;
-    if(!p.discovered.seeds.includes(rewardSeed.id))p.discovered.seeds.push(rewardSeed.id);}
    pushMe(p);
-   sendTo(p.id,{t:'toast',msg:'🎃 You collected a Cursed Pumpkin! +1 '+rewardSeed.n+' seed',kind:'quest'});
+   sendTo(p.id,{t:'toast',msg:'🎃 You caught a Cursed Pumpkin! ('+p.hhPumpkins+' carried) — deliver to the altar!',kind:'quest'});
    broadcast({t:'hhState',hh:hhStatePacket()});
    break;}
   case 'hhDeliverAltar':{
    if(!G.hauntedHarvest.active||G.hauntedHarvest.phase!==HH_PHASES.HUNT)return;
-   if((p.cursedSeeds||0)<1)return sendTo(p.id,{t:'toast',msg:'No Cursed Seeds to deliver.',kind:'err'});
-   const deliverAmt=Math.min(p.cursedSeeds,5);
-   p.cursedSeeds-=deliverAmt;
+   if((p.hhPumpkins||0)<1)return sendTo(p.id,{t:'toast',msg:'No Cursed Pumpkins to deliver. Catch some first!',kind:'err'});
+   /* Must be near the altar (center of map) */
+   if(dist2(p.x,p.z,0,0)>400)return sendTo(p.id,{t:'toast',msg:'Get closer to the altar at the center!',kind:'err'});
+   const deliverAmt=p.hhPumpkins;
+   p.hhPumpkins=0;
    G.hauntedHarvest.altarProgress+=deliverAmt;
    if(!G.hauntedHarvest.participants.includes(p.id))G.hauntedHarvest.participants.push(p.id);
    pushMe(p);
-   sendTo(p.id,{t:'toast',msg:'🎃 Delivered '+deliverAmt+' Cursed Seeds to the altar!',kind:'quest'});
+   sendTo(p.id,{t:'toast',msg:'🎃 Delivered '+deliverAmt+' Cursed Pumpkins to the altar! ('+G.hauntedHarvest.altarProgress+'/'+G.hauntedHarvest.altarTarget+')',kind:'quest'});
    /* If altar target reached, advance to boss phase early */
    if(G.hauntedHarvest.altarProgress>=G.hauntedHarvest.altarTarget){
     G.hauntedHarvest.phase=HH_PHASES.BOSS;
     G.hauntedHarvest.phaseEnd=now()+HH_DURATION.boss;
     G.hauntedHarvest.bossHealth=G.hauntedHarvest.bossMaxHealth;
-    broadcast({t:'toast',msg:'🎃 Altar complete! The Pumpkin King emerges!',kind:'event'});
+    broadcast({t:'toast',msg:'🎃 Altar complete! The Pumpkin King rises from the ground!',kind:'event'});
    }
    broadcast({t:'hhState',hh:hhStatePacket()});
    break;}
   case 'hhAttackBoss':{
    if(!G.hauntedHarvest.active||G.hauntedHarvest.phase!==HH_PHASES.BOSS)return;
-   if((p.cursedSeeds||0)<1)return sendTo(p.id,{t:'toast',msg:'Need Cursed Seeds to attack! Collect from Cursed Pumpkins.',kind:'err'});
-   /* Must be near the boss (center of map) */
-   if(dist2(p.x,p.z,0,0)>6400)return sendTo(p.id,{t:'toast',msg:'Get closer to the Pumpkin King!',kind:'err'});
-   p.cursedSeeds-=1;
-   const damage=10+Math.floor(Math.random()*20);
+   /* Must have a shovel equipped to attack */
+   if(!p.gear.includes('shovel'))return sendTo(p.id,{t:'toast',msg:'Need a Shovel equipped to hit the boss!',kind:'err'});
+   /* Must be near the boss (center of map, on the ground) */
+   if(dist2(p.x,p.z,0,0)>400)return sendTo(p.id,{t:'toast',msg:'Get closer to the Pumpkin King!',kind:'err'});
+   /* Each hit does 15-35 damage */
+   const damage=15+Math.floor(Math.random()*20);
    G.hauntedHarvest.bossHealth=Math.max(0,G.hauntedHarvest.bossHealth-damage);
    if(!G.hauntedHarvest.participants.includes(p.id))G.hauntedHarvest.participants.push(p.id);
+   /* Small cash reward for each hit */
+   p.cash=(p.cash||0)+100;
    pushMe(p);
-   sendTo(p.id,{t:'toast',msg:'🎃 You dealt '+damage+' damage to the Pumpkin King!',kind:'quest'});
+   sendTo(p.id,{t:'toast',msg:'🎃 WHACK! You hit the Pumpkin King for '+damage+' damage! (+100 sheckles)',kind:'quest'});
    /* If boss defeated, advance to finale */
    if(G.hauntedHarvest.bossHealth<=0){
     G.hauntedHarvest.phase=HH_PHASES.FINALE;
@@ -1588,18 +1591,22 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    broadcast({t:'chaosCinematicStart',events:eventIds,snapAt:snapAt,serverTime:now(),adminName:admin.name});
    log('admin:chaosActivate',admin.id,eventIds.join(','));
    sendTo(admin.id,{t:'toast',msg:'Chaos cinematic started — events will trigger in 6 seconds!',kind:'good'});
-   /* Schedule the actual event starts at the snap moment */
+   /* Schedule the actual event start at the snap moment.
+      Only ONE event can be active at a time (G.event is a single slot).
+      We pick the FIRST selected event to actually start; the others are shown in the cinematic title
+      but don't stack. If hauntedharvest is selected, it starts the HH state machine instead. */
    setTimeout(()=>{
-    /* Start each selected event in sequence (the last one wins as G.event, but they all broadcast) */
-    for(const evId of eventIds){
-     const def=EV_MAP[evId];
+    /* If hauntedharvest was selected, start the HH state machine (it's a separate system) */
+    if(eventIds.includes('hauntedharvest')){
+     hhStart(true);
+    }else{
+     /* Start only the FIRST selected event — not all of them (prevents stacking) */
+     const firstEvId=eventIds[0];
+     const def=EV_MAP[firstEvId];
      if(def){
-      /* For chaos, start each event with a shorter duration (90s) */
       startEvent(def,90000,true);
      }
     }
-    /* If hauntedharvest was selected, also start the HH state machine */
-    if(eventIds.includes('hauntedharvest'))hhStart(true);
     /* Clear the activation state */
     G.chaosActivation={active:false,startedAt:0,events:[],snapScheduledAt:0};
     /* Broadcast that the snap happened — clients can play the shockwave effect */
