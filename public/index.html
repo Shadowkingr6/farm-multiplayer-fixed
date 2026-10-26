@@ -1043,15 +1043,6 @@ html.touch #settingsBtn{left:54px}
  </div>
  <button id="s3Skip">Skip</button>
 </div>
-<div id="s3Overlay">
- <div id="s3PhaseLabel">Phase 1 — The Arrival</div>
- <div id="s3GridBar"><div id="s3GridBarFill"></div><div id="s3GridBarText">Defense Grid: 0 / 100</div></div>
- <div id="s3Timer">--:--</div>
- <div id="s3Actions">
-  <button id="s3BtnAttack" disabled>⚔ Hit Minion</button>
-  <button id="s3BtnCharge" disabled>💎 Secure Crystal</button>
- </div>
-</div>
 <!-- ============ HAUNTED HARVEST OVERLAY ============ -->
 <div id="hhOverlay">
  <div id="hhTitle">🎃 THE HAUNTED HARVEST</div>
@@ -3985,8 +3976,8 @@ function handleNet(m){
    updateOthers(m.players.map(p=>({...p})));
    /* Late joiner: if HH is active, sync state */
    if(m.hh&&typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
-   /* Late joiner: if Season 3 is active, sync state */
-   if(m.s3&&typeof Season3!=='undefined')Season3.updateState(m.s3);
+   /* Late joiner: if Season 3 cinematic is playing, start it */
+   if(m.s3&&m.s3.active&&typeof Season3!=='undefined')Season3.start(m.s3.startTime,m.s3.serverTime);
    /* Late joiner: if a chaos cinematic is mid-flight, replay it */
    if(m.chaosActivation&&m.chaosActivation.active&&m.chaosActivation.snapScheduledAt>Date.now()){
     if(typeof ChaosCinematic!=='undefined')ChaosCinematic.start(m.chaosActivation.events,m.chaosActivation.snapScheduledAt,Date.now(),(m.chaosActivation.adminName||'Admin'));
@@ -4109,12 +4100,12 @@ function handleNet(m){
   case 'hhState':{
    if(typeof HauntedHarvest!=='undefined')HauntedHarvest.updateState(m.hh);
    break;}
-  /* ===== SEASON 3: state updates + dialogue ===== */
-  case 's3State':{
-   if(typeof Season3!=='undefined')Season3.updateState(m.s3);
+  /* ===== SEASON 3: cinematic start/end ===== */
+  case 's3CinematicStart':{
+   if(typeof Season3!=='undefined')Season3.start(m.startTime,m.serverTime);
    break;}
-  case 's3Dialogue':{
-   if(typeof Season3!=='undefined')Season3.showDialogue(m.speaker,m.text,m.phase);
+  case 's3CinematicEnd':{
+   if(typeof Season3!=='undefined')Season3.end();
    break;}
   case 'toast':
    if(String(m.msg).startsWith('[Admin]'))showAnnounce(String(m.msg).replace('[Admin] ',''),{targeted:true});
@@ -5489,8 +5480,7 @@ function animate(){
  if(typeof updateChatBubbles==='function'&&(Math.floor(t*60)&3)===0)updateChatBubbles();
  /* Tick the Haunted Harvest UI timer every frame */
  if(typeof HauntedHarvest!=='undefined'&&HauntedHarvest.active)HauntedHarvest.tick();
- /* Tick Season 3 every frame */
- if(typeof Season3!=='undefined'&&Season3.active)Season3.tick();
+ /* Note: Season 3 runs its own requestAnimationFrame loop — no need to tick here */
  renderer.render(scene,camera);}
 /* ============ CHAOS CINEMATIC (Sammy Snap-style — 3D) ============
    A dramatic 6-second 3D cinematic that plays for ALL connected players when an admin
@@ -5864,86 +5854,280 @@ const HauntedHarvest={
  };
 })();
 
-/* ============ SEASON 3: THE CRYSTAL INCURSION ============
-   Full cinematic world event with 3D character models (Shadow, Raven, Crystals, Minions),
-   VFX (crystal crash, dark rift, corruption particles, crop grid), dialogue UI, and gameplay.
-   4 phases: ARRIVAL → CORRUPTION → DEFENSE → ALLIANCE */
+/* ============ SEASON 3: THE CRYSTAL INCURSION — 1-Minute Cinematic Cutscene ============
+   A pure cinematic movie that plays for ALL connected players. No gameplay, no buttons.
+   The camera moves through 4 scenes automatically over 60 seconds:
+   Scene 1 (0-15s):  Crystals crash from the sky, Shadow emerges from a dark rift
+   Scene 2 (15-30s): Shadow corrupts the crystals, minions rise from the ground
+   Scene 3 (30-45s): Farmer activates the defense grid, Raven arrives, they clash then ally
+   Scene 4 (45-60s): Minions defeated, crystals purified, alliance formed, finale title */
 const Season3={
- active:false,phase:0,phaseEnd:0,crystals:[],minions:[],
- defenseGrid:0,defenseTarget:100,
- shadowMesh:null,ravenMesh:null,crystalMeshes:null,minionMeshes:null,
- vfxParticles:[],riftMesh:null,gridMesh:null,_cinematicActive:false,
- /* Phase names for the UI */
- phaseNames:['Phase 1 — The Arrival','Phase 2 — Shadow\'s Corruption','Phase 3 — The Defense','Phase 4 — The Alliance'],
+ active:false,startTime:0,_raf:null,_cleanupFns:[],
+ shadowMesh:null,ravenMesh:null,crystalMeshes:[],minionMeshes:[],riftMesh:null,gridMesh:null,
+ vfxParticles:[],_origCamTarget:null,
 
- /* ===== Update state from server ===== */
- updateState(s3){
-  this.active=s3.active;this.phase=s3.phase;this.phaseEnd=s3.phaseEnd;
-  this.crystals=s3.crystals||[];this.minions=s3.minions||[];
-  this.defenseGrid=s3.defenseGrid||0;this.defenseTarget=s3.defenseTarget||100;
-  if(this.active){
-   this.render();
-   /* Start cinematic on first activation */
-   if(this.phase===0&&!this._cinematicActive){
-    this.startCinematic();
-   }
-  }else{
-   this.cleanup();
+ /* ===== Start the cinematic ===== */
+ start(srvStartTime,srvTime){
+  if(this.active)return;
+  this.active=true;
+  this.startTime=Date.now()+(srvStartTime-srvTime);
+  /* Show the cinematic overlay */
+  const overlay=$('#s3Cinematic');
+  if(overlay)overlay.classList.add('on');
+  /* Store original camera target so we can restore it */
+  if(typeof camTarget!=='undefined')this._origCamTarget={x:camTarget.x,y:camTarget.y,z:camTarget.z};
+  /* Build all 3D objects for the cutscene */
+  this.buildAll();
+  /* Play dramatic sound */
+  if(typeof AudioSys!=='undefined')AudioSys.play('rumble');
+  /* Skip button */
+  const skip=$('#s3Skip');
+  if(skip)skip.onclick=()=>this.end();
+  /* Start the animation loop */
+  this.tick();
+ },
+
+ /* ===== Build all 3D objects for the cutscene ===== */
+ buildAll(){
+  /* Dark rift at center — where Shadow emerges */
+  this.riftMesh=new THREE.Mesh(
+   new THREE.RingGeometry(2,4,24),
+   new THREE.MeshBasicMaterial({color:0xa040ff,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false})
+  );
+  this.riftMesh.rotation.x=-Math.PI/2;
+  this.riftMesh.position.set(0,0.1,0);
+  scene.add(this.riftMesh);
+
+  /* 5 Crystals at world locations */
+  const spots=[[-40,-20],[40,-20],[-40,20],[40,20],[0,-30]];
+  this.crystalMeshes=[];
+  spots.forEach((s,i)=>{
+   const g=this.makeCrystal();
+   g.position.set(s[0],-10,s[1]); /* start underground, will rise */
+   g.userData={targetY:1,spot:s,phase:Math.random()*6.28,crashDelay:i*300};
+   scene.add(g);
+   this.crystalMeshes.push(g);
+  });
+
+  /* Shadow — dark hooded figure floating above center */
+  this.shadowMesh=this.makeShadow();
+  this.shadowMesh.position.set(0,-10,0); /* starts underground */
+  scene.add(this.shadowMesh);
+
+  /* Raven — appears in scene 3, hidden at first */
+  this.ravenMesh=this.makeRaven();
+  this.ravenMesh.position.set(-20,6,-30);
+  this.ravenMesh.visible=false;
+  scene.add(this.ravenMesh);
+
+  /* Defense grid — appears in scene 3 */
+  this.gridMesh=new THREE.Group();
+  for(let i=0;i<5;i++){
+   const ring=new THREE.Mesh(
+    new THREE.RingGeometry(8+i*3,8.5+i*3,32),
+    new THREE.MeshBasicMaterial({color:0x40c0ff,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false})
+   );
+   ring.rotation.x=-Math.PI/2;ring.position.y=0.1;
+   this.gridMesh.add(ring);
+  }
+  scene.add(this.gridMesh);
+
+  /* 6 Corrupted minions — appear in scene 2, hidden at first */
+  this.minionMeshes=[];
+  for(let i=0;i<6;i++){
+   const a=i/6*6.28,d=15+Math.random()*10;
+   const m=this.makeMinion();
+   m.position.set(Math.cos(a)*d,-3,Math.sin(a)*d);
+   m.userData={targetY:0.5,phase:Math.random()*6.28,riseDelay:15000+i*500};
+   m.visible=false;
+   scene.add(m);
+   this.minionMeshes.push(m);
   }
  },
 
- /* ===== Render the UI overlay ===== */
- render(){
-  const overlay=$('#s3Overlay');
-  if(!overlay)return;
-  if(!this.active){overlay.classList.remove('on');return;}
-  overlay.classList.add('on');
-  const pl=$('#s3PhaseLabel');if(pl)pl.textContent=this.phaseNames[this.phase]||'Unknown';
-  /* Grid bar */
-  const gb=$('#s3GridBar');
-  if(gb){
-   const fill=$('#s3GridBarFill');if(fill)fill.style.width=Math.min(100,this.defenseGrid/this.defenseTarget*100)+'%';
-   const txt=$('#s3GridBarText');if(txt)txt.textContent='Defense Grid: '+this.defenseGrid+' / '+this.defenseTarget;
-  }
-  /* Action buttons */
-  const btnAttack=$('#s3BtnAttack');
-  const btnCharge=$('#s3BtnCharge');
-  if(btnAttack)btnAttack.disabled=this.phase!==2;
-  if(btnCharge)btnCharge.disabled=this.phase!==2;
-  /* Render 3D objects */
-  this.render3D();
- },
-
- /* ===== Tick — update timer + animate 3D objects ===== */
+ /* ===== Main animation tick — drives the entire 60-second cutscene ===== */
  tick(){
-  const tmr=$('#s3Timer');
-  if(tmr&&this.active){
-   const rem=Math.max(0,this.phaseEnd-Date.now()-(ST.srvOffset||0));
-   const s=Math.floor(rem/1000);
-   tmr.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
-  }
-  /* Animate 3D objects */
+  if(!this.active)return;
+  const elapsed=Date.now()-this.startTime;
   const t=performance.now()*0.001;
-  if(this.shadowMesh){
-   this.shadowMesh.position.y=8+Math.sin(t*1.2)*0.5;
-   this.shadowMesh.rotation.y+=0.008;
-  }
-  if(this.ravenMesh){
-   this.ravenMesh.position.y=6+Math.sin(t*1.5)*0.4;
-   this.ravenMesh.rotation.y+=0.006;
-  }
-  if(this.crystalMeshes){
-   for(const[,g]of this.crystalMeshes){
-    g.rotation.y+=0.01;
-    g.position.y=1+Math.sin(t*2+g.userData.phase)*0.2;
+
+  /* ===== SCENE 1 (0-15s): CRYSTALS CRASH + SHADOW EMERGES ===== */
+  if(elapsed<15000){
+   /* Title card */
+   if(elapsed>500&&!this._titleShown){
+    this._titleShown=true;
+    const title=$('#s3TitleCard');
+    if(title){
+     title.innerHTML='SEASON 3<span class="sub">The Crystal Incursion</span>';
+     title.classList.add('show');
+    }
    }
-  }
-  if(this.minionMeshes){
-   for(const[,g]of this.minionMeshes){
-    g.position.y=0.5+Math.sin(t*3+g.userData.phase)*0.15;
-    g.rotation.y+=0.02;
+   /* Crystals rise from underground (staggered) */
+   this.crystalMeshes.forEach((c,i)=>{
+    const delay=i*300;
+    if(elapsed>delay){
+     const localT=Math.min(1,(elapsed-delay)/2000);
+     const ease=1-Math.pow(1-localT,3);
+     c.position.y=-10+11*ease;
+     /* Crash VFX — particles on impact */
+     if(localT>0.95&&!c.userData._crashed){
+      c.userData._crashed=true;
+      this.spawnCrashParticles(c.position.x,0,c.position.z);
+      if(typeof AudioSys!=='undefined')AudioSys.play('thunder');
+     }
+    }
+   });
+   /* Shadow rises from rift (starts at 5s) */
+   if(elapsed>5000){
+    const sT=Math.min(1,(elapsed-5000)/3000);
+    const ease=1-Math.pow(1-sT,3);
+    this.shadowMesh.position.y=-10+18*ease; /* rises to y=8 */
    }
+   /* Rift grows */
+   if(this.riftMesh){
+    this.riftMesh.scale.setScalar(Math.min(1,elapsed/3000));
+    this.riftMesh.rotation.z+=0.02;
+   }
+   /* Camera: wide shot looking at center from high angle */
+   this.setCamera(0,30,40,0,5,0);
   }
+
+  /* ===== SCENE 2 (15-30s): SHADOW CORRUPTS + MINIONS RISE ===== */
+  else if(elapsed<30000){
+   /* Hide title card */
+   if(this._titleShown&&!this._titleHidden){
+    this._titleHidden=true;
+    const title=$('#s3TitleCard');
+    if(title)title.classList.remove('show');
+   }
+   /* Shadow dialogue at 16s */
+   if(elapsed>16000&&!this._dlg1){
+    this._dlg1=true;
+    this.showDialogue('shadow','These crystals... their power will be MINE.');
+   }
+   /* Crystals turn purple (corrupted) */
+   this.crystalMeshes.forEach(c=>{
+    if(!c.userData._corrupted&&elapsed>18000){
+     c.userData._corrupted=true;
+     c.children.forEach(ch=>{if(ch.material&&ch.material.color){ch.material.color.setHex(0xa040ff);ch.material.emissive.setHex(0x6020a0);}});
+    }
+   });
+   /* Minions rise from ground (staggered starting at 20s) */
+   this.minionMeshes.forEach((m,i)=>{
+    const delay=20000+i*500;
+    if(elapsed>delay){
+     m.visible=true;
+     const localT=Math.min(1,(elapsed-delay)/1500);
+     const ease=1-Math.pow(1-localT,3);
+     m.position.y=-3+3.5*ease;
+    }
+   });
+   /* Shadow floats higher, spreads arms */
+   this.shadowMesh.position.y=8+Math.sin(elapsed*0.003)*1;
+   this.shadowMesh.rotation.y+=0.01;
+   /* Camera: orbit around Shadow */
+   const ang=(elapsed-15000)*0.0008;
+   this.setCamera(Math.cos(ang)*35,15,Math.sin(ang)*35,0,5,0);
+  }
+
+  /* ===== SCENE 3 (30-45s): FARMER GRID + RAVEN ARRIVES + CLASH ===== */
+  else if(elapsed<45000){
+   /* Farmer dialogue at 31s */
+   if(!this._dlg2){
+    this._dlg2=true;
+    this.showDialogue('farmer','Not this time, Shadow! Activating the crop grid!');
+   }
+   /* Defense grid activates — rings fade in */
+   this.gridMesh.children.forEach((ring,i)=>{
+    ring.material.opacity=Math.min(0.4,(elapsed-30000)/2000)*(0.5+0.5*Math.sin(t*3+i));
+   });
+   /* Raven appears at 35s — flies in from the side */
+   if(elapsed>35000){
+    this.ravenMesh.visible=true;
+    const rT=Math.min(1,(elapsed-35000)/2000);
+    const ease=1-Math.pow(1-rT,2);
+    this.ravenMesh.position.x=-20+5*ease;
+    this.ravenMesh.position.y=6+Math.sin(t*2)*0.5;
+    this.ravenMesh.rotation.y+=0.006;
+   }
+   /* Raven dialogue at 38s */
+   if(elapsed>38000&&!this._dlg3){
+    this._dlg3=true;
+    this.showDialogue('raven','You fight well... for a farmer.');
+   }
+   /* Shadow recoils */
+   this.shadowMesh.position.x=Math.sin(elapsed*0.01)*2;
+   this.shadowMesh.position.y=8+Math.sin(elapsed*0.005)*0.5;
+   /* Camera: split focus — pan from Shadow to Raven */
+   const panT=Math.min(1,(elapsed-30000)/5000);
+   const camX=-20*panT+Math.cos(0.5)*30*(1-panT);
+   this.setCamera(camX,12,-15+30*panT,0,5,0);
+  }
+
+  /* ===== SCENE 4 (45-60s): MINIONS DEFEATED + CRYSTALS PURIFIED + FINALE ===== */
+  else if(elapsed<60000){
+   /* Raven alliance dialogue at 46s */
+   if(!this._dlg4){
+    this._dlg4=true;
+    this.showDialogue('raven','Shadow is the enemy. Not you.');
+   }
+   /* Minions sink back into ground (defeated) */
+   this.minionMeshes.forEach((m,i)=>{
+    const delay=45000+i*300;
+    if(elapsed>delay){
+     const localT=Math.min(1,(elapsed-delay)/1000);
+     m.position.y=0.5-3.5*localT;
+     m.rotation.x=localT*Math.PI;
+    }
+   });
+   /* Crystals turn green (purified) */
+   this.crystalMeshes.forEach(c=>{
+    if(!c.userData._purified&&elapsed>48000){
+     c.userData._purified=true;
+     c.children.forEach(ch=>{if(ch.material&&ch.material.color){ch.material.color.setHex(0x40ff80);ch.material.emissive.setHex(0x20a040);}});
+     /* Purification particles */
+     this.spawnPurifyParticles(c.position.x,c.position.y,c.position.z);
+    }
+   });
+   /* Shadow retreats — sinks back into rift */
+   if(elapsed>50000){
+    const rT=Math.min(1,(elapsed-50000)/3000);
+    this.shadowMesh.position.y=8-18*rT;
+    this.riftMesh.material.opacity=0.5*(1-rT);
+   }
+   /* Raven and grid fade out at 55s */
+   if(elapsed>55000){
+    const fT=Math.min(1,(elapsed-55000)/2000);
+    if(this.ravenMesh)this.ravenMesh.children.forEach(ch=>{if(ch.material)ch.material.opacity=(ch.material.opacity||1)*(1-fT*0.1);});
+    this.gridMesh.children.forEach(r=>r.material.opacity*=0.95);
+   }
+   /* Finale title at 53s */
+   if(elapsed>53000&&!this._finaleTitle){
+    this._finaleTitle=true;
+    const title=$('#s3TitleCard');
+    if(title){
+     title.innerHTML='AN UNEASY ALLIANCE<span class="sub">is born</span>';
+     title.classList.add('show');
+    }
+   }
+   /* Camera: pull back for wide finale shot */
+   const fT=Math.min(1,(elapsed-45000)/5000);
+   this.setCamera(0,25+fT*15,45+fT*15,0,3,0);
+  }
+
+  /* ===== END AT 60s ===== */
+  if(elapsed>=60000){
+   this.end();
+   return;
+  }
+
+  /* Animate crystals (rotation + float) */
+  this.crystalMeshes.forEach(c=>{
+   c.rotation.y+=0.01;
+   if(c.position.y>0)c.position.y+=Math.sin(t*2+c.userData.phase)*0.005;
+  });
+  /* Animate rift */
+  if(this.riftMesh)this.riftMesh.scale.setScalar(this.riftMesh.scale.x+Math.sin(t*3)*0.002);
   /* Animate VFX particles */
   for(let i=this.vfxParticles.length-1;i>=0;i--){
    const p=this.vfxParticles[i];
@@ -5951,24 +6135,25 @@ const Season3={
    p.position.y+=p.userData.vy*0.016;
    p.position.z+=p.userData.vz*0.016;
    p.userData.life-=0.016;
+   p.material.opacity=p.userData.life;
    if(p.userData.life<=0){
     scene.remove(p);if(typeof disposeGroup==='function')disposeGroup(p);
     this.vfxParticles.splice(i,1);
    }
   }
-  /* Animate rift */
-  if(this.riftMesh){
-   this.riftMesh.rotation.z+=0.02;
-   this.riftMesh.scale.setScalar(1+Math.sin(t*2)*0.1);
-  }
-  /* Animate grid */
-  if(this.gridMesh){
-   this.gridMesh.material.opacity=0.2+0.15*Math.sin(t*3);
-  }
+
+  this._raf=requestAnimationFrame(()=>this.tick());
  },
 
- /* ===== Show dialogue box ===== */
- showDialogue(speaker,text,phase){
+ /* ===== Helper: set camera position + look-at target ===== */
+ setCamera(x,y,z,lx,ly,lz){
+  if(typeof camTarget!=='undefined')camTarget.set(lx,ly,lz);
+  if(typeof camPos!=='undefined')camPos.set(x,y,z);
+  camera.lookAt(lx,ly,lz);
+ },
+
+ /* ===== Helper: show dialogue box ===== */
+ showDialogue(speaker,text){
   const box=$('#s3DialogueBox');
   const sp=$('#s3Speaker');
   const tx=$('#s3DialogueText');
@@ -5977,114 +6162,44 @@ const Season3={
   sp.textContent=speaker.charAt(0).toUpperCase()+speaker.slice(1);
   tx.textContent=text;
   box.classList.add('on');
-  /* Auto-hide after 5 seconds */
   clearTimeout(this._dlgTimer);
-  this._dlgTimer=setTimeout(()=>{box.classList.remove('on');},5000);
+  this._dlgTimer=setTimeout(()=>{box.classList.remove('on');},4000);
  },
 
- /* ===== Start the cinematic sequence ===== */
- startCinematic(){
-  this._cinematicActive=true;
-  const overlay=$('#s3Cinematic');
-  if(overlay)overlay.classList.add('on');
-  /* Title card */
-  const title=$('#s3TitleCard');
-  if(title){
-   title.innerHTML='SEASON 3<span class="sub">The Crystal Incursion</span>';
-   setTimeout(()=>title.classList.add('show'),200);
+ /* ===== VFX: crystal crash particles ===== */
+ spawnCrashParticles(x,y,z){
+  for(let i=0;i<15;i++){
+   const p=new THREE.Mesh(
+    new THREE.SphereGeometry(0.2,5,4),
+    new THREE.MeshBasicMaterial({color:0x40c0ff,transparent:true,opacity:1})
+   );
+   p.position.set(x,y,z);
+   const a=Math.random()*6.28,sp=3+Math.random()*4;
+   p.userData={vx:Math.cos(a)*sp,vy:2+Math.random()*3,vz:Math.sin(a)*sp,life:1.5};
+   scene.add(p);this.vfxParticles.push(p);
   }
-  /* Build Shadow + rift immediately */
-  this.buildShadow();
-  this.buildRift();
-  /* Play dramatic sound */
-  if(typeof AudioSys!=='undefined'){AudioSys.play('rumble');}
-  /* Skip button */
-  const skip=$('#s3Skip');
-  if(skip)skip.onclick=()=>this.endCinematic();
-  /* End cinematic after phase 1 (12s) */
-  setTimeout(()=>{this.endCinematic();},12000);
  },
 
- /* ===== End the cinematic (keep gameplay running) ===== */
- endCinematic(){
-  this._cinematicActive=false;
-  const overlay=$('#s3Cinematic');
-  if(overlay)overlay.classList.remove('on');
-  const title=$('#s3TitleCard');
-  if(title)title.classList.remove('show');
-  const dlg=$('#s3DialogueBox');
-  if(dlg)dlg.classList.remove('on');
- },
-
- /* ===== Build 3D objects per phase ===== */
- render3D(){
-  /* Crystals — visible from phase 0 onward */
-  if(this.crystals.length>0&&!this.crystalMeshes){
-   this.crystalMeshes=new Map();
-   this.crystals.forEach(c=>{
-    const g=this.makeCrystal(c.corrupted?'corrupted':'normal');
-    g.position.set(c.x,1,c.z);
-    g.userData.phase=Math.random()*6.28;
-    scene.add(g);
-    this.crystalMeshes.set(c.id,g);
-   });
-  }
-  /* Update crystal appearance based on corrupted/secured state */
-  if(this.crystalMeshes){
-   this.crystals.forEach(c=>{
-    const g=this.crystalMeshes.get(c.id);
-    if(!g)return;
-    if(c.secured){
-     g.children.forEach(ch=>{if(ch.material){ch.material.color.setHex(0x80ff80);ch.material.emissive.setHex(0x40ff40);}});
-    }else if(c.corrupted){
-     g.children.forEach(ch=>{if(ch.material){ch.material.color.setHex(0xa040ff);ch.material.emissive.setHex(0x6020a0);}});
-    }
-   });
-  }
-  /* Shadow — visible from phase 1 (corruption) onward */
-  if(this.phase>=1&&!this.shadowMesh){
-   this.buildShadow();
-  }
-  /* Raven — visible from phase 2 (defense) onward */
-  if(this.phase>=2&&!this.ravenMesh){
-   this.buildRaven();
-  }
-  /* Minions — visible in phase 2 (defense) */
-  if(this.phase===2){
-   if(!this.minionMeshes){
-    this.minionMeshes=new Map();
-    this.minions.forEach(m=>{
-     if(m.taken)return;
-     const g=this.makeMinion();
-     g.position.set(m.x,0.5,m.z);
-     g.userData.phase=Math.random()*6.28;
-     scene.add(g);
-     this.minionMeshes.set(m.id,g);
-    });
-   }
-  }else if(this.minionMeshes){
-   for(const[,g]of this.minionMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
-   this.minionMeshes=null;
-  }
-  /* Defense grid — visible in phase 2 */
-  if(this.phase===2&&!this.gridMesh){
-   this.buildGrid();
-  }else if(this.phase!==2&&this.gridMesh){
-   scene.remove(this.gridMesh);if(typeof disposeGroup==='function')disposeGroup(this.gridMesh);
-   this.gridMesh=null;
+ /* ===== VFX: crystal purification particles ===== */
+ spawnPurifyParticles(x,y,z){
+  for(let i=0;i<12;i++){
+   const p=new THREE.Mesh(
+    new THREE.SphereGeometry(0.15,5,4),
+    new THREE.MeshBasicMaterial({color:0x40ff80,transparent:true,opacity:1})
+   );
+   p.position.set(x,y,z);
+   const a=Math.random()*6.28;
+   p.userData={vx:Math.cos(a)*1,vy:3+Math.random()*2,vz:Math.sin(a)*1,life:2};
+   scene.add(p);this.vfxParticles.push(p);
   }
  },
 
  /* ===== 3D Model: Crystal ===== */
- makeCrystal(type){
+ makeCrystal(){
   const g=new THREE.Group();
-  const col=type==='corrupted'?0xa040ff:0x40c0ff;
-  const emCol=type==='corrupted'?0x6020a0:0x2080ff;
-  const mat=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(emCol),emissiveIntensity:0.5,transparent:true,opacity:0.85});
-  /* Main crystal — tall octahedron */
+  const mat=new THREE.MeshLambertMaterial({color:0x40c0ff,emissive:new THREE.Color(0x2080ff),emissiveIntensity:0.5,transparent:true,opacity:0.85});
   const main=new THREE.Mesh(new THREE.ConeGeometry(0.6,2.2,6),mat);
   main.position.y=1.1;g.add(main);
-  /* Smaller crystals around base */
   for(let i=0;i<4;i++){
    const a=i/4*6.28;
    const small=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.8,5),mat);
@@ -6092,98 +6207,69 @@ const Season3={
    small.rotation.set(Math.cos(a)*0.4,0,Math.sin(a)*0.4);
    g.add(small);
   }
-  /* Point light for glow */
-  const light=new THREE.PointLight(col,2,10);
+  const light=new THREE.PointLight(0x40c0ff,2,10);
   light.position.y=1.5;g.add(light);
   return g;
  },
 
- /* ===== 3D Model: Shadow (dark hooded figure with purple aura) ===== */
- buildShadow(){
-  if(this.shadowMesh)return;
+ /* ===== 3D Model: Shadow ===== */
+ makeShadow(){
   const g=new THREE.Group();
   const darkMat=new THREE.MeshLambertMaterial({color:0x1a0a2a,emissive:new THREE.Color(0x6020a0),emissiveIntensity:0.3});
-  /* Body — tall tapered cylinder */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.7,1.5,5,10),darkMat);
-  body.position.y=0;g.add(body);
-  /* Head — sphere */
+  g.add(body);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.6,12,10),darkMat);
   head.position.y=3;g.add(head);
-  /* Hood — large cone */
   const hood=new THREE.Mesh(new THREE.ConeGeometry(1.2,2,8),darkMat);
   hood.position.y=3.8;g.add(hood);
-  /* Glowing purple eyes */
   const eyeMat=new THREE.MeshBasicMaterial({color:0xa040ff});
   const e1=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),eyeMat);e1.position.set(-0.2,3.1,0.5);g.add(e1);
   const e2=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),eyeMat);e2.position.set(0.2,3.1,0.5);g.add(e2);
-  /* Floating arms — two tapered cylinders */
   const armL=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.1,2,6),darkMat);
   armL.position.set(-1.2,1,0);armL.rotation.z=0.5;g.add(armL);
   const armR=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.1,2,6),darkMat);
   armR.position.set(1.2,1,0);armR.rotation.z=-0.5;g.add(armR);
-  /* Purple aura light */
-  const aura=new THREE.PointLight(0xa040ff,4,25);
-  aura.position.y=2;g.add(aura);
-  /* Position floating above the center */
-  g.position.set(0,8,0);
-  scene.add(g);
-  this.shadowMesh=g;
+  const aura=new THREE.PointLight(0xa040ff,4,25);aura.position.y=2;g.add(aura);
+  return g;
  },
 
- /* ===== 3D Model: Raven (dark warrior with cloak and wings) ===== */
- buildRaven(){
-  if(this.ravenMesh)return;
+ /* ===== 3D Model: Raven ===== */
+ makeRaven(){
   const g=new THREE.Group();
   const darkMat=new THREE.MeshLambertMaterial({color:0x2a2a3a,emissive:new THREE.Color(0x202040),emissiveIntensity:0.2});
   const cloakMat=new THREE.MeshLambertMaterial({color:0x1a1a2a,side:THREE.DoubleSide});
-  /* Body — cylinder */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,2.5,8),darkMat);
-  body.position.y=0;g.add(body);
-  /* Head — sphere */
+  g.add(body);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.4,10,8),darkMat);
   head.position.y=1.6;g.add(head);
-  /* Mask — half sphere covering face */
   const mask=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshLambertMaterial({color:0x101020}));
   mask.position.y=1.7;g.add(mask);
-  /* Glowing blue eyes */
   const eyeMat=new THREE.MeshBasicMaterial({color:0x60a0ff});
   const e1=new THREE.Mesh(new THREE.SphereGeometry(0.06,6,4),eyeMat);e1.position.set(-0.14,1.65,0.35);g.add(e1);
   const e2=new THREE.Mesh(new THREE.SphereGeometry(0.06,6,4),eyeMat);e2.position.set(0.14,1.65,0.35);g.add(e2);
-  /* Cloak — flat plane behind body */
   const cloak=new THREE.Mesh(new THREE.PlaneGeometry(2.5,3),cloakMat);
   cloak.position.set(0,0.5,-0.3);g.add(cloak);
-  /* Wings — two flat planes on sides */
   const wingL=new THREE.Mesh(new THREE.PlaneGeometry(1.5,2),cloakMat);
   wingL.position.set(-1,1,0);wingL.rotation.y=0.3;g.add(wingL);
   const wingR=new THREE.Mesh(new THREE.PlaneGeometry(1.5,2),cloakMat);
   wingR.position.set(1,1,0);wingR.rotation.y=-0.3;g.add(wingR);
-  /* Sword — cylinder in right hand */
   const sword=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.5,6),new THREE.MeshLambertMaterial({color:0x808090,metal:true}));
   sword.position.set(0.8,0.5,0.3);sword.rotation.z=-0.3;g.add(sword);
-  /* Blue aura light */
-  const aura=new THREE.PointLight(0x60a0ff,3,20);
-  aura.position.y=1.5;g.add(aura);
-  /* Position to the side */
-  g.position.set(-15,6,0);
-  scene.add(g);
-  this.ravenMesh=g;
+  const aura=new THREE.PointLight(0x60a0ff,3,20);aura.position.y=1.5;g.add(aura);
+  return g;
  },
 
- /* ===== 3D Model: Corrupted Minion (small dark creature) ===== */
+ /* ===== 3D Model: Corrupted Minion ===== */
  makeMinion(){
   const g=new THREE.Group();
   const mat=new THREE.MeshLambertMaterial({color:0x2a0a3a,emissive:new THREE.Color(0x401060),emissiveIntensity:0.4});
-  /* Body — small sphere */
   const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),mat);
   body.position.y=0.3;g.add(body);
-  /* Head — smaller sphere */
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.3,8,6),mat);
   head.position.y=0.9;g.add(head);
-  /* Glowing purple eyes */
   const eyeMat=new THREE.MeshBasicMaterial({color:0xff40ff});
   const e1=new THREE.Mesh(new THREE.SphereGeometry(0.06,5,4),eyeMat);e1.position.set(-0.1,0.95,0.25);g.add(e1);
   const e2=new THREE.Mesh(new THREE.SphereGeometry(0.06,5,4),eyeMat);e2.position.set(0.1,0.95,0.25);g.add(e2);
-  /* Spikes on back — small cones */
   for(let i=0;i<3;i++){
    const spike=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.3,5),mat);
    spike.position.set(0,0.4+i*0.15,-0.3);spike.rotation.x=-0.5;g.add(spike);
@@ -6191,96 +6277,35 @@ const Season3={
   return g;
  },
 
- /* ===== 3D Model: Dark Rift (where Shadow emerges) ===== */
- buildRift(){
-  if(this.riftMesh)return;
-  const g=new THREE.Mesh(
-   new THREE.RingGeometry(2,4,24),
-   new THREE.MeshBasicMaterial({color:0xa040ff,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false})
-  );
-  g.rotation.x=-Math.PI/2;
-  g.position.set(0,0.1,0);
-  scene.add(g);
-  this.riftMesh=g;
-  /* Spawn corruption particles */
-  for(let i=0;i<20;i++){
-   const p=new THREE.Mesh(
-    new THREE.SphereGeometry(0.15,5,4),
-    new THREE.MeshBasicMaterial({color:0xa040ff,transparent:true,opacity:0.7})
-   );
-   const a=Math.random()*6.28;
-   p.position.set(Math.cos(a)*3,0.5,Math.sin(a)*3);
-   p.userData={vx:Math.cos(a)*1,vy:2+Math.random()*2,vz:Math.sin(a)*1,life:2+Math.random()*2};
-   scene.add(p);this.vfxParticles.push(p);
-  }
- },
-
- /* ===== 3D Model: Defense Grid (glowing ground circles) ===== */
- buildGrid(){
-  if(this.gridMesh)return;
-  const g=new THREE.Group();
-  for(let i=0;i<5;i++){
-   const ring=new THREE.Mesh(
-    new THREE.RingGeometry(8+i*3,8.5+i*3,32),
-    new THREE.MeshBasicMaterial({color:0x40c0ff,transparent:true,opacity:0.3,side:THREE.DoubleSide,depthWrite:false})
-   );
-   ring.rotation.x=-Math.PI/2;
-   ring.position.y=0.1;
-   g.add(ring);
-  }
-  scene.add(g);
-  this.gridMesh=g;
- },
-
- /* ===== Cleanup all 3D objects ===== */
- cleanup(){
+ /* ===== End the cinematic — cleanup everything ===== */
+ end(){
+  this.active=false;
+  if(this._raf)cancelAnimationFrame(this._raf);
+  /* Remove all 3D objects */
   if(this.shadowMesh){scene.remove(this.shadowMesh);if(typeof disposeGroup==='function')disposeGroup(this.shadowMesh);this.shadowMesh=null;}
   if(this.ravenMesh){scene.remove(this.ravenMesh);if(typeof disposeGroup==='function')disposeGroup(this.ravenMesh);this.ravenMesh=null;}
   if(this.riftMesh){scene.remove(this.riftMesh);if(typeof disposeGroup==='function')disposeGroup(this.riftMesh);this.riftMesh=null;}
   if(this.gridMesh){scene.remove(this.gridMesh);if(typeof disposeGroup==='function')disposeGroup(this.gridMesh);this.gridMesh=null;}
-  if(this.crystalMeshes){
-   for(const[,g]of this.crystalMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
-   this.crystalMeshes=null;
-  }
-  if(this.minionMeshes){
-   for(const[,g]of this.minionMeshes){scene.remove(g);if(typeof disposeGroup==='function')disposeGroup(g);}
-   this.minionMeshes=null;
-  }
+  this.crystalMeshes.forEach(c=>{scene.remove(c);if(typeof disposeGroup==='function')disposeGroup(c);});
+  this.crystalMeshes=[];
+  this.minionMeshes.forEach(m=>{scene.remove(m);if(typeof disposeGroup==='function')disposeGroup(m);});
+  this.minionMeshes=[];
   this.vfxParticles.forEach(p=>{scene.remove(p);if(typeof disposeGroup==='function')disposeGroup(p);});
   this.vfxParticles=[];
-  this.endCinematic();
-  const overlay=$('#s3Overlay');if(overlay)overlay.classList.remove('on');
+  /* Hide UI */
+  const overlay=$('#s3Cinematic');if(overlay)overlay.classList.remove('on');
+  const title=$('#s3TitleCard');if(title)title.classList.remove('show');
+  const dlg=$('#s3DialogueBox');if(dlg)dlg.classList.remove('on');
+  /* Restore camera */
+  if(this._origCamTarget&&typeof camTarget!=='undefined'){
+   camTarget.set(this._origCamTarget.x,this._origCamTarget.y,this._origCamTarget.z);
+  }
+  /* Reset flags */
+  this._titleShown=false;this._titleHidden=false;
+  this._dlg1=false;this._dlg2=false;this._dlg3=false;this._dlg4=false;
+  this._finaleTitle=false;
  }
 };
-/* Wire up Season 3 action buttons */
-(function(){
- const ba=$('#s3BtnAttack');if(ba)ba.onclick=()=>{
-  /* Find nearest minion */
-  let nearest=null,nd=999;
-  if(Season3.minions){
-   for(const m of Season3.minions){
-    if(m.taken)continue;
-    const d=Math.hypot((m.x-player.x),(m.z-player.z));
-    if(d<nd){nd=d;nearest=m;}
-   }
-  }
-  if(nearest){send({t:'s3AttackMinion',minionId:nearest.id});if(typeof ShovelItem!=='undefined')ShovelItem.swing();}
-  else toast('No minions nearby!','err');
- };
- const bc=$('#s3BtnCharge');if(bc)bc.onclick=()=>{
-  /* Find nearest unsecured crystal */
-  let nearest=null,nd=999;
-  if(Season3.crystals){
-   for(const c of Season3.crystals){
-    if(c.secured)continue;
-    const d=Math.hypot((c.x-player.x),(c.z-player.z));
-    if(d<nd){nd=d;nearest=c;}
-   }
-  }
-  if(nearest)send({t:'s3ChargeCrystal',crystalId:nearest.id});
-  else toast('No crystals to secure!','err');
- };
-})();
 
 /* ============ CHAT SYSTEM STATE (must be declared BEFORE animate() runs) ============
    Without this, updateChatBubbles() throws "Cannot access 'chatBubbles' before initialization"
