@@ -309,7 +309,7 @@ setInterval(()=>{
    A 1-minute cinematic cutscene that plays for ALL connected players.
    No gameplay — just a movie. Camera moves through 4 scenes automatically.
    Admin-activated via the CHAOS → Season 3 → GO workflow. */
-const S3_DURATION=60000; /* 60 seconds total */
+const S3_DURATION=90000; /* 90 seconds total */
 function s3StatePacket(){return{
   active:!!G.season3.active,
   startTime:G.season3.startTime||0,
