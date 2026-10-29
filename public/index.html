@@ -912,6 +912,11 @@ html.touch .seedCfgRow .sname{font-size:12px}
 .chatMsg{background:rgba(20,30,18,.85);border-radius:8px;padding:5px 10px;font-size:13px;color:#f0e8d0;
  max-width:280px;word-wrap:break-word;animation:fadeIn .3s;font-family:'Nunito',sans-serif}
 .chatMsg b{color:#e8a33d;font-weight:700}.chatMsg b.admin{color:#ff7020}.chatMsg b.special{color:#c060ff}
+/* Channel tag (L=Local green, G=Global gold) prefixes each chat message */
+.chatMsg .chTag{display:inline-block;font-size:9px;font-weight:800;font-family:'Fredoka',sans-serif;
+ padding:1px 5px;border-radius:4px;margin-right:4px;letter-spacing:.05em;vertical-align:middle}
+.chatMsg .chTagL{background:#2f5d3a;color:#80e890}
+.chatMsg .chTagG{background:#5a3a10;color:#ffd070}
 #chatInput{position:fixed;top:14px;left:64px;width:min(360px,calc(100vw - 80px));display:none;z-index:100;gap:6px}
 #chatInput.on{display:flex}
 #chatInput input{flex:1;background:rgba(20,30,18,.95);border:2px solid #2f5d3a88;border-radius:10px;color:#f0e8d0;
@@ -932,6 +937,28 @@ html.touch .seedCfgRow .sname{font-size:12px}
  font-weight:800;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:none;align-items:center;justify-content:center;
  font-family:'Fredoka',sans-serif;border:2px solid #0c1e14}
 #chatToggleBtn .badge.on{display:flex}
+
+/* ============ WORLD BADGE (top-left, below chat buttons) ============ */
+#worldBadge{position:fixed;left:104px;top:18px;display:flex;align-items:center;gap:6px;
+ background:rgba(20,30,18,.85);border:2px solid #2f5d3a66;border-radius:10px;
+ padding:6px 12px;color:#f0e8d0;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;
+ z-index:80;pointer-events:none;letter-spacing:.04em}
+#worldBadge .wbIcon{font-size:14px;opacity:.9}
+#worldBadge .wbText{color:#80e890;font-family:'Fredoka',sans-serif;letter-spacing:.06em}
+#worldBadge .wbCount{color:#e8a33d;background:rgba(232,163,61,.15);padding:1px 7px;border-radius:6px;font-size:11px}
+#worldBadge.full .wbCount{color:#ff7060;background:rgba(255,112,96,.18)}
+html.touch #worldBadge{left:96px;top:14px;font-size:11px;padding:5px 10px}
+
+/* ============ CHAT CHANNEL TOGGLE (Local/Global) ============ */
+#chatChannelToggle{display:flex;gap:2px;background:rgba(10,16,10,.9);border:2px solid #2f5d3a88;
+ border-radius:8px;padding:2px}
+#chatChannelToggle .chCh{background:transparent;border:none;color:#8aa08a;font-family:'Fredoka',sans-serif;
+ font-size:11px;padding:6px 10px;border-radius:6px;cursor:pointer;font-weight:600;letter-spacing:.04em;transition:all .15s}
+#chatChannelToggle .chCh:hover{color:#c0d4b8}
+#chatChannelToggle .chCh.on{background:linear-gradient(180deg,#4f9a5c,#2f5d3a);color:#fff;box-shadow:0 2px 6px #0006}
+#chatChannelToggle .chCh.on[data-ch="global"]{background:linear-gradient(180deg,#c08a30,#8a5a18);color:#fff}
+#chatInput{flex-wrap:wrap}
+@media(max-width:560px){#chatInput{width:calc(100vw - 28px)!important}#worldBadge{display:none}}
 /* Chat bubble (above player head) */
 .chatBubble{position:absolute;background:rgba(255,255,255,.95);border-radius:12px;padding:6px 12px;font-size:13px;
  color:#1a1410;font-family:'Nunito',sans-serif;font-weight:600;max-width:220px;word-wrap:break-word;pointer-events:none;
@@ -1059,8 +1086,12 @@ html.touch #settingsBtn{left:54px}
 <!-- ============ CHAT SYSTEM (top-left) ============ -->
 <button id="chatToggleBtn" title="Open chat (Enter)" aria-label="Open chat">&#128172;<span class="badge" id="chatBadge">0</span></button>
 <button id="settingsBtn" title="Settings" aria-label="Settings">&#9881;</button>
+<!-- ============ WORLD BADGE (top-left, below chat buttons) ============
+     Shows the player's assigned world + current player count.
+     Players CANNOT manually switch worlds — this is informational only. -->
+<div id="worldBadge" title="You are in this world. Players cannot switch worlds manually."><span class="wbIcon">&#127759;</span><span class="wbText">World 1</span><span class="wbCount">0/6</span></div>
 <div id="chatHistory"></div>
-<div id="chatInput"><input id="chatTextInput" maxlength="200" placeholder="Type a message... (Enter to send, Esc to close)" autocomplete="off"><button id="chatSendBtn">Send</button></div>
+<div id="chatInput"><div id="chatChannelToggle"><button type="button" id="chChLocal" class="chCh on" title="Only players in your world see this">Local</button><button type="button" id="chChGlobal" class="chCh" title="Everyone in EVERY world sees this">Global</button></div><input id="chatTextInput" maxlength="200" placeholder="Type a message... (Enter to send, Esc to close)" autocomplete="off"><button id="chatSendBtn">Send</button></div>
 <!-- ============ SETTINGS PANEL ============ -->
 <div id="settingsPanel">
  <div class="spHead"><h2>Settings</h2><button class="spClose" id="spClose">&#10005;</button></div>
@@ -1339,7 +1370,9 @@ const EXP_COST=[500,5000,50000];
 const ST={me:null,plants:[],plantSnapT:0,stock:{},restockAt:0,event:null,plots:[],
  players:new Map(),ws:null,connected:false,sel:null,hotbar:[],adminToken:null,dayTime:.9,dayOverride:null,
  leaderboard:[],srvOffset:0,season:{status:'inactive',launchAt:0,cinematicAt:0,active:false},halloween:false,lastExpansion:-1,dread:0,
- prices:{},shopCfg:{},emoteStock:{},emoteRestockAt:0};
+ prices:{},shopCfg:{},emoteStock:{},emoteRestockAt:0,
+ /* ===== MULTI-WORLD: client tracks its assigned world + roster count ===== */
+ worldId:'w1',worldInfo:{id:'w1',players:0,max:6}};
 const QUESTS=[['q1','Plant your first seed','plant',1],['q2','Harvest your first crop','harvest',1],['q3','Sell your first fruit','sell',1],
 ['q4','Buy a new seed variety','buySeedType',2],['q5','Grow five crops','harvest',5],['q6','Earn a mutation','mutations',1],
 ['q7','Purchase an egg','eggsBought',1],['q8','Hatch a pet','petsHatched',1],['q9','Equip a pet','petsEquipped',1],
@@ -3968,7 +4001,10 @@ function handleNet(m){
    ST.prices=m.prices||{};ST.shopCfg=m.cfg||{};
    ST.emoteStock=m.emoteStock||{};ST.emoteRestockAt=m.emoteRestockAt||0;
    ST.shopRoles=m.shopRoles||[];
-   setMyTag(ST.me.name);updateGameShopBtn();
+   /* ===== MULTI-WORLD: capture this player's assigned world + roster ===== */
+   ST.worldId=m.worldId||'w1';
+   ST.worldInfo=m.worldInfo||{id:ST.worldId,players:0,max:6};
+   setMyTag(ST.me.name);updateGameShopBtn();updateWorldBadge();
    refreshPlants(m.plants);ST.stock=m.stock;ST.restockAt=m.restockAt;
    if(m.event)weather.set(m.event,true);
    updateOthers(m.players.map(p=>({...p})));
@@ -4077,8 +4113,16 @@ function handleNet(m){
     if(chatSeenMids.size>100){const arr=[...chatSeenMids];chatSeenMids=new Set(arr.slice(-100));}
    }
    const isMe=ST.me&&m.id===ST.me.id;
-   addChatMessage(m.name,m.text,m.role);
+   /* Channel: 'local' (same-world only) or 'global' (all worlds).
+      Server already routed the message — we just label it for display. */
+   const channel=m.channel||'local';
+   addChatMessage(m.name,m.text,m.role,channel);
    if(settings.bubbles||typeof settings==='undefined')showChatBubble(isMe?'me':m.id,m.name,m.text);
+   break;}
+  /* ===== MULTI-WORLD: server pushed updated world player count ===== */
+  case 'worldInfo':{
+   ST.worldInfo=m.world||ST.worldInfo;
+   updateWorldBadge();
    break;}
   case 'plantMutated':{
    /* A plant mutated during an event — show a notification */
@@ -6552,6 +6596,7 @@ const Season3={
 const chatBubbles=new Map();
 let chatOpen=false;
 let chatUnread=0;
+let chatChannel='local'; /* 'local' (same-world only) or 'global' (all worlds) — default Local */
 const chatSeenMids=new Set(); /* deduplication set — prevents chat messages appearing multiple times */
 const settings={bubbles:true,history:true,volume:0.5};
 animate();
@@ -6594,9 +6639,37 @@ function toggleChat(){
 function sendChat(){
  const text=$('#chatTextInput').value.trim();
  if(!text){toggleChat();return;}
- send({t:'chat',text});
+ /* Send with the currently-selected channel — server routes Local→same-world, Global→all worlds */
+ send({t:'chat',text,channel:chatChannel});
  $('#chatTextInput').value='';
  toggleChat();
+}
+/* ===== CHAT CHANNEL TOGGLE (Local / Global) =====
+   Click the Local/Global buttons in the chat bar to switch which channel you SEND to.
+   Both channels are always visible in the history — they're labelled with a colored tag. */
+function setChatChannel(ch){
+ if(ch!=='local'&&ch!=='global')return;
+ chatChannel=ch;
+ $('#chChLocal').classList.toggle('on',ch==='local');
+ $('#chChLocal').setAttribute('data-ch','local');
+ $('#chChGlobal').classList.toggle('on',ch==='global');
+ $('#chChGlobal').setAttribute('data-ch','global');
+ /* Update placeholder so player knows which channel they're typing into */
+ const inp=$('#chatTextInput');
+ if(inp)inp.placeholder=ch==='global'?'Global channel — everyone in EVERY world sees this… (Enter to send)':'Local channel — only players in your world see this… (Enter to send, Esc to close)';
+}
+/* ===== WORLD BADGE UPDATER =====
+   Shows the player's assigned world ID + current player count.
+   Players cannot switch worlds — this is informational only. */
+function updateWorldBadge(){
+ const badge=$('#worldBadge');if(!badge)return;
+ const info=ST.worldInfo||{id:ST.worldId||'w1',players:0,max:6};
+ const num=String(info.id||'w1').replace(/^w/i,'');
+ const txt=badge.querySelector('.wbText');
+ const cnt=badge.querySelector('.wbCount');
+ if(txt)txt.textContent='World '+num;
+ if(cnt)cnt.textContent=(info.players||0)+'/'+(info.max||6);
+ badge.classList.toggle('full',(info.players||0)>=(info.max||6));
 }
 /* Enter to open chat, Esc to close */
 addEventListener('keydown',e=>{
@@ -6617,6 +6690,10 @@ addEventListener('keydown',e=>{
 (function(){
  const ctb=$('#chatToggleBtn');if(ctb)ctb.onclick=()=>{toggleChat();if(typeof AudioSys!=='undefined')AudioSys.play('click');};
  const csb=$('#chatSendBtn');if(csb)csb.onclick=()=>sendChat();
+ /* Wire up chat channel toggle (Local/Global) */
+ const chLocal=$('#chChLocal');if(chLocal)chLocal.onclick=()=>{setChatChannel('local');if(typeof AudioSys!=='undefined')AudioSys.play('click');};
+ const chGlobal=$('#chChGlobal');if(chGlobal)chGlobal.onclick=()=>{setChatChannel('global');if(typeof AudioSys!=='undefined')AudioSys.play('click');};
+ setChatChannel('local'); /* default channel */
  const sb=$('#settingsBtn');if(sb)sb.onclick=()=>{toggleSettings();if(typeof AudioSys!=='undefined')AudioSys.play('click');};
  const sc=$('#spClose');if(sc)sc.onclick=()=>toggleSettings();
  const slogout=$('#setLogout');if(slogout)slogout.onclick=()=>{if(confirm('Log out and return to login screen?'))logout();};
@@ -6634,7 +6711,7 @@ addEventListener('keydown',e=>{
  addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#settingsPanel')&&$('#settingsPanel').classList.contains('on'))toggleSettings();});
  applySettings();
 })();
-function addChatMessage(name,text,role){
+function addChatMessage(name,text,role,channel){
  const hist=$('#chatHistory');
  if(!hist)return;
  const msg=document.createElement('div');
@@ -6645,7 +6722,12 @@ function addChatMessage(name,text,role){
  if(role==='admin')cls='admin';
  else if(role==='special')cls='special';
  else if(role&&role!=='player')cls=''; /* custom role: keep default gold */
- msg.innerHTML='<b class="'+cls+'">'+safeName+'</b>: '+text;
+ /* Channel tag — Local in green, Global in gold. Helps players tell which channel a message came from. */
+ const ch=channel||'local';
+ const chTag=ch==='global'
+  ?'<span class="chTag chTagG" title="Everyone in every world saw this">G</span> '
+  :'<span class="chTag chTagL" title="Only players in your world saw this">L</span> ';
+ msg.innerHTML=chTag+'<b class="'+cls+'">'+safeName+'</b>: '+text;
  hist.insertBefore(msg,hist.firstChild);
  if(hist.children.length>20)hist.removeChild(hist.lastChild);
  if(!chatOpen){chatUnread++;updateChatBadge();}
@@ -6694,13 +6776,17 @@ function toggleSettings(){
  const open=!p.classList.contains('on');
  p.classList.toggle('on',open);
  if(open){
-  /* Update info section with player's username + ID */
+  /* Update info section with player's username + ID + world */
   const info=$('#spInfo');
   if(info){
    const name=ST.me&&ST.me.name?ST.me.name:'Not logged in';
    const pid=ST.me&&ST.me.pid?ST.me.pid:'--------';
    const role=ST.me&&ST.me.role&&ST.me.role!=='player'?' ('+ST.me.role+')':'';
-   info.innerHTML='Logged in as: <b>'+String(name).replace(/</g,'&lt;')+'</b>'+role+'<br>Your Player ID: <b>'+pid+'</b>';
+   const wId=ST.worldId||'w1';
+   const wNum=String(wId).replace(/^w/i,'');
+   const wInfo=ST.worldInfo||{players:0,max:6};
+   info.innerHTML='Logged in as: <b>'+String(name).replace(/</g,'&lt;')+'</b>'+role+'<br>Your Player ID: <b>'+pid+'</b>'+
+    '<br>Your World: <b style="color:#80e890">World '+wNum+'</b> <span style="color:#8aa08a;font-size:12px">('+wInfo.players+'/'+wInfo.max+' players — you cannot switch worlds manually)</span>';
   }
   applySettings();
  }

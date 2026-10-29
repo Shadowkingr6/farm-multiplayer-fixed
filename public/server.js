@@ -13,6 +13,7 @@ const RESTOCK_MS=5*60*1000,SAVE_MS=30*1000,CINEMATIC_MS=46000;
 const EMOTE_RESTOCK_MS=2*60*60*1000;
 const PLOT_POS=[[-55,-55],[55,-55],[-55,55],[55,55],[-85,0],[85,0]];
 const PLOT_HALF=[6,7.5,9,10.5];
+const MAX_PLAYERS_PER_WORLD=6; /* hard cap per world — when full, next player joins a new world */
 const EXP_COST=[500,5000,50000];
 const WORLD_R=96;
 const PACK_PRICE=1000000;
@@ -524,10 +525,52 @@ const G={players:new Map(),plants:new Map(),plots:new Array(PLOT_POS.length).fil
  season3:{active:false,startTime:0},
  /* ===== CHAOS ACTIVATION state — prevents duplicate chaos triggers during cinematic ===== */
  chaosActivation:{active:false,startedAt:0,events:[],snapScheduledAt:0},
+ /* ===== MULTI-WORLD SYSTEM =====
+    Each world is an isolated farm instance with max 6 players + 6 plot slots.
+    Players are auto-assigned to the first world with capacity on login.
+    They CANNOT manually switch worlds. Admin features / events / announcements
+    broadcast to ALL worlds (via broadcast()). Player positions, plants, chat (Local)
+    only travel within a world (via broadcastWorld()). */
+ worlds:new Map(), /* worldId -> { id, plots:[6], plants:Map, players:Set, createdAt } */
  adminSessions:new Map(),authFails:new Map(),logs:[],startedAt:Date.now(),savedAt:Date.now(),dirty:false,nextId:1};
 G.maintenance={active:false,until:0,msg:'',fix:'',by:''};
 
 function defaultMaxFor(s){return s.id==='rake'||s.id==='alienapple'?0:s.rar==='Common'?50:s.rar==='Uncommon'?25:s.rar==='Rare'?8:s.rar==='Epic'?4:s.rar==='Legendary'?2:1;}
+
+/* ================= MULTI-WORLD MANAGER =================
+   Worlds are isolated farm instances. Each world has its own 6 plot slots and
+   plant list. Players are auto-assigned to the first world with capacity on login.
+   Once assigned, a player's worldId is stored on their save — they always rejoin
+   the same world. They cannot manually switch. */
+function getOrCreateWorld(worldId){
+ if(!worldId)worldId='w1';
+ if(!G.worlds.has(worldId)){
+  G.worlds.set(worldId,{id:worldId,plots:new Array(PLOT_POS.length).fill(null),plants:new Map(),players:new Set(),createdAt:now()});
+  /* For brand-new worlds, plot slots start empty. The first player to join claims slot 0. */
+ }
+ return G.worlds.get(worldId);}
+function findWorldWithSpace(){
+ /* Iterate worlds sorted by ID (w1, w2, w3...) so we always fill lower-numbered worlds first */
+ const ids=[...G.worlds.keys()].sort((a,b)=>(+a.slice(1))- (+b.slice(1)));
+ for(const id of ids){const w=G.worlds.get(id);if(w.players.size<MAX_PLAYERS_PER_WORLD)return w;}
+ /* None found — create the next world. New world ID = max existing + 1 (or 'w1' if no worlds yet). */
+ let maxN=0;for(const id of G.worlds.keys()){const n=+id.slice(1);if(n>maxN)maxN=n;}
+ return getOrCreateWorld('w'+(maxN+1));}
+function worldOf(playerId){const p=G.players.get(playerId);return p&&p.worldId?G.worlds.get(p.worldId):null;}
+function broadcastWorld(worldId,msg,exceptId){if(!WSS||!worldId)return;const s=JSON.stringify(msg);
+ for(const c of WSS.clients){if(c.readyState!==1||c._id===exceptId)continue;
+  const p=G.players.get(c._id);if(p&&p.worldId===worldId)c.send(s);}}
+function pushPlantsToWorld(worldId){const w=worldId?G.worlds.get(worldId):null;if(!w)return;
+ broadcastWorld(worldId,{t:'plants',plants:[...w.plants.values()].map(plantPacket)});}
+function pushPlantsAll(){for(const id of G.worlds.keys())pushPlantsToWorld(id);}
+function worldPlayerList(worldId){const w=worldId?G.worlds.get(worldId):null;if(!w)return[];
+ return [...w.players].map(pid=>G.players.get(pid)).filter(p=>p&&p.online).map(x=>({id:x.id,pid:x.pid||'',name:x.name,x:x.x||0,z:x.z||0,ry:0,
+  cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
+  ac:x.activeCosmetic||null,role:x.role||'player',roleColor:x.roleColor||'',roleEffect:x.roleEffect||'none',roleGlow:!!x.roleGlow}));}
+function worldInfoPacket(worldId){const w=worldId?G.worlds.get(worldId):null;if(!w)return{id:'w1',players:0,max:MAX_PLAYERS_PER_WORLD,plot:-1};
+ return{id:w.id,players:w.players.size,max:MAX_PLAYERS_PER_WORLD};}
+function nextWorldNumber(){let maxN=0;for(const id of G.worlds.keys()){const n=+id.slice(1);if(n>maxN)maxN=n;}return maxN+1;}
+
 function seedStockInit(){const st={};for(const s of SEEDS){const max=defaultMaxFor(s);st[s.id]={max,qty:max===0?0:Math.random()<.9?rint(1,max):0};}return st;}
 function defaultShopConfig(){const c={};for(const s of SEEDS){c[s.id]={enabled:defaultMaxFor(s)>0,price:s.pr,weight:75,rarity:s.rar,max:defaultMaxFor(s),always:false};}return c;}
 function priceMap(){const m={};for(const id in G.shopConfig)m[id]=G.shopConfig[id].price;return m;}
@@ -537,7 +580,7 @@ function rotateEmoteShop(){const pool=EMOTE_CATALOG.slice();const picked=[];
  G.emoteRestockAt=now()+EMOTE_RESTOCK_MS;
  broadcast({t:'emoteStock',stock:G.emoteStock,restockAt:G.emoteRestockAt});}
 
-function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,cash:p.cash,tokens:p.tokens,relics:p.relics||0,
+function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,worldId:p.worldId||'w1',cash:p.cash,tokens:p.tokens,relics:p.relics||0,
  plot:p.plot,expansion:p.expansion,seeds:p.seeds,produce:p.produce,gear:p.gear,eggs:p.eggs,pets:p.pets,packs:p.packs||0,
  stats:p.stats,quests:p.quests,daily:p.daily,discovered:p.discovered,
  passXP:p.passXP||0,passLevel:p.passLevel||1,freeClaimed:p.freeClaimed||[],goldOwned:!!p.goldOwned,goldClaimed:p.goldClaimed||[],
@@ -551,12 +594,14 @@ function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,cash:p.cash
  hhPumpkins:p.hhPumpkins||0,
  role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow,roleBenefits:p.roleBenefits||{},roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
  portal:p.portal||null};}
-function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,plots:G.plots,stock:G.stock,restockAt:G.restockAt,
+function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,
+ worlds:[...G.worlds.entries()].map(([id,w])=>({id:w.id,plots:w.plots,plants:[...w.plants.values()],createdAt:w.createdAt})),
+ stock:G.stock,restockAt:G.restockAt,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
  scubaExpiresAt:global._scubaExpiresAt||0, /* persist Scuba limited-time timer across server restarts */
- players:[...G.players.values()].map(serializePlayer),plants:[...G.plants.values()]};
+ players:[...G.players.values()].map(serializePlayer)};
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
  fs.writeFileSync(SAVE_FILE+'.tmp',JSON.stringify(data));fs.renameSync(SAVE_FILE+'.tmp',SAVE_FILE);
  G.savedAt=Date.now();G.dirty=false;}catch(e){console.error('[FARM] save failed:',e.message);}}
@@ -565,7 +610,25 @@ function load(){let raw=null;
  else if(fs.existsSync(SAVE_BAK))raw=fs.readFileSync(SAVE_BAK,'utf8');
  if(!raw){G.stock=seedStockInit();G.shopConfig=defaultShopConfig();G.restockAt=Date.now()+RESTOCK_MS;rotateEmoteShop();return;}
  try{const d=JSON.parse(raw);G.nextId=d.nextId||1;
-  G.plots=(d.plots||new Array(6).fill(null)).slice(0,6);while(G.plots.length<6)G.plots.push(null);
+  /* ===== MULTI-WORLD LOAD =====
+     Restore world structure. Backward compat: if save has old flat `plots`/`plants` (pre-multiworld),
+     migrate everything into 'w1' and tag all existing players with worldId='w1'. */
+  G.worlds=new Map();
+  if(Array.isArray(d.worlds)){
+   for(const wData of d.worlds){
+    if(!wData||!wData.id)continue;
+    const plots=Array.isArray(wData.plots)?wData.plots.slice(0,PLOT_POS.length):new Array(PLOT_POS.length).fill(null);
+    while(plots.length<PLOT_POS.length)plots.push(null);
+    G.worlds.set(wData.id,{id:wData.id,plots,plants:new Map(),players:new Set(),createdAt:wData.createdAt||now()});
+    for(const pl of (wData.plants||[])){if(!pl.dead){G.worlds.get(wData.id).plants.set(pl.id,pl);}}
+   }
+  }
+  /* Backward-compat: pre-multiworld save → migrate to w1 */
+  if(G.worlds.size===0){
+   const w=getOrCreateWorld('w1');
+   if(Array.isArray(d.plots)){w.plots=d.plots.slice(0,PLOT_POS.length);while(w.plots.length<PLOT_POS.length)w.plots.push(null);}
+   if(Array.isArray(d.plants)){for(const pl of d.plants){if(!pl.dead)w.plants.set(pl.id,pl);}}
+  }
   G.stock=d.stock&&typeof d.stock==='object'&&!Array.isArray(d.stock)?d.stock:seedStockInit();
   const def=defaultShopConfig();G.shopConfig=Object.assign(def,d.shopConfig||{});
   for(const s of SEEDS){if(!G.shopConfig[s.id])G.shopConfig[s.id]=def[s.id];
@@ -606,13 +669,26 @@ function load(){let raw=null;
    if(!p.pid)p.pid=genPlayerId(); /* backfill 9-char player ID for existing saves */
    if(!p.portal)p.portal=defaultPortal();
    if(!p.gear.includes('shovel'))p.gear.push('shovel');
-   G.players.set(p.id,p);if(p.plot>=0&&p.plot<6)G.plots[p.plot]=p.id;}
+   if(!p.worldId)p.worldId='w1'; /* backfill worldId for pre-multiworld saves */
+   /* Make sure player's world exists (it should — restored above — but be defensive) */
+   const w=getOrCreateWorld(p.worldId);
+   w.players.add(p.id);
+   if(p.plot>=0&&p.plot<PLOT_POS.length)w.plots[p.plot]=p.id;
+   G.players.set(p.id,p);}
+  /* Apply offline growth to plants in every world */
   const el=Math.min(Date.now()-(d.savedAt||Date.now()),12*3600*1000);
-  for(const pl of d.plants||[]){if(!pl.dead){pl.prog=Math.min((pl.prog||0)+el,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);G.plants.set(pl.id,pl);}}
-  console.log('[FARM] loaded:',G.players.size,'players | S1:',G.season.status,'| S2:',G.s2.phase);}
+  for(const w of G.worlds.values()){
+   for(const pl of w.plants.values()){if(!pl.dead){pl.prog=Math.min((pl.prog||0)+el,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);}}
+  }
+  console.log('[FARM] loaded:',G.players.size,'players across',G.worlds.size,'world(s) | S1:',G.season.status,'| S2:',G.s2.phase);}
  catch(e){console.error('[FARM] corrupt save, fresh start');G.stock=seedStockInit();G.shopConfig=defaultShopConfig();G.restockAt=Date.now()+RESTOCK_MS;rotateEmoteShop();}}
-function newPlayer(id,name){let plot=G.plots.findIndex(o=>o===null);if(plot<0)plot=0;G.plots[plot]=id;
- return{id,name,pid:genPlayerId(),cash:150,tokens:0,relics:0,plot,expansion:0,seeds:{carrot:5},produce:[],gear:['watercan','shovel'],eggs:{},pets:[],packs:0,
+function newPlayer(id,name){
+ /* Assign this player to the first world with capacity (or create a new world).
+    Players CANNOT manually switch worlds — their worldId is fixed for the life of the account. */
+ const w=findWorldWithSpace();
+ let plot=w.plots.findIndex(o=>o===null);if(plot<0)plot=0;
+ w.plots[plot]=id;w.players.add(id);
+ return{id,name,pid:genPlayerId(),worldId:w.id,cash:150,tokens:0,relics:0,plot,expansion:0,seeds:{carrot:5},produce:[],gear:['watercan','shovel'],eggs:{},pets:[],packs:0,
  stats:{plant:0,harvest:0,sell:0,buySeedType:1,mutations:0,eggsBought:0,petsHatched:0,petsEquipped:0,watered:0,weatherSeen:0,mutHarvest:0,expansion:0,earned:0,rareHarvest:0},
  quests:[],daily:{last:'',streak:0},discovered:{seeds:['carrot'],muts:[],pets:[]},
  passXP:0,passLevel:1,freeClaimed:[],goldOwned:false,goldClaimed:[],
@@ -662,31 +738,37 @@ function tryRelicDrop(p,muts,sd){
  if((rareMut||['Divine','Demon','Mythical','Alienoic'].includes(sd.rar))&&p.relicDrops<5&&Math.random()<.08){
   p.relics=(p.relics||0)+1;p.relicDrops++;sendTo(p.id,{t:'toast',msg:'You found a RELIC!',kind:'quest'});}}
 function tickPlants(){if(G.paused)return;const dt=2000;
- /* If an event is active, plants get a chance to gain mutations while growing */
+ /* If an event is active, plants get a chance to gain mutations while growing.
+    Events are GLOBAL — they affect ALL worlds simultaneously. */
  const evBoosts=G.event?(G.event.def.boosts||{}):{};
  const evHasMutBoost=Object.keys(evBoosts).length>0;
- for(const pl of G.plants.values()){const owner=G.players.get(pl.o);if(!owner)continue;
-  let m=effGrowth(owner);if(pl.boostUntil>now())m*=gearBonus(owner,'water')||1.6;
-  pl.prog=Math.min(pl.prog+dt*m,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);
-  /* ===== EVENT MUTATION GUARANTEE =====
-     When an event is active, growing plants have a chance to gain a mutation that matches the event's boost.
-     This makes events visually exciting — players SEE their plants mutating in real time. */
-  if(evHasMutBoost&&pl.prog<SEED_MAP[pl.s].grow*0.98&&Math.random()<0.04){
-   /* Pick a mutation from the event's boost list */
-   const evMutIds=Object.keys(evBoosts);
-   const mutId=evMutIds[Math.floor(Math.random()*evMutIds.length)];
-   if(mutId&&MUT_MAP[mutId]){
-    if(!pl.muts)pl.muts=[];
-    if(!pl.muts.includes(mutId)&&pl.muts.length<3){
-     pl.muts.push(mutId);
-     /* Notify the owner so they see it happen */
-     sendTo(owner.id,{t:'plantMutated',plantId:pl.id,mut:mutId,plantName:SEED_MAP[pl.s]?SEED_MAP[pl.s].n:'plant'});
+ const worldIdsToRefresh=new Set();
+ for(const w of G.worlds.values()){
+  for(const pl of w.plants.values()){
+   const owner=G.players.get(pl.o);if(!owner)continue;
+   let m=effGrowth(owner);if(pl.boostUntil>now())m*=gearBonus(owner,'water')||1.6;
+   pl.prog=Math.min(pl.prog+dt*m,SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1);
+   /* ===== EVENT MUTATION GUARANTEE =====
+      When an event is active, growing plants have a chance to gain a mutation that matches the event's boost.
+      This makes events visually exciting — players SEE their plants mutating in real time. */
+   if(evHasMutBoost&&pl.prog<SEED_MAP[pl.s].grow*0.98&&Math.random()<0.04){
+    /* Pick a mutation from the event's boost list */
+    const evMutIds=Object.keys(evBoosts);
+    const mutId=evMutIds[Math.floor(Math.random()*evMutIds.length)];
+    if(mutId&&MUT_MAP[mutId]){
+     if(!pl.muts)pl.muts=[];
+     if(!pl.muts.includes(mutId)&&pl.muts.length<3){
+      pl.muts.push(mutId);
+      /* Notify the owner so they see it happen (per-player, not per-world) */
+      sendTo(owner.id,{t:'plantMutated',plantId:pl.id,mut:mutId,plantName:SEED_MAP[pl.s]?SEED_MAP[pl.s].n:'plant'});
+     }
     }
    }
+   worldIdsToRefresh.add(w.id);
   }
  }
- /* Push plant updates to clients so they re-render with mutations */
- if(evHasMutBoost)pushPlants();}
+ /* Push plant updates per-world — only same-world clients receive them */
+ if(evHasMutBoost)for(const wid of worldIdsToRefresh)pushPlantsToWorld(wid);}
 function plantPacket(pl){return{id:pl.id,o:pl.o,s:pl.s,x:+pl.x.toFixed(2),z:+pl.z.toFixed(2),p:+Math.min(pl.prog/(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:1),1).toFixed(3),muts:pl.muts||[]};}
 function startEvent(def,durMs,byAdmin){if(G.event)endEvent(false);
  const dur=durMs||def.dur;G.event={def,start:now(),end:now()+dur};
@@ -712,13 +794,24 @@ function broadcast(msg,exceptId){if(!WSS)return;const s=JSON.stringify(msg);
 function sendTo(id,msg){if(!WSS)return;for(const c of WSS.clients)if(c._id===id&&c.readyState===1)c.send(JSON.stringify(msg));}
 function me(p){return serializePlayer(p);}
 function pushMe(p){sendTo(p.id,{t:'me',me:me(p)});G.dirty=true;save();}
-function pushPlants(){broadcast({t:'plants',plants:[...G.plants.values()].map(plantPacket)});}
-/* ===== INIT DATA HELPER ===== */
+/* pushPlants() now refreshes EVERY world's plants to its own players.
+   For player-specific plant refreshes (e.g. after a single plant/harvest),
+   call pushPlantsToWorld(p.worldId) directly. */
+function pushPlants(){pushPlantsAll();}
+/* ===== INIT DATA HELPER =====
+   Sends only the player's own world's plants, plots, and player roster.
+   Global state (events, season, auction, HH, S3, chaos, stock, shop) is sent
+   to everyone — these are server-wide features that hit all worlds simultaneously. */
 function sendInitData(sock,p){
+ const w=worldOf(p.id);
+ const worldPlants=w?[...w.plants.values()].map(plantPacket):[];
+ const worldPlots=w?w.plots:new Array(PLOT_POS.length).fill(null);
  sock.send(JSON.stringify({t:'init',self:me(p),serverTime:now(),
   season:seasonPacket(),s2:s2Packet(),maintenance:G.maintenance,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
   stickyNote:G.stickyNote,stickyNoteColor:G.stickyNoteColor,
-  plants:[...G.plants.values()].map(plantPacket),stock:G.stock,restockAt:G.restockAt,
+  worldId:p.worldId||'w1',
+  worldInfo:worldInfoPacket(p.worldId),
+  plants:worldPlants,stock:G.stock,restockAt:G.restockAt,
   prices:priceMap(),cfg:G.shopConfig,
   emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
   shopRoles:getShopRolesState(),
@@ -726,13 +819,14 @@ function sendInitData(sock,p){
   s3:s3StatePacket(),
   chaosActivation:{active:G.chaosActivation.active,events:G.chaosActivation.events,snapScheduledAt:G.chaosActivation.snapScheduledAt},
   event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
-  plots:G.plots,plotPos:PLOT_POS,
-  players:[...G.players.values()].filter(x=>x.online).map(x=>({id:x.id,pid:x.pid||'',name:x.name,x:x.x||0,z:x.z||0,ry:0,
-   cb:x.charBody||'farmer',ch:x.charHat||null,cs:x.charShirt||0x4f8a5c,cp:x.charPants||0x4a5a7a,ck:x.charSkinCol||0xe8b48a,
-   ac:x.activeCosmetic||null,role:x.role||'player',roleColor:x.roleColor||'',roleEffect:x.roleEffect||'none',roleGlow:!!x.roleGlow}))}));
- broadcast({t:'pJoin',id:p.id,pid:p.pid||'',name:p.name,
+  plots:worldPlots,plotPos:PLOT_POS,
+  /* Only SAME-WORLD online players are visible to this player */
+  players:worldPlayerList(p.worldId)}));
+ /* Tell other players in the SAME world that this player joined — players in other worlds don't see them. */
+ broadcastWorld(p.worldId,{t:'pJoin',id:p.id,pid:p.pid||'',name:p.name,
   cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
-  ac:p.activeCosmetic||null,role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow},p.id);pushPlants();}
+  ac:p.activeCosmetic||null,role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow},p.id);
+ pushPlantsToWorld(p.worldId);}
 function addStat(p,k,n=1){p.stats[k]=(p.stats[k]||0)+n;}
 function awardReward(p,r){if(r.cash){p.cash+=r.cash;p.stats.earned+=r.cash;}
  if(r.tokens)p.tokens+=r.tokens;if(r.relics)p.relics=(p.relics||0)+r.relics;
@@ -789,7 +883,8 @@ function tickSeason2(){
   const hasGA=(p.pets||[]).some(x=>x.pid==='godalien'&&x.eq);
   if(!hasGA)continue;
   p.lastAlienTry=now();
-  const mature=[...G.plants.values()].filter(pl=>pl.o===p.id&&pl.prog>=(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:0));
+  const w=worldOf(p.id);
+  const mature=w?[...w.plants.values()].filter(pl=>pl.o===p.id&&pl.prog>=(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:0)):[];
   if(mature.length&&Math.random()<.20){
    const target=mature[rint(0,mature.length-1)];
    sendTo(p.id,{t:'toast',msg:'GODALIEN: Your '+SEED_MAP[target.s].n+' has been touched by alien energy!',kind:'quest'});
@@ -817,23 +912,36 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
   return sendTo(p.id,{t:'maintenance',until:G.maintenance.until,msg:G.maintenance.msg,fix:G.maintenance.fix||'',by:G.maintenance.by||''});}
  switch(msg.t){
   case 'pos':{p.x=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.x||0));p.z=Math.max(-WORLD_R,Math.min(WORLD_R,+msg.z||0));
-   p.ry=+msg.ry||0;broadcast({t:'ppos',id:p.id,x:p.x,z:p.z,ry:p.ry},p.id);break;}
-  /* ===== CHAT SYSTEM =====
-     Server-side chat: validates input, filters bad words, rate-limits (1s),
-     strips HTML, broadcasts to everyone (including sender for echo confirmation). */
+   p.ry=+msg.ry||0;
+   /* Position broadcasts only go to players in the SAME world — players in other worlds can't see this player. */
+   broadcastWorld(p.worldId,{t:'ppos',id:p.id,x:p.x,z:p.z,ry:p.ry},p.id);break;}
+  /* ===== CHAT SYSTEM — LOCAL + GLOBAL CHANNELS =====
+     Server-side chat: validates input, filters bad words, rate-limits (1s), strips HTML.
+     LOCAL channel: only players in the SAME world see the message.
+     GLOBAL channel: ALL players across ALL worlds see the message.
+     Default channel is 'local' if not specified. */
   case 'chat':{
    if(!p._lastChat)p._lastChat=0;
    if(now()-p._lastChat<1000)return sendTo(p.id,{t:'toast',msg:'Wait a moment before sending another message.',kind:'err'});
    let text=String(msg.text||'').trim().slice(0,200);
    if(!text)return;
+   /* Channel: 'global' or 'local' (default) */
+   const channel=(msg.channel==='global')?'global':'local';
    /* Filter bad words */
    const low=' '+text.toLowerCase()+' ';
    for(const w of BAD){if(low.includes(w)){text='***';break;}}
    /* Strip HTML to prevent injection */
    text=text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
    p._lastChat=now();
-   /* Broadcast to EVERYONE with a unique message ID (prevents client-side duplicates) */
-   broadcast({t:'chat',mid:'M'+(G.nextId++),id:p.id,name:p.name,text:text,role:p.role||'player'});
+   /* Build the chat packet with a unique message ID (prevents client-side duplicates) */
+   const chatPkt={t:'chat',mid:'M'+(G.nextId++),id:p.id,name:p.name,text:text,role:p.role||'player',channel,worldId:p.worldId||'w1'};
+   if(channel==='global'){
+    /* GLOBAL — everyone in every world sees it */
+    broadcast(chatPkt);
+   }else{
+    /* LOCAL — only same-world players see it */
+    broadcastWorld(p.worldId,chatPkt);
+   }
    break;}
   /* ===== HAUNTED HARVEST — player commands (not admin) =====
      Phase 2 (Hunt): players walk up to Cursed Pumpkins and collect them directly.
@@ -976,7 +1084,8 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    if(!EMOTE_MAP[id]&&!PASS_EMOTES[id])return;
    if(now()<(p._lastEmote||0)+1500)return;
    p._lastEmote=now();
-   broadcast({t:'pemote',id:p.id,emote:id},p.id);addPassXP(p,2);break;}
+   /* Emotes only show to players in the same world — other worlds can't see this player. */
+   broadcastWorld(p.worldId,{t:'pemote',id:p.id,emote:id},p.id);addPassXP(p,2);break;}
   case 'claimPass':{
    const tier=Math.max(1,Math.min(PASS_MAX,+msg.tier|0));
    const track=msg.track==='gold'?'gold':'free';
@@ -1048,8 +1157,8 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
     if(!h||(p.cosmetics||{})[h])p.charHat=h;
    }
    pushMe(p);G.dirty=true;
-   /* Broadcast the char update to all other players so they see the new model */
-   broadcast({t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
+   /* Broadcast the char update to other players in the SAME world so they see the new model */
+   broadcastWorld(p.worldId,{t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
    break;}
   case 'buyCharBody':{
    const b=CHAR_BODY_MAP[msg.bodyId];if(!b)return;
@@ -1060,7 +1169,7 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    p.ownedCharBodies.push(b.id);
    p.charBody=b.id;
    pushMe(p);save();
-   broadcast({t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
+   broadcastWorld(p.worldId,{t:'pCharUpdate',id:p.id,cb:p.charBody,ch:p.charHat,cs:p.charShirt,cp:p.charPants,ck:p.charSkinCol,ac:p.activeCosmetic},p.id);
    sendTo(p.id,{t:'toast',msg:'Unlocked '+b.n+'! Equipped.',kind:'quest'});break;}
   /* ===== BUY ROLE FROM GAME SHOP =====
      Players can purchase roles with relics or sheckles. Limited-time roles (Scuba) become
@@ -1086,7 +1195,7 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    p.role=r.n;p.roleColor=r.color;p.roleEffect=r.effect;p.roleGlow=(r.effect!=='none');
    p.roleBenefits={...r.benefits};p.roleGivenBy='Shop Purchase';
    pushMe(p);save();
-   broadcast({t:'pRoleUpdate',id:p.id,role:p.role,roleColor:p.roleColor,roleEffect:p.roleEffect,roleGlow:p.roleGlow},p.id);
+   broadcastWorld(p.worldId,{t:'pRoleUpdate',id:p.id,role:p.role,roleColor:p.roleColor,roleEffect:p.roleEffect,roleGlow:p.roleGlow},p.id);
    sendTo(p.id,{t:'toast',msg:'✓ You are now a '+r.n+'! '+r.desc,kind:'quest'});
    log('role:buy',p.id,r.n);
    break;}
@@ -1105,25 +1214,27 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    sendTo(p.id,{t:'toast',msg:'Bought '+qty+'x '+sd.n+'!',kind:'shop'});break;}
   case 'plant':{const sd=SEED_MAP[msg.seedId];if(!sd)return;
    if((p.seeds[sd.id]||0)<1)return sendTo(p.id,{t:'toast',msg:'No seeds.',kind:'err'});
+   const w=worldOf(p.id);
    const px=PLOT_POS[p.plot][0],pz=PLOT_POS[p.plot][1],half=PLOT_HALF[p.expansion],x=+msg.x,z=+msg.z;
    if(Math.abs(x-px)>half||Math.abs(z-pz)>half)return sendTo(p.id,{t:'toast',msg:'Plant inside YOUR plot!',kind:'err'});
    if(dist2(x,z,p.x,p.z)>100)return sendTo(p.id,{t:'toast',msg:'Too far.',kind:'err'});
    let count=0;
-   for(const pl of G.plants.values()){if(pl.o===p.id)count++;
+   if(w)for(const pl of w.plants.values()){if(pl.o===p.id)count++;
     if(pl.o===p.id&&dist2(pl.x,pl.z,x,z)<.81)return sendTo(p.id,{t:'toast',msg:'Too close to another plant.',kind:'err'});}
    if(count>=16+p.expansion*8)return sendTo(p.id,{t:'toast',msg:'Plot full!',kind:'err'});
    p.seeds[sd.id]--;
    const pl={id:'P'+(G.nextId++),o:p.id,s:sd.id,x,z,prog:0,boostUntil:0};
-   G.plants.set(pl.id,pl);addStat(p,'plant');addPassXP(p,8);
-   pushMe(p);pushPlants();sendTo(p.id,{t:'toast',msg:sd.n+' planted!',kind:'good'});break;}
-  case 'water':{const pl=G.plants.get(msg.plantId);if(!pl||pl.o!==p.id)return;
+   if(w)w.plants.set(pl.id,pl);addStat(p,'plant');addPassXP(p,8);
+   pushMe(p);pushPlantsToWorld(p.worldId);sendTo(p.id,{t:'toast',msg:sd.n+' planted!',kind:'good'});break;}
+  case 'water':{
+   const w=worldOf(p.id);const pl=w?w.plants.get(msg.plantId):null;if(!pl||pl.o!==p.id)return;
    if(dist2(pl.x,pl.z,p.x,p.z)>100)return;
    if(pl.prog>=(SEED_MAP[pl.s]?SEED_MAP[pl.s].grow:0))return;
    pl.boostUntil=now()+(p.gear.includes('watercan2')?120000:p.gear.includes('watercanG')?150000:90000);
    addStat(p,'watered');addPassXP(p,3);break;}
   case 'harvest':{
    if(!p.gear.includes('shovel'))return sendTo(p.id,{t:'toast',msg:'Need a Shovel!',kind:'err'});
-   const pl=G.plants.get(msg.plantId);if(!pl||pl.o!==p.id)return;
+   const w=worldOf(p.id);const pl=w?w.plants.get(msg.plantId):null;if(!pl||pl.o!==p.id)return;
    const sd=SEED_MAP[pl.s];
    if(dist2(pl.x,pl.z,p.x,p.z)>100)return;
    if(pl.prog<sd.grow)return sendTo(p.id,{t:'toast',msg:'Not ready.',kind:'err'});
@@ -1134,24 +1245,24 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    const fruits=[];
    /* Carry over plant's mutations (gained during event) to ~70% of harvested fruits */
    const plantMuts=pl.muts||[];
-   for(let i=0;i<count;i++){let w=rand(sd.wmin,sd.wmax);
+   for(let i=0;i<count;i++){let w2=rand(sd.wmin,sd.wmax);
     /* Use plant's mutations for most fruits, but roll fresh ones for some variety */
     let muts;
     if(plantMuts.length>0&&Math.random()<0.7){muts=plantMuts.slice();}
     else{muts=rollMuts(p);}
-    if(muts.includes('giant')||muts.includes('overgrown'))w*=2.2;
-    if(muts.includes('miniature'))w*=.5;
+    if(muts.includes('giant')||muts.includes('overgrown'))w2*=2.2;
+    if(muts.includes('miniature'))w2*=.5;
     for(const m of muts)if(!p.discovered.muts.includes(m))p.discovered.muts.push(m);
     if(muts.length){addStat(p,'mutations',muts.length);addStat(p,'mutHarvest');}
-    const f={uid:'F'+(G.nextId++),s:sd.id,w:+w.toFixed(3),m:muts,v:fruitValue(sd,w,muts,p),t:now()};
+    const f={uid:'F'+(G.nextId++),s:sd.id,w:+w2.toFixed(3),m:muts,v:fruitValue(sd,w2,muts,p),t:now()};
     p.produce.push(f);fruits.push(f);}
    tryRelicDrop(p,fruits.length?fruits[0].m:[],sd);
    addStat(p,'harvest');addPassXP(p,15+(fruits.some(f=>f.m.length)?20:0));
    if(['Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'].includes(sd.rar))addStat(p,'rareHarvest');
    if(sd.reg>0){pl.prog=sd.grow*(1-sd.reg);/* Keep mutations on regrowing plants */}
-   else G.plants.delete(pl.id);
+   else if(w)w.plants.delete(pl.id);
    for(const pet of p.pets){pet.xp=(pet.xp||0)+5;pet.lvl=Math.min(10,1+Math.floor(pet.xp/100));}
-   pushMe(p);pushPlants();G.dirty=true;save();
+   pushMe(p);pushPlantsToWorld(p.worldId);G.dirty=true;save();
    sendTo(p.id,{t:'harvested',fruits,plantId:pl.id,seed:sd.id});break;}
   case 'sell':{const uids=Array.isArray(msg.uids)?msg.uids.slice(0,200):[];sellFruits(p,uids);break;}
   case 'sellAll':{sellFruits(p,p.produce.map(f=>f.uid));break;}
@@ -1194,7 +1305,7 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
   case 'expandPlot':{if(p.expansion>=3)return;
    if(p.cash<EXP_COST[p.expansion])return;
    p.cash-=EXP_COST[p.expansion];p.expansion++;addStat(p,'expansion');addPassXP(p,20);
-   pushMe(p);broadcast({t:'plots',plots:G.plots});break;}
+   pushMe(p);broadcastWorld(p.worldId,{t:'plots',plots:(worldOf(p.id)||{}).plots||new Array(PLOT_POS.length).fill(null)});break;}
   case 'leaderboard':{sendTo(p.id,{t:'leaderboard',list:[...G.players.values()]
     .map(x=>({id:x.id,name:x.name,cash:x.cash})).sort((a,b)=>b.cash-a.cash).slice(0,10)});break;}
   case 'adminAuth':{const key=sock._ip||p.id;const fails=G.authFails.get(key)||{n:0,until:0};
@@ -1343,10 +1454,11 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
  const target=a.targetId?G.players.get(a.targetId):admin;
  switch(c){
   case 'info':sendTo(admin.id,{t:'admData',kind:'info',data:{uptime:Math.round((now()-G.startedAt)/1000),
-   online:[...G.players.values()].filter(x=>x.online).length,players:G.players.size,plants:G.plants.size,
+   online:[...G.players.values()].filter(x=>x.online).length,players:G.players.size,plants:[...G.worlds.values()].reduce((n,w)=>n+w.plants.size,0),
+   worlds:G.worlds.size,
    event:G.event?G.event.def.n:'none',paused:G.paused,season:G.season.status,seasonName:G.season.name,
    s2phase:G.s2.phase,s2act:G.s2.act,s2heartFed:G.s2.heartFed}});break;
-  case 'players':sendTo(admin.id,{t:'admData',kind:'players',data:[...G.players.values()].map(x=>({id:x.id,pid:x.pid||'',name:x.name,
+  case 'players':sendTo(admin.id,{t:'admData',kind:'players',data:[...G.players.values()].map(x=>({id:x.id,pid:x.pid||'',name:x.name,worldId:x.worldId||'w1',
    cash:x.cash,tokens:x.tokens,plot:x.plot,exp:x.expansion,online:!!x.online,produce:x.produce.length,pets:x.pets.length,
    role:x.role||'player',roleColor:x.roleColor||'',roleEffect:x.roleEffect||'none',roleGlow:!!x.roleGlow,roleBenefits:x.roleBenefits||{}}))});break;
   /* ===== SEASON 2 ADMIN ===== */
@@ -1483,7 +1595,7 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    t2.roleGlow=(effect!=='none');
    if(role==='player'){t2.lastRolePay=0;t2.roleColor='';t2.roleEffect='none';t2.roleGlow=false;t2.roleBenefits={};}
    pushMe(t2);save();
-   broadcast({t:'pRoleUpdate',id:t2.id,role:t2.role,roleColor:t2.roleColor,roleEffect:t2.roleEffect,roleGlow:t2.roleGlow},t2.id);
+   broadcastWorld(t2.worldId,{t:'pRoleUpdate',id:t2.id,role:t2.role,roleColor:t2.roleColor,roleEffect:t2.roleEffect,roleGlow:t2.roleGlow},t2.id);
    sendTo(admin.id,{t:'toast',msg:t2.name+' is now '+role.toUpperCase()+(color?' ('+color+')':'')+(effect!=='none'?' ['+effect.toUpperCase()+']':''),kind:'good'});
    sendTo(t2.id,{t:'toast',msg:'You are now a '+role.toUpperCase()+'.',kind:'quest'});
    log('role:set',t2.id,role+'/'+effect+(color?'/'+color:'')+' benefits:'+JSON.stringify(benefits));break;}
@@ -1556,16 +1668,22 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
   case 'randomEvent':{const pool=EVENTS.filter(e=>e.w>0);startEvent(pool[rint(0,pool.length-1)]);break;}
   case 'pauseGrow':G.paused=!!a.v;broadcast({t:'toast',msg:'Growth '+(G.paused?'paused':'resumed')+'.'});break;
   case 'setGrowMul':G.growMul=Math.max(.1,Math.min(10,+a.v||1));break;
-  case 'matureAll':{for(const pl of G.plants.values())if(a.ownerOnly?pl.o===target.id:true)
+  case 'matureAll':{
+   /* Mature plants — affects either the admin's own world, or (if targetId given) the target's world.
+      If ownerOnly=true, only that player's plants mature. */
+   const tw=target?worldOf(target.id):worldOf(admin.id);
+   if(tw)for(const pl of tw.plants.values())if(a.ownerOnly?pl.o===target.id:true)
     if(SEED_MAP[pl.s])pl.prog=SEED_MAP[pl.s].grow;
-   pushPlants();break;}
+   if(tw)pushPlantsToWorld(tw.id);break;}
   /* ===== ADMIN SPAWN PLANT IN A PLAYER'S GARDEN =====
      Args: targetId, seed (seedId), x, z, mature (bool), muts (array of mutation IDs)
-     The plant spawns in the target's plot at the given coordinates with optional mutations. */
+     The plant spawns in the target's plot at the given coordinates with optional mutations.
+     Plants are stored in the TARGET'S world (since the target owns the plot). */
   case 'spawnPlant':{
    if(!target)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
    const sd=SEED_MAP[a.seed];
    if(!sd)return sendTo(admin.id,{t:'toast',msg:'Invalid seed ID.',kind:'err'});
+   const tw=worldOf(target.id);if(!tw)return sendTo(admin.id,{t:'toast',msg:'Target has no world.',kind:'err'});
    /* Use target's plot position */
    const tp=PLOT_POS[target.plot]||[0,0];
    const tx=+a.x||tp[0]+(Math.random()-.5)*4;
@@ -1576,8 +1694,8 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
     /* If outside plot, snap to plot center */
     return sendTo(admin.id,{t:'toast',msg:'Coordinates outside player\'s plot. Use their plot area.',kind:'err'});
    }
-   /* Check for collisions */
-   for(const pl of G.plants.values()){
+   /* Check for collisions in the target's world */
+   for(const pl of tw.plants.values()){
     if(pl.o===target.id&&dist2(pl.x,pl.z,tx,tz)<.81){
      return sendTo(admin.id,{t:'toast',msg:'Too close to an existing plant.',kind:'err'});
     }
@@ -1589,12 +1707,12 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
     for(const m of rawMuts){const mt=String(m).trim();if(mt&&MUT_MAP[mt]&&!muts.includes(mt))muts.push(mt);}
     if(muts.length>3)muts=muts.slice(0,3);
    }
-   /* Create the plant */
+   /* Create the plant in the target's world */
    const newPl={id:'P'+(G.nextId++),o:target.id,s:sd.id,x:tx,z:tz,prog:0,boostUntil:0,muts};
    if(a.mute){newPl.prog=0;}
    else if(a.mature||a.mature===undefined){newPl.prog=sd.grow;} /* default to mature */
-   G.plants.set(newPl.id,newPl);
-   pushPlants();G.dirty=true;save();
+   tw.plants.set(newPl.id,newPl);
+   pushPlantsToWorld(tw.id);G.dirty=true;save();
    log('admin:spawnPlant',target.id,sd.id+' muts:'+muts.join(','));
    sendTo(admin.id,{t:'toast',msg:'Spawned '+sd.n+(muts.length?(' ['+muts.join(', ')+']'):'')+' in '+target.name+'\'s garden.',kind:'good'});
    sendTo(target.id,{t:'toast',msg:'A '+sd.n+' appeared in your garden'+(muts.length?' with mutations!':'!'),kind:'quest'});
@@ -1892,6 +2010,17 @@ if(WebSocketServer){
       if(e||!match)return sock.send(JSON.stringify({t:'authError',msg:'Invalid username or password.'}));
       let p=G.players.get(acc.playerId);
       if(!p){p=newPlayer(acc.playerId,acc.username||username);G.players.set(p.id,p);}
+      else{
+       /* Existing player — they rejoin their saved world (cannot change worlds manually).
+          If their world doesn't exist for some reason, fall back to their saved worldId by recreating it. */
+       if(!p.worldId)p.worldId='w1';
+       const w=getOrCreateWorld(p.worldId);
+       if(!w.players.has(p.id))w.players.add(p.id);
+       if(p.plot>=0&&p.plot<PLOT_POS.length&&w.plots[p.plot]!==p.id){
+        /* Re-claim the plot slot if it was somehow lost (e.g. world reset edge case) */
+        if(w.plots[p.plot]===null)w.plots[p.plot]=p.id;
+       }
+      }
       /* Force-close any stale connection from a previous session */
       if(p.online){for(const c of WSS.clients){if(c._id===p.id&&c.readyState===1)c.close();}}
       p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
@@ -1928,7 +2057,13 @@ if(WebSocketServer){
      if(!clean)return sock.send(JSON.stringify({t:'nameRejected',msg:'Bad name.'}));
      const id='U'+crypto.randomBytes(6).toString('hex');
      let p=[...G.players.values()].find(x=>x.name===clean&&!x.online);
-     if(p){p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;}
+     if(p){p.online=true;if(p.packs===undefined)p.packs=0;if(p.bloodDrops===undefined)p.bloodDrops=0;
+      /* Re-register them with their saved world */
+      if(!p.worldId)p.worldId='w1';
+      const w=getOrCreateWorld(p.worldId);
+      if(!w.players.has(p.id))w.players.add(p.id);
+      if(p.plot>=0&&p.plot<PLOT_POS.length&&w.plots[p.plot]===null)w.plots[p.plot]=p.id;
+     }
      else{p=newPlayer(id,clean);p.online=true;G.players.set(p.id,p);}
      sock._id=p.id;joined=true;
      sendInitData(sock,p);
@@ -1937,8 +2072,15 @@ if(WebSocketServer){
     return;
    }
    try{handleMsg(sock,msg);}catch(e){console.error('[FARM] handler:',e.message);}});
-  sock.on('close',()=>{if(!sock._id)return;const p=G.players.get(sock._id);if(p){p.online=false;save();}
-   broadcast({t:'pLeft',id:sock._id});});});
+  sock.on('close',()=>{
+   if(!sock._id)return;
+   const p=G.players.get(sock._id);
+   const wid=p?p.worldId:null;
+   if(p){p.online=false;save();}
+   /* Player-leave notification only goes to the SAME world — other worlds never knew about them. */
+   if(wid)broadcastWorld(wid,{t:'pLeft',id:sock._id});
+   else broadcast({t:'pLeft',id:sock._id}); /* fallback if we don't know the world */
+  });});
  setInterval(()=>{tickPlants();tickSeason2();
   if(G.event&&now()>G.event.end)endEvent();
   if(!G.event&&now()>G.nextEventRoll){G.nextEventRoll=now()+60000;if(Math.random()<.65)rollEvent();}
@@ -2037,10 +2179,21 @@ if(WebSocketServer){
  },250);
  setInterval(()=>{broadcast({t:'seasonState',season:seasonPacket()});
   broadcast({t:'s2State',s2:s2Packet()});},5000);
- setInterval(pushPlants,5000);
+ /* Plant refresh — per-world so players only see their own world's plants */
+ setInterval(pushPlantsAll,5000);
  setInterval(save,SAVE_MS);
- setInterval(()=>{broadcast({t:'plots',plots:G.plots});
-  broadcast({t:'leaderboard',list:[...G.players.values()].map(x=>({id:x.id,name:x.name,cash:x.cash})).sort((a,b)=>b.cash-a.cash).slice(0,10)});},20000);
+ /* Plots refresh — per-world (each world has its own 6 plot slots).
+    Leaderboard is GLOBAL — players from all worlds compete on the same ranking. */
+ setInterval(()=>{
+  for(const w of G.worlds.values()){
+   broadcastWorld(w.id,{t:'plots',plots:w.plots});
+  }
+  broadcast({t:'leaderboard',list:[...G.players.values()].map(x=>({id:x.id,name:x.name,cash:x.cash})).sort((a,b)=>b.cash-a.cash).slice(0,10)});
+  /* Also periodically push updated world info (player count) to each world */
+  for(const w of G.worlds.values()){
+   broadcastWorld(w.id,{t:'worldInfo',world:worldInfoPacket(w.id)});
+  }
+ },20000);
  load();
  loadAccounts();
  process.on('SIGINT',()=>{console.log('\n[FARM] saving…');save();saveAccounts();process.exit(0);});
