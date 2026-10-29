@@ -1004,6 +1004,113 @@ html.touch #chatHistory{top:54px;width:240px;max-height:180px}
 html.touch #chatInput{top:10px;left:58px;width:calc(100vw - 130px)}
 html.touch #chatToggleBtn,html.touch #settingsBtn{width:38px;height:38px;font-size:16px}
 html.touch #settingsBtn{left:54px}
+/* ============ FARM v2.0 UPGRADE — Market, Polls, Elections, Mayor ============ */
+#marketDash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(900px,94vw);max-height:88vh;background:linear-gradient(180deg,#0e1318,#0b1014);border:1px solid #2b3540;border-radius:16px;box-shadow:0 40px 110px #000c;overflow:hidden;display:none;flex-direction:column;z-index:200}
+#marketDash.on{display:flex;animation:mdIn .3s ease}
+@keyframes mdIn{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}}
+.mdHead{background:linear-gradient(180deg,#161d24,#10161b);color:#e6ecf2;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #232d37}
+.mdHead h2{font-size:18px;font-weight:600;letter-spacing:.06em;color:#f0b34c;font-family:'Fredoka'}
+.mdHead .mdSub{font-size:11px;color:#6a7885;letter-spacing:.2em;text-transform:uppercase;font-weight:800}
+.mdHead button{background:#ffffff12;color:#c8d2dc;width:34px;height:34px;border-radius:9px;font-size:15px;border:1px solid #ffffff1a;cursor:pointer}
+.mdBody{padding:18px 22px;overflow-y:auto;flex:1}
+.mdInfo{background:#0d1319;border:1px solid #26313c;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#7c8a98;line-height:1.5}
+.mdInfo b{color:#f0b34c}
+.mdGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.mdCard{background:#141b21;border:1px solid #26313c;border-radius:10px;padding:14px;transition:border-color .15s,transform .15s}
+.mdCard:hover{border-color:#3a4854;transform:translateY(-2px)}
+.mdCard .mdName{font-family:'Fredoka';font-size:14px;color:#e6ecf2;margin-bottom:4px}
+.mdCard .mdPrice{font-family:'Fredoka';font-size:20px;color:#80e890;font-weight:700}
+.mdCard .mdBase{font-size:11px;color:#6a7885;margin-top:2px}
+.mdCard .mdChange{font-size:12px;font-weight:700;padding:2px 8px;border-radius:5px;display:inline-block;margin-top:4px}
+.mdChange.up{background:#1a3a1a;color:#80e890}.mdChange.down{background:#3a1a1a;color:#ff6060}.mdChange.stable{background:#1a1a2a;color:#8a8a9a}
+.mdCard .mdHistory{height:30px;margin-top:8px;display:flex;align-items:flex-end;gap:1px}
+.mdCard .mdHistBar{flex:1;background:#2d6b45;border-radius:1px;min-height:2px;transition:height .3s}
+.mdCard .mdBuyRow{display:flex;gap:6px;margin-top:10px;align-items:center}
+.mdCard .mdQty{width:50px;background:#0d1319;border:1px solid #2b3540;color:#dfe6ee;border-radius:6px;padding:6px;text-align:center;font-size:13px}
+.mdCard .mdBuyBtn{flex:1;background:linear-gradient(180deg,#2d6b45,#1a4a2a);color:#fff;border:none;padding:8px;border-radius:7px;font-family:'Fredoka';font-size:12px;cursor:pointer;font-weight:600;transition:filter .12s}
+.mdCard .mdBuyBtn:hover{filter:brightness(1.15)}
+.mdCard .mdBuyBtn:disabled{opacity:.4;cursor:not-allowed}
+.mdPaused{background:#3a2a10;color:#ffd070;padding:8px 14px;border-radius:8px;font-size:13px;text-align:center;margin-bottom:12px;display:none}
+.mdPaused.on{display:block}
+#marketBtn{display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1a3a22,#2f5d3a);border:2px solid #4fae6888;border-radius:12px;padding:8px 14px;color:#80e890;font-family:'Fredoka';font-size:13px;cursor:pointer;pointer-events:auto;transition:transform .15s,box-shadow .2s}
+#marketBtn:hover{transform:translateY(-1px);box-shadow:0 0 14px #4fae6844}
+#marketBtn .mbIcon{font-size:16px}
+#pollNotify{position:fixed;top:80px;right:20px;z-index:340;display:none;background:linear-gradient(135deg,#1a1a2a,#2a2a3a);border:2px solid #e8a33d88;border-radius:12px;padding:12px 18px;cursor:pointer;transition:transform .15s,box-shadow .2s;max-width:300px}
+#pollNotify.on{display:block;animation:pnIn .4s ease}
+@keyframes pnIn{from{opacity:0;transform:translateX(40px)}}
+#pollNotify:hover{transform:translateY(-2px);box-shadow:0 0 16px #e8a33d44}
+#pollNotify .pnLabel{font-size:10px;color:#e8a33d;letter-spacing:.2em;text-transform:uppercase;font-weight:800}
+#pollNotify .pnText{font-size:13px;color:#f0e8d0;margin-top:4px;font-family:'Fredoka';font-weight:600}
+#pollInterface{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,94vw);max-height:88vh;background:linear-gradient(180deg,#0e1318,#0b1014);border:1px solid #2b3540;border-radius:16px;box-shadow:0 40px 110px #000c;overflow:hidden;display:none;flex-direction:column;z-index:200}
+#pollInterface.on{display:flex;animation:piIn .3s ease}
+@keyframes piIn{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}}
+.piHead{background:linear-gradient(180deg,#161d24,#10161b);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #232d37}
+.piHead h2{font-size:16px;color:#f0b34c;font-family:'Fredoka'}
+.piHead button{background:#ffffff12;color:#c8d2dc;width:32px;height:32px;border-radius:9px;font-size:15px;border:1px solid #ffffff1a;cursor:pointer}
+.piBody{padding:20px 22px;overflow-y:auto;flex:1}
+.piQuestion{font-family:'Fredoka';font-size:20px;color:#e6ecf2;margin-bottom:16px;line-height:1.4}
+.piOption{background:#141b21;border:2px solid #26313c;border-radius:10px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .15s,background .15s;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden}
+.piOption:hover{border-color:#f0b34c;background:#161e25}
+.piOption.voted{border-color:#2d6b45;background:#0d1a12}
+.piOption .poText{font-size:15px;color:#e6ecf2;font-family:'Nunito';font-weight:600}
+.piOption .poCount{font-size:13px;color:#6a7885;font-weight:700}
+.piOption .poPct{font-size:14px;color:#f0b34c;font-weight:700;font-family:'Fredoka'}
+.piOption .poBar{position:absolute;bottom:0;left:0;height:3px;background:#2d6b45;border-radius:0 0 10px 10px;transition:width .5s}
+.piInfo{font-size:12px;color:#6a7885;margin-top:14px;line-height:1.5}
+.piInfo b{color:#93a1af}
+.piClosed{text-align:center;padding:20px;color:#e05a5a;font-family:'Fredoka';font-size:16px}
+#electionInterface{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(640px,94vw);max-height:88vh;background:linear-gradient(180deg,#0e1318,#0b1014);border:1px solid #2b3540;border-radius:16px;box-shadow:0 40px 110px #000c;overflow:hidden;display:none;flex-direction:column;z-index:200}
+#electionInterface.on{display:flex;animation:eiIn .3s ease}
+@keyframes eiIn{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}}
+.eiHead{background:linear-gradient(180deg,#161d24,#10161b);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #232d37}
+.eiHead h2{font-size:16px;color:#ffd24a;font-family:'Fredoka'}
+.eiHead button{background:#ffffff12;color:#c8d2dc;width:32px;height:32px;border-radius:9px;font-size:15px;border:1px solid #ffffff1a;cursor:pointer}
+.eiBody{padding:20px 22px;overflow-y:auto;flex:1}
+.eiStatus{font-size:13px;color:#93a1af;margin-bottom:16px;font-weight:600}
+.eiStatus b{color:#ffd24a}
+.eiNomForm{background:#0d1319;border:1px solid #26313c;border-radius:12px;padding:16px;margin-bottom:16px}
+.eiNomForm h3{font-family:'Fredoka';font-size:15px;color:#e6ecf2;margin-bottom:8px}
+.eiNomForm textarea{width:100%;min-height:80px;background:#0b1014;border:1px solid #2b3540;color:#dfe6ee;border-radius:8px;padding:10px;font-family:'Nunito';font-size:14px;resize:vertical;outline:none}
+.eiNomForm textarea:focus{border-color:#ffd24a}
+.eiNomForm button{margin-top:10px;background:linear-gradient(180deg,#ffd24a,#c0a030);color:#1a1408;border:none;padding:10px 20px;border-radius:8px;font-family:'Fredoka';font-weight:600;cursor:pointer;font-size:14px}
+.eiNomForm button:hover{filter:brightness(1.1)}
+.eiNomForm .eiCount{font-size:11px;color:#6a7885;text-align:right;margin-top:4px}
+.eiFinalist{background:#141b21;border:2px solid #26313c;border-radius:12px;padding:16px;margin-bottom:12px;transition:border-color .15s}
+.eiFinalist:hover{border-color:#ffd24a55}
+.eiFinalist.voted{border-color:#2d6b45;background:#0d1a12}
+.eiFinalist .efName{font-family:'Fredoka';font-size:18px;color:#e6ecf2;margin-bottom:6px}
+.eiFinalist .efStatement{font-size:14px;color:#93a1af;line-height:1.5;margin-bottom:10px}
+.eiFinalist .efVoteBtn{background:linear-gradient(180deg,#ffd24a,#c0a030);color:#1a1408;border:none;padding:8px 20px;border-radius:8px;font-family:'Fredoka';font-weight:600;cursor:pointer;font-size:13px}
+.eiFinalist .efVoteBtn:hover{filter:brightness(1.1)}
+.eiFinalist .efVoteBtn:disabled{opacity:.5;cursor:not-allowed}
+.eiFinalist .efVotes{font-size:13px;color:#6a7885;margin-top:8px}
+.eiResults{text-align:center;padding:20px}
+.eiResults .eiWinner{font-family:'Fredoka';font-size:28px;color:#ffd24a;margin-bottom:8px}
+.eiResults .eiVotes{font-size:14px;color:#93a1af}
+#mayorBadge{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:60;display:none;background:linear-gradient(135deg,#1a1408,#2a2010);border:2px solid #ffd24a88;border-radius:12px;padding:6px 18px;color:#ffd24a;font-family:'Fredoka';font-size:13px;font-weight:600;letter-spacing:.05em;box-shadow:0 0 16px #ffd24a33;align-items:center;gap:8px}
+#mayorBadge.on{display:flex}
+#mayorBadge .mbCrown{font-size:16px}
+.admUpgradeCard{background:#141b21;border:1px solid #26313c;border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.admUpgradeCard>h4{font-size:14px;color:#80e890;margin-bottom:4px;font-family:'Fredoka';letter-spacing:.04em}
+.admUpgradeCard>h4::before{content:'';display:inline-block;width:4px;height:15px;background:#80e890;border-radius:2px;margin-right:9px;vertical-align:-2px}
+.admMarketRow{background:#131a20;border:1px solid #26313c;border-radius:10px;padding:10px 14px;margin-bottom:8px;display:grid;grid-template-columns:minmax(120px,1.5fr) repeat(4,minmax(80px,.8fr)) auto;gap:8px;align-items:center}
+.admMarketRow .amName{font-family:'Fredoka';font-size:13px;color:#e6ecf2}
+.admMarketRow input{background:#0d1319;border:1px solid #2b3540;color:#dfe6ee;border-radius:6px;padding:5px 8px;font-size:12px;width:100%}
+.admPollRow{background:#131a20;border:1px solid #26313c;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.admPollRow .apQ{font-family:'Fredoka';font-size:14px;color:#e6ecf2;margin-bottom:4px}
+.admPollRow .apMeta{font-size:11px;color:#6a7885;margin-bottom:6px}
+.admPollRow .apCounts{font-size:12px;color:#93a1af}
+.admElectionRow{background:#131a20;border:1px solid #26313c;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.admElectionRow .aeStatus{font-family:'Fredoka';font-size:13px;color:#ffd24a;margin-bottom:4px}
+.admElectionRow .aeMeta{font-size:11px;color:#6a7885;margin-bottom:6px}
+.admNomRow{background:#0d1319;border:1px solid #26313c;border-radius:8px;padding:10px;margin:6px 0}
+.admNomRow .anName{font-family:'Fredoka';font-size:13px;color:#e6ecf2}
+.admNomRow .anStmt{font-size:12px;color:#93a1af;line-height:1.4;margin:4px 0}
+.admNomRow .anBtns{display:flex;gap:6px;margin-top:6px}
+.healthDot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.healthDot.ok{background:#4fd07f;box-shadow:0 0 6px #4fd07f}
+.healthDot.warn{background:#f0b34c;box-shadow:0 0 6px #f0b34c}
+.healthDot.err{background:#ff4040;box-shadow:0 0 6px #ff4040}
 </style>
 </head>
 <body>
@@ -11460,6 +11567,170 @@ const Act2 = {
   }
 })();
 
+</script>
+<!-- ============ FARM v2.0 UPGRADE — Market, Polls, Elections, Mayor ============ -->
+<div id="marketDash"><div class="mdHead"><div><h2>GLOBAL SEED MARKET</h2><div class="mdSub">demand-driven pricing</div></div><button id="mdClose">✕</button></div><div class="mdBody"><div class="mdInfo">Prices change based on <b>global demand</b>. When players buy a seed, its price rises. When demand falls, prices decrease.</div><div class="mdPaused" id="mdPaused">⚠ Dynamic pricing is PAUSED by admin.</div><div class="mdGrid" id="mdGrid"></div></div></div>
+<div id="pollNotify"><div class="pnLabel">📋 Active Poll</div><div class="pnText" id="pnText">A poll is open!</div></div>
+<div id="pollInterface"><div class="piHead"><h2>📋 Community Poll</h2><button id="piClose">✕</button></div><div class="piBody" id="piBody"></div></div>
+<div id="electionInterface"><div class="eiHead"><h2>🗳️ Mayor Election</h2><button id="eiClose">✕</button></div><div class="eiBody" id="eiBody"></div></div>
+<div id="mayorBadge"><span class="mbCrown">👑</span><span id="mbText">Mayor: —</span></div>
+<script>
+'use strict';
+(function(){
+const $=s=>document.querySelector(s);
+const UPG={market:null,polls:[],currentPoll:null,election:null,mayor:null,dbBackend:'json'};
+function send(o){if(typeof ST!=='undefined'&&ST.ws&&ST.ws.readyState===1)ST.ws.send(JSON.stringify(o));}
+function escapeHtml(s){return String(s).replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function formatNum(n){n=Math.round(n);return n>=1e9?(n/1e9).toFixed(1)+'B':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':String(n);}
+
+/* ===== CREATE UI ELEMENTS ===== */
+const md=$('#marketDash');if(md){const c=$('#mdClose');if(c)c.onclick=()=>md.classList.remove('on');}
+const mb=document.createElement('button');mb.id='marketBtn';mb.innerHTML='<span class="mbIcon">📊</span> Market';mb.onclick=()=>{send({t:'marketState'});md.classList.add('on');};
+const bl=$('#bottomLeft');if(bl)bl.appendChild(mb);
+const pn=$('#pollNotify');if(pn)pn.onclick=()=>{$('#pollInterface').classList.add('on');send({t:'pollList'});};
+const pi=$('#pollInterface');if(pi){const c=$('#piClose');if(c)c.onclick=()=>pi.classList.remove('on');}
+const ei=$('#electionInterface');if(ei){const c=$('#eiClose');if(c)c.onclick=()=>ei.classList.remove('on');}
+
+/* ===== MARKET DASHBOARD ===== */
+function renderMarket(){
+ if(!UPG.market)return;const grid=$('#mdGrid');if(!grid)return;
+ const paused=$('#mdPaused');if(paused)paused.classList.toggle('on',UPG.market.paused);
+ const prices=UPG.market.prices.sort((a,b)=>{const ra=(typeof SEEDS!=='undefined'&&SEEDS[a.seedId])?SEEDS[a.seedId].rar:'Common';const rb=(typeof SEEDS!=='undefined'&&SEEDS[b.seedId])?SEEDS[b.seedId].rar:'Common';const order=['Common','Uncommon','Rare','Epic','Legendary','Mythical','Demon','Divine','Alienoic'];return order.indexOf(ra)-order.indexOf(rb);});
+ grid.innerHTML=prices.map(p=>{
+  const sd=(typeof SEEDS!=='undefined'&&SEEDS[p.seedId])?SEEDS[p.seedId]:null;const name=sd?sd.n:p.seedId;const rar=sd?sd.rar:'Common';
+  const rarCol=(typeof RARCOL!=='undefined'&&RARCOL[rar])?RARCOL[rar]:'#97a553';
+  const cc=p.changePercent>2?'up':p.changePercent<-2?'down':'stable';const ci=p.trend==='up'?'▲':p.trend==='down'?'▼':'◆';
+  const ct=(p.changePercent>=0?'+':'')+p.changePercent.toFixed(1)+'%';const hist=p.history||[];
+  const maxH=hist.length?Math.max(...hist.map(h=>h.price),1):1;const minH=hist.length?Math.min(...hist.map(h=>h.price),1):1;
+  const range=Math.max(1,maxH-minH);const histBars=hist.length?hist.map(h=>{const hgt=Math.max(2,((h.price-minH)/range)*28);return '<div class="mdHistBar" style="height:'+hgt+'px;background:'+(h.price>p.basePrice?'#2d6b45':'#3a1a1a')+'"></div>';}).join(''):'<div style="font-size:10px;color:#6a7885">No history yet</div>';
+  return '<div class="mdCard"><div class="mdName"><span class="rar" style="background:'+rarCol+';font-size:8px;padding:1px 5px;border-radius:3px;color:#fff;margin-right:4px">'+rar+'</span>'+name+'</div><div class="mdPrice">'+formatNum(p.currentPrice)+' <span style="font-size:11px;color:#6a7885">sheckles</span></div><div class="mdBase">Base: '+formatNum(p.basePrice)+' · Range: '+formatNum(p.minPrice)+'–'+formatNum(p.maxPrice)+'</div><div class="mdChange '+cc+'">'+ci+' '+ct+'</div><div class="mdHistory">'+histBars+'</div><div class="mdBuyRow"><input type="number" class="mdQty" value="1" min="1" max="50" id="mdq_'+p.seedId+'"><button class="mdBuyBtn" id="mdb_'+p.seedId+'">Buy</button></div></div>';
+ }).join('');
+ prices.forEach(p=>{const btn=$('#mdb_'+p.seedId);const qty=$('#mdq_'+p.seedId);if(btn)btn.onclick=()=>{const q=Math.max(1,Math.min(50,parseInt(qty.value)||1));send({t:'marketBuy',seedId:p.seedId,qty:q});};});
+}
+
+/* ===== POLL INTERFACE ===== */
+function renderPoll(poll){
+ if(!poll)return;UPG.currentPoll=poll;const body=$('#piBody');if(!body)return;
+ if(poll.status==='cancelled'){body.innerHTML='<div class="piClosed">This poll was cancelled.</div>';return;}
+ const now=Date.now();const closed=poll.status==='closed'||now>poll.closeAt;const timeLeft=Math.max(0,poll.closeAt-now);
+ const timeStr=timeLeft>3600000?Math.floor(timeLeft/3600000)+'h '+Math.floor((timeLeft%3600000)/60000)+'m':timeLeft>60000?Math.floor(timeLeft/60000)+'m':Math.floor(timeLeft/1000)+'s';
+ body.innerHTML='<div class="piQuestion">'+escapeHtml(poll.question)+'</div>'+poll.options.map((opt,i)=>{
+  const count=poll.counts?(poll.counts[i]||0):0;const pct=poll.totalVotes>0&&poll.showResults?Math.round(count/poll.totalVotes*100):0;const isVoted=poll.myVote===i;
+  return '<div class="piOption'+(isVoted?' voted':'')+'" data-idx="'+i+'"><div class="poText">'+escapeHtml(opt)+(isVoted?' ✓':'')+'</div><div>'+(poll.showResults?'<span class="poPct">'+pct+'%</span> <span class="poCount">('+count+')</span>':(closed?'':'<span class="poCount">Vote →</span>'))+'</div>'+(poll.showResults?'<div class="poBar" style="width:'+pct+'%"></div>':'')+'</div>';
+ }).join('')+'<div class="piInfo">'+(closed?'<b>Poll closed.</b>':'<b>Closes in:</b> '+timeStr)+' · <b>Total votes:</b> '+poll.totalVotes+(poll.allowChanges?' · <b>Vote changes allowed</b>':' · <b>Votes are locked</b>')+(poll.myVote!==null&&!poll.allowChanges?' · <b>Your vote is locked</b>':'')+(poll.myVote!==null&&poll.allowChanges&&!closed?' · <button id="piRemove" style="background:#ffffff0d;border:1px solid #ffffff1a;color:#c8d2dc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">Remove my vote</button>':'')+'</div>';
+ if(!closed){body.querySelectorAll('.piOption').forEach(el=>{el.onclick=()=>{send({t:'pollVote',pollId:poll.id,optionIndex:parseInt(el.dataset.idx)});};});}
+ const rb=$('#piRemove');if(rb)rb.onclick=()=>{send({t:'pollRemoveVote',pollId:poll.id});};
+}
+
+/* ===== ELECTION INTERFACE ===== */
+function renderElection(election){
+ if(!election)return;UPG.election=election;const body=$('#eiBody');if(!body)return;
+ const now=Date.now();let html='';
+ const statusLabels={'nominating':'📝 NOMINATION PHASE','voting':'🗳️ VOTING PHASE','closed':'⏳ VOTING CLOSED','closed_pending_confirmation':'⏳ VOTING CLOSED','completed':'✅ ELECTION COMPLETE','closed_nowinner':'❌ No votes were cast'};
+ html+='<div class="eiStatus"><b>'+(statusLabels[election.status]||election.status)+'</b></div>';
+ if(election.nominationOpen){
+  if(election.hasNominated){html+='<div class="eiNomForm"><h3>✓ You have submitted your nomination</h3><p style="font-size:13px;color:#6a7885">Wait for admin to review and select finalists.</p></div>';}
+  else{html+='<div class="eiNomForm"><h3>Submit Your Candidacy</h3><p style="font-size:12px;color:#6a7885;margin-bottom:8px">Write a campaign statement (10-500 chars).</p><textarea id="eiNomText" maxlength="500" placeholder="My vision for FARM is..."></textarea><div class="eiCount"><span id="eiNomCount">0</span>/500</div><button id="eiNomBtn">Submit Nomination</button></div>';}
+ }
+ if(election.status==='voting'||election.status==='closed'||election.status==='closed_pending_confirmation'||election.status==='completed'){
+  if(election.finalists&&election.finalists.length>0){
+   const timeLeft=Math.max(0,election.closeAt-now);
+   const timeStr=timeLeft>3600000?Math.floor(timeLeft/3600000)+'h '+Math.floor((timeLeft%3600000)/60000)+'m':timeLeft>60000?Math.floor(timeLeft/60000)+'m':Math.floor(timeLeft/1000)+'s';
+   if(election.status==='voting')html+='<div class="eiStatus">⏰ Voting closes in <b>'+timeStr+'</b> · '+election.totalVotes+' total votes</div>';
+   election.finalists.forEach(f=>{
+    const isVoted=election.myVote===f.playerId;const voteCount=election.showResults&&election.tally?(election.tally[f.playerId]||0):null;const canVote=election.status==='voting'&&!isVoted;
+    html+='<div class="eiFinalist'+(isVoted?' voted':'')+'"><div class="efName">'+escapeHtml(f.playerName)+(isVoted?' ✓':'')+'</div><div class="efStatement">'+escapeHtml(f.statement)+'</div>'+(canVote?'<button class="efVoteBtn" data-pid="'+f.playerId+'">Vote for '+escapeHtml(f.playerName)+'</button>':'')+(isVoted&&election.status==='voting'?'<div class="efVotes" style="color:#2d6b45">✓ You voted for this candidate</div>':'')+(voteCount!==null?'<div class="efVotes">'+voteCount+' vote'+(voteCount!==1?'s':'')+'</div>':'')+'</div>';
+   });
+   setTimeout(()=>{body.querySelectorAll('.efVoteBtn').forEach(btn=>{btn.onclick=()=>{send({t:'electionVote',electionId:election.id,finalistPlayerId:btn.dataset.pid});};});},50);
+  }else if(election.status==='voting'){html+='<div class="eiStatus">No finalists selected yet.</div>';}
+ }
+ if(election.status==='completed'&&election.winnerName){html+='<div class="eiResults"><div class="eiWinner">👑 '+escapeHtml(election.winnerName)+'</div><div class="eiVotes">has been elected Mayor of FARM!</div></div>';}
+ if(election.status==='closed_nowinner'){html+='<div class="eiResults"><div class="eiWinner" style="color:#ff6060">No Winner</div><div class="eiVotes">No votes were cast.</div></div>';}
+ body.innerHTML=html;
+ const nomBtn=$('#eiNomBtn');const nomText=$('#eiNomText');const nomCount=$('#eiNomCount');
+ if(nomBtn&&nomText){nomText.oninput=()=>{if(nomCount)nomCount.textContent=nomText.value.length;};nomBtn.onclick=()=>{const stmt=nomText.value.trim();if(stmt.length<10){if(typeof toast==='function')toast('Statement must be at least 10 characters.','err');return;}send({t:'nominate',electionId:election.id,statement:stmt});};}
+}
+
+/* ===== MAYOR BADGE ===== */
+function updateMayorBadge(){
+ const badge=$('#mayorBadge');const text=$('#mbText');if(!badge||!text)return;
+ if(UPG.mayor&&UPG.mayor.active){text.textContent='👑 Mayor: '+UPG.mayor.playerName;badge.classList.add('on');}
+ else badge.classList.remove('on');
+}
+
+/* ===== ADMIN PANEL HOOK ===== */
+function hookAdminPanel(){
+ const observer=new MutationObserver(()=>{
+  const tabs=$('#admTabs');if(!tabs)return;if(tabs.querySelector('[data-atab="Market"]'))return;
+  ['Market','Polls','Elections','Mayor','DBHealth','AuditLog'].forEach(name=>{
+   const btn=document.createElement('button');btn.textContent=name;btn.dataset.atab=name;
+   btn.onclick=()=>{[...tabs.children].forEach(x=>x.classList.remove('on'));btn.classList.add('on');renderAdminTab(name);};
+   tabs.appendChild(btn);
+  });
+ });
+ observer.observe(document.body,{childList:true,subtree:true});
+}
+function renderAdminTab(name){
+ const el=$('#admBody');if(!el)return;el.innerHTML='<div class="admUpgradeCard">Loading...</div>';
+ if(name==='Market')send({t:'admin',token:ST.adminToken,cmd:'marketData'});
+ else if(name==='Polls')send({t:'admin',token:ST.adminToken,cmd:'pollList'});
+ else if(name==='Elections')send({t:'admin',token:ST.adminToken,cmd:'electionList'});
+ else if(name==='Mayor')send({t:'admin',token:ST.adminToken,cmd:'mayorHistory'});
+ else if(name==='DBHealth')send({t:'admin',token:ST.adminToken,cmd:'dbHealth'});
+ else if(name==='AuditLog')send({t:'admin',token:ST.adminToken,cmd:'auditLog',args:{limit:100}});
+}
+function renderAdminData(kind,data){
+ const el=$('#admBody');if(!el)return;
+ if(kind==='market'){
+  el.innerHTML='<div class="admUpgradeCard"><h4>GLOBAL SEED MARKET</h4><div class="desc">Dynamic pricing '+(data.paused?'<b style="color:#ff6060">PAUSED</b>':'<b style="color:#80e890">ACTIVE</b>')+'. Update interval: '+Math.floor(data.updateInterval/1000)+'s.</div><div class="admRow" style="margin-top:12px"><button class="btnSm btnA" onclick="admCmd(\'marketPause\',{paused:'+!data.paused+'})">'+(data.paused?'Resume':'Pause')+' Dynamic Pricing</button><button class="btnSm btnR" onclick="if(confirm(\'Reset ALL prices?\'))admCmd(\'marketReset\',{all:true})">Reset ALL Prices</button></div></div><div class="admUpgradeCard"><h4>SEED PRICES</h4><div class="admMarketRow" style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#6a7885;font-weight:800"><div>Seed</div><div>Base</div><div>Current</div><div>Min</div><div>Max</div><div>Actions</div></div>'+data.prices.map(p=>'<div class="admMarketRow"><div class="amName">'+p.seedId+'</div><div>'+p.basePrice+'</div><div style="color:#80e890;font-weight:700">'+p.currentPrice+'</div><div>'+p.minPrice+'</div><div>'+p.maxPrice+'</div><div style="display:flex;gap:4px"><input type="number" value="'+p.basePrice+'" id="ambp_'+p.seedId+'" style="width:60px"><button class="btnSm btnG" onclick="admCmd(\'marketSetBasePrice\',{seedId:\''+p.seedId+'\',basePrice:+document.getElementById(\'ambp_'+p.seedId+'\').value})">Set</button><button class="btnSm btnGhost" onclick="admCmd(\'marketReset\',{seedId:\''+p.seedId+'\'})">Reset</button></div></div>').join('')+'</div>';
+ }else if(kind==='polls'){
+  el.innerHTML='<div class="admUpgradeCard"><h4>CREATE NEW POLL</h4><div class="admRow"><label>Question</label><input id="apQuestion" style="flex:1;min-width:200px" placeholder="Poll question..."></div><div class="admRow"><label>Options (2-10)</label><div id="apOptions" style="display:flex;flex-direction:column;gap:4px;flex:1"><input class="apOpt" placeholder="Option 1" style="width:100%"><input class="apOpt" placeholder="Option 2" style="width:100%"></div><button class="btnSm btnGhost" onclick="(function(){const c=document.getElementById(\'apOptions\');const i=document.createElement(\'input\');i.className=\'apOpt\';i.placeholder=\'Option \'+(c.children.length+1);i.style.width=\'100%\';c.appendChild(i)})()">+ Add Option</button></div><div class="admRow"><label>Color</label><input type="color" id="apColor" value="#e8a33d" style="width:52px;height:34px"></div><div class="admRow"><label>Close in (hours)</label><input type="number" id="apHours" value="24" min="1" max="168" style="width:80px"></div><div class="admRow"><label>Allow vote changes</label><input type="checkbox" id="apAllowChanges"></div><div class="admRow"><label>Show results during voting</label><input type="checkbox" id="apResultsVisible" checked></div><button class="btnSm btnA" onclick="(function(){const q=document.getElementById(\'apQuestion\').value.trim();const opts=[...document.querySelectorAll(\'.apOpt\')].map(i=>i.value.trim()).filter(i=>i);if(!q||opts.length<2){alert(\'Need question and 2+ options\');return;}admCmd(\'pollCreate\',{question:q,options:opts,color:document.getElementById(\'apColor\').value,closeAt:Date.now()+(+document.getElementById(\'apHours\').value)*3600000,allowChanges:document.getElementById(\'apAllowChanges\').checked,resultsVisible:document.getElementById(\'apResultsVisible\').checked})})()">📋 CREATE & PUBLISH POLL</button></div><div class="admUpgradeCard"><h4>EXISTING POLLS ('+data.length+')</h4>'+data.map(p=>'<div class="admPollRow"><div class="apQ">'+escapeHtml(p.question)+'</div><div class="apMeta">Status: <b>'+p.status+'</b> · '+p.totalVotes+' votes · by '+p.createdByName+'</div><div class="apCounts">'+p.options.map((o,i)=>escapeHtml(o)+': '+(p.counts[i]||0)).join(' · ')+'</div>'+(p.status==='open'?'<div style="margin-top:6px"><button class="btnSm btnA" onclick="admCmd(\'pollClose\',{pollId:\''+p.id+'\'})">Close Poll</button> <button class="btnSm btnR" onclick="if(confirm(\'Cancel?\'))admCmd(\'pollCancel\',{pollId:\''+p.id+'\'})">Cancel</button></div>':'')+'</div>').join('')+'</div>';
+ }else if(kind==='elections'){
+  el.innerHTML='<div class="admUpgradeCard"><h4>ELECTIONS</h4><button class="btnSm btnA" onclick="admCmd(\'electionCreate\',{})">+ Create New Election</button></div>'+data.map(e=>'<div class="admUpgradeCard"><h4>Election '+e.id.slice(0,8)+' — '+e.status.toUpperCase()+'</h4><div class="aeMeta">Created: '+new Date(e.createdAt).toLocaleString()+' · '+e.nominationCount+' nominations · '+e.finalistCount+' finalists · '+e.totalVotes+' votes</div>'+(e.winnerName?'<div class="aeStatus">Winner: '+e.winnerName+'</div>':'')+(e.nominations&&e.nominations.length?'<div style="margin-top:10px"><b style="color:#f0b34c;font-size:12px">NOMINATIONS:</b></div>'+e.nominations.map(n=>'<div class="admNomRow"><div class="anName">'+n.playerName+' <span style="font-size:10px;color:#6a7885">['+n.status+']</span></div><div class="anStmt">'+escapeHtml(n.statement)+'</div>'+(n.status==='pending'?'<div class="anBtns"><button class="btnSm btnG" onclick="admCmd(\'electionReviewNom\',{nominationId:\''+n.id+'\',action:\'approve\'})">Approve</button><button class="btnSm btnR" onclick="admCmd(\'electionReviewNom\',{nominationId:\''+n.id+'\',action:\'reject\'})">Reject</button></div>':'')+(n.status==='approved'?'<div class="anBtns"><button class="btnSm btnA" onclick="admCmd(\'electionReviewNom\',{nominationId:\''+n.id+'\',action:\'finalize\'})">★ Make Finalist</button></div>':'')+'</div>').join(''):'')+(e.status==='nominating'&&e.finalistCount>0?'<div class="anBtns" style="margin-top:8px"><button class="btnSm btnA" onclick="(function(){const days=+prompt(\'Term length in days? (1-90)\',30)||30;const closeIn=+prompt(\'Voting closes in how many hours?\',48)||48;admCmd(\'electionPublish\',{electionId:\''+e.id+'\',startAt:Date.now(),closeAt:Date.now()+closeIn*3600000,termDays:days})})()">📢 Publish (Open Voting)</button></div>':'')+(e.status==='voting'?'<div class="anBtns" style="margin-top:8px"><button class="btnSm btnR" onclick="if(confirm(\'Close voting?\'))admCmd(\'electionClose\',{electionId:\''+e.id+'\'})">Close Voting</button></div>':'')+((e.status==='closed'||e.status==='closed_pending_confirmation')&&e.winnerName?'<div class="anBtns" style="margin-top:8px"><button class="btnSm btnA" onclick="if(confirm(\'Confirm '+e.winnerName+' as Mayor?\'))admCmd(\'electionConfirmWinner\',{electionId:\''+e.id+'\'})">✓ Confirm Winner as Mayor</button></div>':'')+'</div>').join('');
+ }else if(kind==='mayorHistory'){
+  const current=data.find(t=>t.status==='active');
+  el.innerHTML='<div class="admUpgradeCard"><h4>CURRENT MAYOR</h4>'+(current?'<div class="aeStatus">👑 '+current.playerName+'</div><div class="aeMeta">Term: '+new Date(current.startAt).toLocaleDateString()+' → '+new Date(current.endAt).toLocaleDateString()+'</div><div class="anBtns" style="margin-top:8px"><button class="btnSm btnR" onclick="(function(){const r=prompt(\'Reason for revoking mayor?\',\'\');if(r!==null)admCmd(\'revokeMayor\',{reason:r})})()">Revoke Mayor Role</button></div>':'<div class="aeMeta">No active mayor.</div>')+'</div><div class="admUpgradeCard"><h4>MAYOR HISTORY ('+data.length+')</h4>'+data.map(t=>'<div class="admElectionRow"><div class="aeStatus">'+t.playerName+'</div><div class="aeMeta">'+t.status+' · '+new Date(t.startAt).toLocaleDateString()+' → '+new Date(t.endAt).toLocaleDateString()+'</div></div>').join('')+'</div>';
+ }else if(kind==='dbHealth'){
+  const dot=data.connected?(data.backend==='json'?'warn':'ok'):'err';
+  el.innerHTML='<div class="admUpgradeCard"><h4>DATABASE HEALTH</h4><div class="admRow"><span class="healthDot '+dot+'"></span><b>'+data.backend.toUpperCase()+'</b> '+(data.connected?'Connected':'Disconnected')+'</div>'+(data.backend==='json'?'<div class="desc" style="color:#f0b34c">⚠ JSON file storage is NOT persistent on Render. Set DATABASE_URL for persistent storage.</div>':'')+(data.accounts!==undefined?'<div class="admRow"><label>Accounts</label><b>'+data.accounts+'</b></div>':'')+(data.players!==undefined?'<div class="admRow"><label>Players</label><b>'+data.players+'</b></div>':'')+(data.accountsFile!==undefined?'<div class="admRow"><label>accounts.json exists</label><b>'+(data.accountsFile?'Yes':'No')+'</b></div>':'')+(data.saveFile!==undefined?'<div class="admRow"><label>farm_save.json exists</label><b>'+(data.saveFile?'Yes':'No')+'</b></div>':'')+(data.warning?'<div class="desc" style="color:#f0b34c">'+data.warning+'</div>':'')+(data.error?'<div class="desc" style="color:#ff4040">Error: '+data.error+'</div>':'')+'</div>';
+ }else if(kind==='auditLog'){
+  el.innerHTML='<div class="admUpgradeCard"><h4>AUDIT LOG ('+data.length+' entries)</h4><table><tr><th>Time</th><th>Action</th><th>Actor</th><th>Target</th><th>Details</th></tr>'+data.map(l=>'<tr><td style="font-size:11px">'+new Date(l.at).toLocaleString()+'</td><td style="font-size:12px;color:#f0b34c">'+l.action+'</td><td style="font-size:12px">'+(l.actorName||'—')+'</td><td style="font-size:11px">'+(l.targetId||'—')+'</td><td style="font-size:11px;color:#6a7885">'+(l.details?JSON.stringify(l.details).slice(0,80):'—')+'</td></tr>').join('')+'</table></div>';
+ }
+}
+
+/* ===== HOOK INTO handleNet ===== */
+function hookHandleNet(){
+ if(typeof handleNet!=='function'){setTimeout(hookHandleNet,100);return;}
+ const orig=handleNet;window.handleNet=function(m){if(handleUpgradeNet(m))return;orig(m);};
+ console.log('[UPGRADE] handleNet hooked.');
+}
+function handleUpgradeNet(m){
+ switch(m.t){
+  case 'marketPrices':UPG.market=m.market;renderMarket();return true;
+  case 'pollNew':UPG.polls.push({id:m.poll.id,question:m.poll.question,openAt:m.poll.openAt,closeAt:m.poll.closeAt,color:m.poll.color});showPollNotify(m.poll.question);return true;
+  case 'pollList':UPG.polls=m.polls||[];if(UPG.polls.length>0){/* show first poll */}else{const body=$('#piBody');if(body)body.innerHTML='<div style="text-align:center;padding:40px;color:#6a7885">No active polls.</div>';}return true;
+  case 'pollUpdate':renderPoll(m.poll);return true;
+  case 'pollClosed':if(typeof toast==='function')toast('📋 Poll closed: '+(m.question||''),'info');send({t:'pollList'});return true;
+  case 'pollCancelled':if(typeof toast==='function')toast('📋 Poll cancelled.','info');send({t:'pollList'});return true;
+  case 'electionNew':if(typeof toast==='function')toast('🗳️ A new election has been announced!','event');$('#electionInterface').classList.add('on');send({t:'electionData',electionId:m.electionId});return true;
+  case 'electionPublished':if(typeof toast==='function')toast('🗳️ Voting is now open!','event');$('#electionInterface').classList.add('on');send({t:'electionData',electionId:m.electionId});return true;
+  case 'electionData':renderElection(m.election);return true;
+  case 'electionAutoClosed':if(typeof toast==='function')toast('🗳️ Voting has closed.','info');return true;
+  case 'mayorInfo':UPG.mayor=m.mayor;updateMayorBadge();return true;
+  case 'nominationConfirmed':if(typeof toast==='function')toast('✓ Nomination submitted!','quest');if(UPG.election)send({t:'electionData',electionId:UPG.election.id});return true;
+  case 'admData':if(['market','polls','elections','mayorHistory','dbHealth','auditLog'].includes(m.kind)){renderAdminData(m.kind,m.data);return true;}return false;
+  default:return false;
+ }
+}
+function showPollNotify(question){const pn=$('#pollNotify');const txt=$('#pnText');if(!pn||!txt)return;txt.textContent=question.slice(0,50)+(question.length>50?'…':'');pn.classList.add('on');}
+
+/* ===== INITIALIZATION ===== */
+function start(){
+ hookHandleNet();hookAdminPanel();console.log('[UPGRADE] Client upgrade loaded.');
+ const checkConnected=setInterval(()=>{if(typeof ST!=='undefined'&&ST.me){clearInterval(checkConnected);send({t:'marketState'});send({t:'pollList'});send({t:'mayorInfo'});}},1000);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
 </script>
 </body>
 </html>

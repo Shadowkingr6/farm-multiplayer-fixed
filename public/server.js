@@ -23,6 +23,668 @@ const GOLD_PASS_COST=35,PASS_MAX=20;
 const HEART_ACT1_FED=500;        /* fruit needed to unlock Decider */
 const DECIDER_COST=1000000000;   /* 1B blood drops */
 let WebSocketServer=null,WSS=null;try{WebSocketServer=require('ws');}catch(e){console.error('[FARM] run: npm install ws');}
+
+/* ============================================================
+   POSTGRESQL / SUPABASE DATABASE LAYER
+   ============================================================
+   If DATABASE_URL is set AND the 'pg' package is installed,
+   all persistent data is stored in PostgreSQL. This survives
+   Render redeployments and is shared across all instances.
+
+   If DATABASE_URL is NOT set, the server falls back to JSON
+   files (existing behavior — NOT persistent on Render free tier).
+
+   SAFETY RULES:
+   1. NEVER creates an empty database over existing data.
+   2. On first PG connection, auto-migrates JSON → PG (if JSON exists).
+   3. If PG already has data, migration is skipped.
+   4. If PG connection fails, server keeps running from memory.
+   5. All queries use parameterized SQL (no injection).
+   ============================================================ */
+let pg=null;try{pg=require('pg');}catch(e){console.log('[FARM-DB] pg package not installed — JSON file mode only');}
+const DATABASE_URL=process.env.DATABASE_URL||'';
+const USE_PG=!!(pg&&DATABASE_URL);
+let dbPool=null,dbReady=false;
+
+/* Database initialization — called at startup */
+async function dbInit(){
+ if(!USE_PG){console.log('[FARM-DB] JSON file mode (no DATABASE_URL set).');return;}
+ console.log('[FARM-DB] PostgreSQL mode enabled. Connecting to Supabase...');
+ try{
+  dbPool=new pg.Pool({
+   connectionString:DATABASE_URL,
+   max:10,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,
+   ssl:DATABASE_URL.includes('supabase')||DATABASE_URL.includes('render.com')?{rejectUnauthorized:false}:undefined
+  });
+  await dbPool.query('SELECT 1');
+  console.log('[FARM-DB] Connected to PostgreSQL.');
+  /* Check if tables exist (user must run schema.sql manually) */
+  const tRes=await dbPool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='accounts'");
+  if(tRes.rows.length===0){
+   console.error('[FARM-DB] ❌ Tables not found! Run schema.sql in your Supabase SQL Editor first.');
+   console.error('[FARM-DB] Falling back to JSON file mode.');
+   dbPool=null;return;
+  }
+  console.log('[FARM-DB] Tables verified.');
+  /* Auto-migrate JSON → PG if PG is empty and JSON files exist */
+  await dbMigrateFromJsonIfNeeded();
+  dbReady=true;
+  console.log('[FARM-DB] PostgreSQL ready.');
+ }catch(e){
+  console.error('[FARM-DB] ❌ PostgreSQL connection FAILED:',e.message);
+  console.error('[FARM-DB] Falling back to JSON file mode. DATA WILL NOT BE PERSISTENT.');
+  dbPool=null;
+ }
+}
+
+/* Migration: JSON → PostgreSQL (one-time, safe, non-destructive) */
+async function dbMigrateFromJsonIfNeeded(){
+ try{
+  const res=await dbPool.query('SELECT COUNT(*) as cnt FROM accounts');
+  const pgAccountCount=parseInt(res.rows[0].cnt);
+  if(pgAccountCount>0){
+   console.log('[FARM-DB] PostgreSQL already has',pgAccountCount,'accounts — skipping migration.');
+   return;
+  }
+  console.log('[FARM-DB] PostgreSQL is empty. Checking for JSON files to migrate...');
+  /* Try to migrate accounts.json */
+  if(fs.existsSync(ACCOUNTS_FILE)){
+   console.log('[FARM-DB] Migrating accounts from',ACCOUNTS_FILE,'...');
+   const accounts=JSON.parse(fs.readFileSync(ACCOUNTS_FILE,'utf8'));
+   let count=0;
+   for(const key in accounts){
+    const a=accounts[key];
+    try{
+     await dbPool.query(
+      'INSERT INTO accounts(username_lower,username,password_hash,email,email_verified,player_id,created_at,verify_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(username_lower) DO NOTHING',
+      [key,a.username||key,a.passwordHash,a.email||'',!!a.emailVerified,a.playerId,a.createdAt||Date.now(),a.verifyToken||null]);
+     count++;
+    }catch(e){console.error('[FARM-DB] Account migration error for',key,':',e.message);}
+   }
+   console.log('[FARM-DB] Migrated',count,'accounts.');
+  }else{
+   console.log('[FARM-DB] No accounts.json found — starting fresh (no accounts to migrate).');
+  }
+  /* Try to migrate farm_save.json */
+  if(fs.existsSync(SAVE_FILE)){
+   console.log('[FARM-DB] Migrating game state from',SAVE_FILE,'...');
+   const d=JSON.parse(fs.readFileSync(SAVE_FILE,'utf8'));
+   /* Migrate players */
+   if(d.players){
+    let pCount=0;
+    for(const p of d.players){
+     try{
+      await dbPool.query('INSERT INTO players(id,data,updated_at) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=$2,updated_at=$3',
+       [p.id,JSON.stringify(p),Date.now()]);
+      pCount++;
+     }catch(e){console.error('[FARM-DB] Player migration error for',p.id,':',e.message);}
+    }
+    console.log('[FARM-DB] Migrated',pCount,'players.');
+   }
+   /* Migrate worlds */
+   if(d.worlds){
+    await dbPool.query('INSERT INTO game_state(key,value,updated_at) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET value=$2,updated_at=$3',
+     ['worlds',JSON.stringify(d.worlds),Date.now()]);
+    console.log('[FARM-DB] Migrated worlds.');
+   }else if(d.plots||d.plants){
+    /* Pre-multiworld save → create w1 */
+    const w1={id:'w1',plots:d.plots||[],plants:d.plants||[],createdAt:Date.now()};
+    await dbPool.query('INSERT INTO game_state(key,value,updated_at) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET value=$2,updated_at=$3',
+     ['worlds',JSON.stringify([w1]),Date.now()]);
+    console.log('[FARM-DB] Migrated pre-multiworld state to w1.');
+   }
+   /* Migrate global state */
+   const gsKeys=['nextId','stock','restockAt','season','shopConfig','emoteStock','emoteRestockAt','maintenance','s2','timer','portalEnabled','scubaExpiresAt'];
+   const gsData={};
+   for(const k of gsKeys)if(d[k]!==undefined)gsData[k]=d[k];
+   await dbPool.query('INSERT INTO game_state(key,value,updated_at) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET value=$2,updated_at=$3',
+    ['globalState',JSON.stringify(gsData),Date.now()]);
+   console.log('[FARM-DB] Migrated global state.');
+  }else{
+   console.log('[FARM-DB] No farm_save.json found — starting fresh.');
+  }
+  console.log('[FARM-DB] Migration complete. JSON files were NOT deleted (kept as backup).');
+ }catch(e){
+  console.error('[FARM-DB] Migration check failed:',e.message);
+ }
+}
+
+/* Database CRUD: Accounts */
+async function dbLoadAccounts(){
+ if(!dbPool)return null;
+ try{
+  const res=await dbPool.query('SELECT * FROM accounts');
+  const accounts={};
+  for(const r of res.rows){
+   accounts[r.username_lower]={username:r.username,passwordHash:r.password_hash,email:r.email||'',emailVerified:!!r.email_verified,playerId:r.player_id,createdAt:r.created_at,verifyToken:r.verify_token||undefined};
+  }
+  return accounts;
+ }catch(e){console.error('[FARM-DB] loadAccounts error:',e.message);return null;}
+}
+async function dbSaveAccounts(accounts){
+ if(!dbPool)return;
+ try{
+  for(const key in accounts){
+   const a=accounts[key];
+   await dbPool.query(
+    'INSERT INTO accounts(username_lower,username,password_hash,email,email_verified,player_id,created_at,verify_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(username_lower) DO UPDATE SET username=EXCLUDED.username,password_hash=EXCLUDED.password_hash,email=EXCLUDED.email,email_verified=EXCLUDED.email_verified,verify_token=EXCLUDED.verify_token',
+    [key,a.username||key,a.passwordHash,a.email||'',!!a.emailVerified,a.playerId,a.createdAt||Date.now(),a.verifyToken||null]);
+  }
+ }catch(e){console.error('[FARM-DB] saveAccounts error:',e.message);}
+}
+async function dbUpsertAccount(key,a){
+ if(!dbPool)return;
+ try{
+  await dbPool.query(
+   'INSERT INTO accounts(username_lower,username,password_hash,email,email_verified,player_id,created_at,verify_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(username_lower) DO UPDATE SET username=EXCLUDED.username,password_hash=EXCLUDED.password_hash,email=EXCLUDED.email,email_verified=EXCLUDED.email_verified,verify_token=EXCLUDED.verify_token',
+   [key,a.username||key,a.passwordHash,a.email||'',!!a.emailVerified,a.playerId,a.createdAt||Date.now(),a.verifyToken||null]);
+ }catch(e){console.error('[FARM-DB] upsertAccount error:',e.message);}
+}
+
+/* Database CRUD: Players */
+async function dbLoadAllPlayers(){
+ if(!dbPool)return null;
+ try{
+  const res=await dbPool.query('SELECT data FROM players');
+  return res.rows.map(r=>r.data);
+ }catch(e){console.error('[FARM-DB] loadAllPlayers error:',e.message);return null;}
+}
+async function dbSavePlayer(p){
+ if(!dbPool)return;
+ try{
+  await dbPool.query('INSERT INTO players(id,data,updated_at) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=$2,updated_at=$3',
+   [p.id,JSON.stringify(p),Date.now()]);
+ }catch(e){console.error('[FARM-DB] savePlayer error for',p.id,':',e.message);}
+}
+async function dbSaveAllPlayers(players){
+ if(!dbPool)return;
+ for(const p of players)await dbSavePlayer(p);
+}
+
+/* Database CRUD: Game State */
+async function dbLoadGameState(){
+ if(!dbPool)return null;
+ try{
+  const res=await dbPool.query('SELECT key,value FROM game_state');
+  const state={};
+  for(const r of res.rows)state[r.key]=r.value;
+  return state;
+ }catch(e){console.error('[FARM-DB] loadGameState error:',e.message);return null;}
+}
+async function dbSaveGameStateKey(key,value){
+ if(!dbPool)return;
+ try{
+  await dbPool.query('INSERT INTO game_state(key,value,updated_at) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET value=$2,updated_at=$3',
+   [key,JSON.stringify(value),Date.now()]);
+ }catch(e){console.error('[FARM-DB] saveGameStateKey error:',e.message);}
+}
+
+/* Database: Audit Log */
+async function dbAddAudit(action,actorId,actorName,targetId,details){
+ if(!dbPool)return;
+ try{
+  await dbPool.query('INSERT INTO audit_log(action,actor_id,actor_name,target_id,details,at) VALUES($1,$2,$3,$4,$5,$6)',
+   [action,actorId||null,actorName||null,targetId||null,JSON.stringify(details||{}),Date.now()]);
+ }catch(e){console.error('[FARM-DB] addAudit error:',e.message);}
+}
+async function dbLoadAudit(limit){
+ if(!dbPool)return[];
+ try{
+  const res=await dbPool.query('SELECT * FROM audit_log ORDER BY at DESC LIMIT $1',[limit||100]);
+  return res.rows.map(r=>({id:r.id,action:r.action,actorId:r.actor_id,actorName:r.actor_name,targetId:r.target_id,details:r.details,at:parseInt(r.at)}));
+ }catch(e){console.error('[FARM-DB] loadAudit error:',e.message);return[];}
+}
+
+/* Database: Health Check */
+async function dbHealthCheck(){
+ if(!USE_PG||!dbPool){
+  return{backend:'json',connected:true,accountsFile:fs.existsSync(ACCOUNTS_FILE),saveFile:fs.existsSync(SAVE_FILE),warning:'JSON file storage — NOT persistent on Render free tier'};
+ }
+ try{
+  await dbPool.query('SELECT 1');
+  const aRes=await dbPool.query('SELECT COUNT(*) as cnt FROM accounts');
+  const pRes=await dbPool.query('SELECT COUNT(*) as cnt FROM players');
+  return{backend:'postgresql',connected:true,accounts:parseInt(aRes.rows[0].cnt),players:parseInt(pRes.rows[0].cnt),tablesReady:dbReady};
+ }catch(e){
+  return{backend:'postgresql',connected:false,error:e.message};
+ }
+}
+
+/* ============================================================
+   GLOBAL SEED MARKET — Dynamic demand-based pricing
+   ============================================================ */
+const MARKET_UPDATE_MS=60*1000;
+const DEMAND_WINDOW_MS=10*60*1000;
+const MAX_CHANGE_PER_UPDATE=0.08;
+const MEAN_REVERSION_RATE=0.02;
+const MAX_DEMAND_PER_PURCHASE=50;
+const PURCHASE_RATE_LIMIT_MS=10*1000;
+const PURCHASE_RATE_LIMIT_MAX=10;
+let MARKET={prices:{},paused:false,history:{},purchaseLog:[]};
+
+async function marketInit(){
+ console.log('[MARKET] Initializing global seed market...');
+ if(dbPool&&dbReady){
+  /* Load from database */
+  try{
+   const res=await dbPool.query('SELECT * FROM market_prices');
+   if(res.rows.length>0){
+    for(const r of res.rows){
+     MARKET.prices[r.seed_id]={basePrice:parseInt(r.base_price),currentPrice:parseInt(r.current_price),minPrice:parseInt(r.min_price),maxPrice:parseInt(r.max_price),demandData:r.demand_data||{recentPurchases:[]},totalPurchases:parseInt(r.total_purchases)||0,updatedAt:parseInt(r.updated_at)};
+    }
+    console.log('[MARKET] Restored',Object.keys(MARKET.prices).length,'seed prices from database.');
+    return;
+   }
+  }catch(e){console.error('[MARKET] DB load error:',e.message);}
+ }
+ /* Initialize from seed definitions */
+ for(const s of SEEDS){
+  const cfg=G.shopConfig[s.id]||{};
+  const bp=cfg.price||s.pr;
+  MARKET.prices[s.id]={basePrice:bp,currentPrice:bp,minPrice:Math.max(1,Math.floor(bp*0.3)),maxPrice:Math.floor(bp*5),demandData:{recentPurchases:[]},totalPurchases:0,updatedAt:Date.now()};
+ }
+ console.log('[MARKET] Created',Object.keys(MARKET.prices).length,'seed price entries.');
+ /* Save to DB */
+ if(dbPool&&dbReady){
+  for(const sid in MARKET.prices){
+   const p=MARKET.prices[sid];
+   try{await dbPool.query('INSERT INTO market_prices(seed_id,base_price,current_price,min_price,max_price,demand_data,total_purchases,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(seed_id) DO UPDATE SET base_price=EXCLUDED.base_price,current_price=EXCLUDED.current_price,min_price=EXCLUDED.min_price,max_price=EXCLUDED.max_price,demand_data=EXCLUDED.demand_data,total_purchases=EXCLUDED.total_purchases,updated_at=EXCLUDED.updated_at',
+    [sid,p.basePrice,p.currentPrice,p.minPrice,p.maxPrice,JSON.stringify(p.demandData||{}),p.totalPurchases||0,Date.now()]);}catch(e){}
+  }
+ }
+}
+function marketGetPrice(seedId){const p=MARKET.prices[seedId];return p?p.currentPrice:0;}
+function marketGetState(){
+ const list=[];
+ for(const sid in MARKET.prices){
+  const p=MARKET.prices[sid];
+  const change=p.basePrice>0?((p.currentPrice-p.basePrice)/p.basePrice*100):0;
+  const hist=(MARKET.history[sid]||[]).slice(-20);
+  list.push({seedId:sid,basePrice:p.basePrice,currentPrice:p.currentPrice,minPrice:p.minPrice,maxPrice:p.maxPrice,changePercent:Math.round(change*100)/100,trend:change>2?'up':change<-2?'down':'stable',totalPurchases:p.totalPurchases||0,history:hist,paused:MARKET.paused});
+ }
+ return{prices:list,paused:MARKET.paused,nextUpdate:Date.now()+MARKET_UPDATE_MS};
+}
+function marketProcessPurchase(player,seedId,qty){
+ const sd=SEED_MAP[seedId];if(!sd)return{ok:false,msg:'Invalid seed.'};
+ qty=Math.max(1,Math.min(50,qty|0));
+ const p=MARKET.prices[seedId];if(!p)return{ok:false,msg:'Seed not in market.'};
+ const now=Date.now();
+ const recent=MARKET.purchaseLog.filter(x=>x.playerId===player.id&&x.at>now-PURCHASE_RATE_LIMIT_MS);
+ if(recent.length>=PURCHASE_RATE_LIMIT_MAX)return{ok:false,msg:'Rate limit: too many purchases. Wait a moment.'};
+ const price=p.currentPrice;
+ const totalCost=price*qty;
+ if(player.cash<totalCost)return{ok:false,msg:'Not enough sheckles. Need '+totalCost+', have '+player.cash+'.'};
+ const st=G.stock[seedId];const cfg=G.shopConfig[seedId];
+ if(!cfg||!cfg.enabled)return{ok:false,msg:'Not available in shop.'};
+ if(!cfg.always&&st.qty<qty)return{ok:false,msg:'Not enough stock!'};
+ /* Execute purchase */
+ player.cash-=totalCost;if(!cfg.always)st.qty-=qty;
+ player.seeds[seedId]=(player.seeds[seedId]||0)+qty;
+ if(!player.discovered.seeds.includes(seedId))player.discovered.seeds.push(seedId);
+ /* Record demand (capped) */
+ const demandQty=Math.min(qty,MAX_DEMAND_PER_PURCHASE);
+ p.demandData.recentPurchases=p.demandData.recentPurchases||[];
+ p.demandData.recentPurchases.push({qty:demandQty,at:now});
+ p.demandData.recentPurchases=p.demandData.recentPurchases.filter(x=>x.at>now-DEMAND_WINDOW_MS);
+ p.totalPurchases=(p.totalPurchases||0)+demandQty;
+ MARKET.purchaseLog.push({seedId,qty,playerId:player.id,at:now});
+ if(MARKET.purchaseLog.length>1000)MARKET.purchaseLog=MARKET.purchaseLog.slice(-500);
+ /* Persist to DB */
+ if(dbPool&&dbReady){
+  dbPool.query('INSERT INTO market_prices(seed_id,base_price,current_price,min_price,max_price,demand_data,total_purchases,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(seed_id) DO UPDATE SET demand_data=EXCLUDED.demand_data,total_purchases=EXCLUDED.total_purchases,updated_at=EXCLUDED.updated_at',
+   [seedId,p.basePrice,p.currentPrice,p.minPrice,p.maxPrice,JSON.stringify(p.demandData||{}),p.totalPurchases||0,Date.now()]).catch(()=>{});
+  dbPool.query('INSERT INTO market_purchases(seed_id,qty,player_id,price,at) VALUES($1,$2,$3,$4,$5)',[seedId,qty,player.id,price,now]).catch(()=>{});
+ }
+ return{ok:true,price:price,totalCost:totalCost,qty:qty};
+}
+function marketUpdatePrices(){
+ if(MARKET.paused)return;
+ const now=Date.now();let changes=[];
+ for(const sid in MARKET.prices){
+  const p=MARKET.prices[sid];
+  const purchases=(p.demandData.recentPurchases||[]).filter(x=>x.at>now-DEMAND_WINDOW_MS);
+  const totalDemand=purchases.reduce((s,x)=>s+x.qty,0);
+  const expectedDemand=10;
+  const ratio=expectedDemand>0?totalDemand/expectedDemand:0;
+  let newPrice=p.currentPrice;let changePct=0;
+  if(ratio>1.2){changePct=Math.min(MAX_CHANGE_PER_UPDATE,(ratio-1.2)*0.05);newPrice=p.currentPrice*(1+changePct);}
+  else if(ratio<0.5){changePct=-Math.min(MAX_CHANGE_PER_UPDATE,(0.5-ratio)*0.05);newPrice=p.currentPrice*(1+changePct);}
+  else{const diff=p.basePrice-p.currentPrice;newPrice=p.currentPrice+diff*MEAN_REVERSION_RATE;changePct=(newPrice-p.currentPrice)/p.currentPrice;}
+  newPrice=Math.max(p.minPrice,Math.min(p.maxPrice,Math.floor(newPrice)));
+  if(newPrice!==p.currentPrice){
+   p.currentPrice=newPrice;p.updatedAt=now;
+   MARKET.history[sid]=MARKET.history[sid]||[];
+   MARKET.history[sid].push({price:newPrice,at:now});
+   if(MARKET.history[sid].length>50)MARKET.history[sid]=MARKET.history[sid].slice(-50);
+   changes.push({seedId:sid,newPrice,changePercent:Math.round(changePct*10000)/100});
+   if(dbPool&&dbReady){
+    dbPool.query('UPDATE market_prices SET current_price=$2,updated_at=$3 WHERE seed_id=$1',[sid,newPrice,now]).catch(()=>{});
+   }
+  }
+ }
+ if(changes.length>0)broadcast({t:'marketPrices',market:marketGetState(),changes:changes});
+}
+function marketSyncToShopConfig(){
+ for(const sid in MARKET.prices){if(G.shopConfig[sid])G.shopConfig[sid].price=MARKET.prices[sid].currentPrice;}
+}
+function marketSetBasePrice(seedId,basePrice){
+ const p=MARKET.prices[seedId];if(!p)return false;
+ p.basePrice=Math.max(1,Math.floor(basePrice));
+ p.minPrice=Math.max(1,Math.floor(p.basePrice*0.3));
+ p.maxPrice=Math.floor(p.basePrice*5);
+ p.currentPrice=Math.max(p.minPrice,Math.min(p.maxPrice,p.currentPrice));
+ p.updatedAt=Date.now();
+ if(dbPool&&dbReady){dbPool.query('UPDATE market_prices SET base_price=$2,min_price=$3,max_price=$4,current_price=$5,updated_at=$6 WHERE seed_id=$1',[seedId,p.basePrice,p.minPrice,p.maxPrice,p.currentPrice,Date.now()]).catch(()=>{});}
+ return true;
+}
+function marketSetPaused(paused){MARKET.paused=!!paused;console.log('[MARKET] Dynamic pricing',MARKET.paused?'PAUSED':'RESUMED');return MARKET.paused;}
+function marketResetPrice(seedId){
+ const p=MARKET.prices[seedId];if(!p)return false;
+ p.currentPrice=p.basePrice;p.demandData.recentPurchases=[];p.updatedAt=Date.now();
+ if(dbPool&&dbReady){dbPool.query('UPDATE market_prices SET current_price=$2,demand_data=$3,updated_at=$4 WHERE seed_id=$1',[seedId,p.basePrice,JSON.stringify({recentPurchases:[]}),Date.now()]).catch(()=>{});}
+ return true;
+}
+function marketResetAllPrices(){for(const sid in MARKET.prices)marketResetPrice(sid);return true;}
+function marketGetAdminData(){
+ return{prices:Object.entries(MARKET.prices).map(([id,p])=>({seedId:id,basePrice:p.basePrice,currentPrice:p.currentPrice,minPrice:p.minPrice,maxPrice:p.maxPrice,totalPurchases:p.totalPurchases||0,recentDemand:(p.demandData.recentPurchases||[]).reduce((s,x)=>s+x.qty,0)})),paused:MARKET.paused,demandWindow:DEMAND_WINDOW_MS,updateInterval:MARKET_UPDATE_MS};
+}
+
+/* ============================================================
+   GLOBAL POLL SYSTEM
+   ============================================================ */
+let POLLS=[];
+async function pollsInit(){
+ console.log('[POLLS] Loading polls...');
+ if(dbPool&&dbReady){
+  try{
+   const res=await dbPool.query('SELECT * FROM polls ORDER BY created_at DESC');
+   POLLS=res.rows.map(r=>({id:r.id,question:r.question,options:r.options,createdBy:r.created_by,createdByName:r.created_by_name,openAt:parseInt(r.open_at),closeAt:parseInt(r.close_at),allowChanges:r.allow_changes,resultsVisible:r.results_visible,color:r.color,status:r.status,createdAt:parseInt(r.created_at)}));
+   console.log('[POLLS] Loaded',POLLS.length,'polls.');
+  }catch(e){console.error('[POLLS] DB load error:',e.message);}
+ }
+}
+function pollsGetActive(){
+ const now=Date.now();
+ return POLLS.filter(p=>p.status==='open'||(p.status==='closed'&&now-p.closeAt<24*3600*1000));
+}
+async function pollsGetWithResults(pollId,playerId){
+ const poll=POLLS.find(p=>p.id===pollId);if(!poll)return null;
+ let votes=[];
+ if(dbPool&&dbReady){
+  try{const res=await dbPool.query('SELECT player_id,option_index FROM poll_votes WHERE poll_id=$1',[pollId]);votes=res.rows.map(r=>({playerId:r.player_id,optionIndex:r.option_index}));}catch(e){}
+ }
+ const myVote=votes.find(v=>v.playerId===playerId);
+ const counts=poll.options.map(()=>0);
+ for(const v of votes){if(v.optionIndex>=0&&v.optionIndex<counts.length)counts[v.optionIndex]++;}
+ const now=Date.now();
+ const showResults=poll.resultsVisible||poll.status==='closed'||poll.closeAt<now;
+ return{id:poll.id,question:poll.question,options:poll.options,openAt:poll.openAt,closeAt:poll.closeAt,allowChanges:poll.allowChanges,resultsVisible:poll.resultsVisible,color:poll.color,status:poll.status,myVote:myVote?myVote.optionIndex:null,voteLocked:myVote&&!poll.allowChanges,totalVotes:votes.length,counts:showResults?counts:null,showResults:showResults};
+}
+async function pollsCreate(admin,config){
+ const question=String(config.question||'').trim().slice(0,300);
+ if(!question)return{ok:false,msg:'Question is required.'};
+ let options=Array.isArray(config.options)?config.options:[];
+ options=options.map(o=>String(o||'').trim().slice(0,100)).filter(o=>o);
+ if(options.length<2)return{ok:false,msg:'Need at least 2 options.'};
+ if(options.length>10)return{ok:false,msg:'Maximum 10 options.'};
+ const lower=options.map(o=>o.toLowerCase());
+ if(new Set(lower).size!==lower.length)return{ok:false,msg:'Duplicate options not allowed.'};
+ const now=Date.now();
+ const openAt=config.openAt?Math.max(now,config.openAt):now;
+ const closeAt=config.closeAt?Math.max(openAt+60000,config.closeAt):now+24*3600*1000;
+ const allowChanges=!!config.allowChanges;
+ const resultsVisible=config.resultsVisible!==false;
+ const color=/^#[0-9a-fA-F]{6}$/.test(config.color||'')?config.color:'#e8a33d';
+ const poll={id:'P'+crypto.randomBytes(6).toString('hex'),question,options,createdBy:admin.id,createdByName:admin.name,openAt,closeAt,allowChanges,resultsVisible,color,status:'open',createdAt:now};
+ POLLS.push(poll);
+ if(dbPool&&dbReady){
+  try{await dbPool.query('INSERT INTO polls(id,question,options,created_by,created_by_name,open_at,close_at,allow_changes,results_visible,color,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET question=EXCLUDED.question,options=EXCLUDED.options,allow_changes=EXCLUDED.allow_changes,results_visible=EXCLUDED.results_visible,color=EXCLUDED.color,status=EXCLUDED.status,close_at=EXCLUDED.close_at',
+   [poll.id,poll.question,JSON.stringify(poll.options),poll.createdBy,poll.createdByName,poll.openAt,poll.closeAt,poll.allowChanges,poll.resultsVisible,poll.color,poll.status,poll.createdAt]);}catch(e){console.error('[POLLS] DB save error:',e.message);}
+ }
+ await dbAddAudit('poll:create',admin.id,admin.name,poll.id,{question,optionsCount:options.length});
+ console.log('[POLLS] Admin',admin.name,'created poll:',question.slice(0,50));
+ return{ok:true,poll};
+}
+async function pollsVote(player,pollId,optionIndex){
+ const poll=POLLS.find(p=>p.id===pollId);if(!poll)return{ok:false,msg:'Poll not found.'};
+ const now=Date.now();
+ if(poll.status!=='open')return{ok:false,msg:'Poll is '+poll.status+'.'};
+ if(now<poll.openAt)return{ok:false,msg:'Poll has not opened yet.'};
+ if(now>poll.closeAt)return{ok:false,msg:'Poll has closed.'};
+ optionIndex=optionIndex|0;
+ if(optionIndex<0||optionIndex>=poll.options.length)return{ok:false,msg:'Invalid option.'};
+ let votes=[];
+ if(dbPool&&dbReady){
+  try{const res=await dbPool.query('SELECT player_id,option_index FROM poll_votes WHERE poll_id=$1',[pollId]);votes=res.rows.map(r=>({playerId:r.player_id,optionIndex:r.option_index}));}catch(e){}
+ }
+ const existing=votes.find(v=>v.playerId===player.id);
+ if(existing&&!poll.allowChanges)return{ok:false,msg:'Your vote is locked (this poll does not allow changes).'};
+ if(dbPool&&dbReady){
+  try{await dbPool.query('INSERT INTO poll_votes(poll_id,player_id,option_index,voted_at) VALUES($1,$2,$3,$4) ON CONFLICT(poll_id,player_id) DO UPDATE SET option_index=EXCLUDED.option_index,voted_at=EXCLUDED.voted_at',[pollId,player.id,optionIndex,Date.now()]);}catch(e){}
+ }
+ return{ok:true,optionIndex,changed:!!existing};
+}
+async function pollsRemoveVote(player,pollId){
+ const poll=POLLS.find(p=>p.id===pollId);if(!poll)return{ok:false,msg:'Poll not found.'};
+ if(poll.status!=='open')return{ok:false,msg:'Poll is '+poll.status+'.'};
+ if(!poll.allowChanges)return{ok:false,msg:'This poll does not allow vote changes.'};
+ if(dbPool&&dbReady){try{await dbPool.query('DELETE FROM poll_votes WHERE poll_id=$1 AND player_id=$2',[pollId,player.id]);}catch(e){}}
+ return{ok:true};
+}
+async function pollsClose(admin,pollId){
+ const poll=POLLS.find(p=>p.id===pollId);if(!poll)return{ok:false,msg:'Poll not found.'};
+ poll.status='closed';poll.closeAt=Date.now();
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE polls SET status=$2,close_at=$3 WHERE id=$1',[pollId,poll.status,poll.closeAt]);}catch(e){}}
+ await dbAddAudit('poll:close',admin.id,admin.name,pollId,{});
+ return{ok:true};
+}
+async function pollsCancel(admin,pollId){
+ const poll=POLLS.find(p=>p.id===pollId);if(!poll)return{ok:false,msg:'Poll not found.'};
+ poll.status='cancelled';
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE polls SET status=$2 WHERE id=$1',[pollId,poll.status]);}catch(e){}}
+ await dbAddAudit('poll:cancel',admin.id,admin.name,pollId,{});
+ return{ok:true};
+}
+function pollsTick(){
+ const now=Date.now();
+ for(const poll of POLLS){
+  if(poll.status==='open'&&now>poll.closeAt){
+   poll.status='closed';
+   if(dbPool&&dbReady){dbPool.query('UPDATE polls SET status=$2 WHERE id=$1',[poll.id,poll.status]).catch(()=>{});}
+   console.log('[POLLS] Auto-closed poll:',poll.question.slice(0,50));
+   broadcast({t:'pollClosed',pollId:poll.id,question:poll.question});
+  }
+ }
+}
+async function pollsGetAdminList(){
+ const list=[];
+ for(const poll of POLLS){
+  let votes=[];
+  if(dbPool&&dbReady){try{const res=await dbPool.query('SELECT player_id,option_index FROM poll_votes WHERE poll_id=$1',[poll.id]);votes=res.rows.map(r=>({playerId:r.player_id,optionIndex:r.option_index}));}catch(e){}}
+  const counts=poll.options.map(()=>0);
+  for(const v of votes){if(v.optionIndex>=0&&v.optionIndex<counts.length)counts[v.optionIndex]++;}
+  list.push({id:poll.id,question:poll.question,options:poll.options,status:poll.status,openAt:poll.openAt,closeAt:poll.closeAt,allowChanges:poll.allowChanges,resultsVisible:poll.resultsVisible,color:poll.color,createdByName:poll.createdByName,createdAt:poll.createdAt,totalVotes:votes.length,counts});
+ }
+ return list;
+}
+
+/* ============================================================
+   ELECTIONS & MAYOR SYSTEM
+   ============================================================ */
+let ELECTIONS=[],NOMINATIONS=[],MAYOR_TERMS=[];
+async function electionsInit(){
+ console.log('[ELECTIONS] Loading elections...');
+ if(dbPool&&dbReady){
+  try{
+   const eRes=await dbPool.query('SELECT * FROM elections ORDER BY created_at DESC');
+   ELECTIONS=eRes.rows.map(r=>({id:r.id,status:r.status,startAt:parseInt(r.start_at),closeAt:parseInt(r.close_at),winnerPlayerId:r.winner_player_id,winnerName:r.winner_name,termEnd:parseInt(r.term_end),createdAt:parseInt(r.created_at)}));
+   const mRes=await dbPool.query('SELECT * FROM mayor_terms ORDER BY start_at DESC');
+   MAYOR_TERMS=mRes.rows.map(r=>({id:r.id,playerId:r.player_id,playerName:r.player_name,electionId:r.election_id,startAt:parseInt(r.start_at),endAt:parseInt(r.end_at),status:r.status,powers:r.powers||{}}));
+   NOMINATIONS=[];
+   for(const el of ELECTIONS){
+    const nRes=await dbPool.query('SELECT * FROM election_nominations WHERE election_id=$1 ORDER BY submitted_at ASC',[el.id]);
+    NOMINATIONS.push(...nRes.rows.map(r=>({id:r.id,electionId:r.election_id,playerId:r.player_id,playerName:r.player_name,statement:r.statement,status:r.status,submittedAt:parseInt(r.submitted_at)})));
+   }
+   console.log('[ELECTIONS] Loaded',ELECTIONS.length,'elections,',NOMINATIONS.length,'nominations,',MAYOR_TERMS.length,'mayor terms.');
+  }catch(e){console.error('[ELECTIONS] DB load error:',e.message);}
+ }
+}
+function electionsGetCurrentMayor(){
+ const now=Date.now();
+ return MAYOR_TERMS.find(t=>t.status==='active'&&t.endAt>now)||null;
+}
+function electionsIsMayor(playerId){const m=electionsGetCurrentMayor();return m&&m.playerId===playerId;}
+async function electionsSubmitNomination(player,electionId,statement){
+ const el=ELECTIONS.find(e=>e.id===electionId);
+ if(!el)return{ok:false,msg:'Election not found.'};
+ if(el.status!=='nominating')return{ok:false,msg:'Nominations are not open.'};
+ statement=String(statement||'').trim().slice(0,500);
+ if(statement.length<10)return{ok:false,msg:'Statement must be at least 10 characters.'};
+ if(NOMINATIONS.find(n=>n.electionId===electionId&&n.playerId===player.id))return{ok:false,msg:'You have already nominated.'};
+ const nom={id:'N'+crypto.randomBytes(6).toString('hex'),electionId,playerId:player.id,playerName:player.name,statement,status:'pending',submittedAt:Date.now()};
+ NOMINATIONS.push(nom);
+ if(dbPool&&dbReady){try{await dbPool.query('INSERT INTO election_nominations(id,election_id,player_id,player_name,statement,status,submitted_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,statement=EXCLUDED.statement',[nom.id,nom.electionId,nom.playerId,nom.playerName,nom.statement,nom.status,nom.submittedAt]);}catch(e){}}
+ console.log('[ELECTIONS] Nomination by',player.name);
+ return{ok:true,nomination:nom};
+}
+async function electionsReviewNomination(admin,nomId,action){
+ const nom=NOMINATIONS.find(n=>n.id===nomId);if(!nom)return{ok:false,msg:'Nomination not found.'};
+ if(action==='approve')nom.status='approved';
+ else if(action==='reject')nom.status='rejected';
+ else if(action==='finalize'){
+  const el=ELECTIONS.find(e=>e.id===nom.electionId);if(!el)return{ok:false,msg:'Election not found.'};
+  const fc=NOMINATIONS.filter(n=>n.electionId===nom.electionId&&n.status==='finalist').length;
+  if(fc>=3)return{ok:false,msg:'Maximum 3 finalists already selected.'};
+  nom.status='finalist';
+ }else return{ok:false,msg:'Invalid action.'};
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE election_nominations SET status=$2 WHERE id=$1',[nom.id,nom.status]);}catch(e){}}
+ await dbAddAudit('election:reviewNom',admin.id,admin.name,nom.playerId,{nominationId:nomId,action});
+ return{ok:true,status:nom.status};
+}
+async function electionsCreate(admin){
+ const el={id:'E'+crypto.randomBytes(6).toString('hex'),status:'nominating',startAt:0,closeAt:0,winnerPlayerId:null,winnerName:null,termEnd:0,createdAt:Date.now()};
+ ELECTIONS.push(el);
+ if(dbPool&&dbReady){try{await dbPool.query('INSERT INTO elections(id,status,start_at,close_at,winner_player_id,winner_name,term_end,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,start_at=EXCLUDED.start_at,close_at=EXCLUDED.close_at,winner_player_id=EXCLUDED.winner_player_id,winner_name=EXCLUDED.winner_name,term_end=EXCLUDED.term_end',[el.id,el.status,el.startAt,el.closeAt,el.winnerPlayerId,el.winnerName,el.termEnd,el.createdAt]);}catch(e){}}
+ await dbAddAudit('election:create',admin.id,admin.name,el.id,{});
+ console.log('[ELECTIONS] Admin',admin.name,'created election',el.id);
+ return{ok:true,election:el};
+}
+async function electionsPublish(admin,electionId,config){
+ const el=ELECTIONS.find(e=>e.id===electionId);if(!el)return{ok:false,msg:'Election not found.'};
+ const finalists=NOMINATIONS.filter(n=>n.electionId===electionId&&n.status==='finalist');
+ if(finalists.length<1)return{ok:false,msg:'Need at least 1 finalist.'};
+ if(finalists.length>3)return{ok:false,msg:'Maximum 3 finalists.'};
+ const now=Date.now();
+ const startAt=config.startAt?Math.max(now,config.startAt):now;
+ const closeAt=config.closeAt?Math.max(startAt+60000,config.closeAt):now+7*24*3600*1000;
+ const termDays=Math.max(1,Math.min(90,config.termDays||30));
+ el.status='voting';el.startAt=startAt;el.closeAt=closeAt;el.termEnd=closeAt+termDays*24*3600*1000;
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE elections SET status=$2,start_at=$3,close_at=$4,term_end=$5 WHERE id=$1',[electionId,el.status,el.startAt,el.closeAt,el.termEnd]);}catch(e){}}
+ await dbAddAudit('election:publish',admin.id,admin.name,electionId,{finalists:finalists.length,startAt,closeAt});
+ return{ok:true,election:el};
+}
+async function electionsVote(player,electionId,finalistPlayerId){
+ const el=ELECTIONS.find(e=>e.id===electionId);if(!el)return{ok:false,msg:'Election not found.'};
+ if(el.status!=='voting')return{ok:false,msg:'Election is not open for voting.'};
+ const now=Date.now();
+ if(now<el.startAt)return{ok:false,msg:'Voting has not opened.'};
+ if(now>el.closeAt)return{ok:false,msg:'Voting has closed.'};
+ const finalist=NOMINATIONS.find(n=>n.electionId===electionId&&n.playerId===finalistPlayerId&&n.status==='finalist');
+ if(!finalist)return{ok:false,msg:'Invalid finalist.'};
+ if(finalistPlayerId===player.id)return{ok:false,msg:'You cannot vote for yourself.'};
+ if(dbPool&&dbReady){try{await dbPool.query('INSERT INTO election_votes(election_id,player_id,finalist_player_id,voted_at) VALUES($1,$2,$3,$4) ON CONFLICT(election_id,player_id) DO UPDATE SET finalist_player_id=EXCLUDED.finalist_player_id,voted_at=EXCLUDED.voted_at',[electionId,player.id,finalistPlayerId,Date.now()]);}catch(e){}}
+ return{ok:true,finalistPlayerId};
+}
+async function electionsClose(admin,electionId){
+ const el=ELECTIONS.find(e=>e.id===electionId);if(!el)return{ok:false,msg:'Election not found.'};
+ if(el.status!=='voting')return{ok:false,msg:'Election is not in voting phase.'};
+ let votes=[];
+ if(dbPool&&dbReady){try{const res=await dbPool.query('SELECT player_id,finalist_player_id FROM election_votes WHERE election_id=$1',[electionId]);votes=res.rows.map(r=>({playerId:r.player_id,finalistPlayerId:r.finalist_player_id}));}catch(e){}}
+ const tally={};
+ for(const v of votes)tally[v.finalistPlayerId]=(tally[v.finalistPlayerId]||0)+1;
+ let winnerId=null,winnerVotes=0;
+ const finalists=NOMINATIONS.filter(n=>n.electionId===electionId&&n.status==='finalist').sort((a,b)=>a.submittedAt-b.submittedAt);
+ for(const f of finalists){const v=tally[f.playerId]||0;if(v>winnerVotes){winnerVotes=v;winnerId=f.playerId;}}
+ if(!winnerId||winnerVotes===0){el.status='closed_nowinner';el.winnerPlayerId=null;el.winnerName=null;}
+ else{const wn=finalists.find(f=>f.playerId===winnerId);el.status='closed';el.winnerPlayerId=winnerId;el.winnerName=wn?wn.playerName:'Unknown';}
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE elections SET status=$2,winner_player_id=$3,winner_name=$4 WHERE id=$1',[electionId,el.status,el.winnerPlayerId,el.winnerName]);}catch(e){}}
+ await dbAddAudit('election:close',admin.id,admin.name,electionId,{winner:el.winnerName,votes:winnerVotes});
+ return{ok:true,election:el,winnerVotes,totalVotes:votes.length,tally};
+}
+async function electionsConfirmWinner(admin,electionId,setRoleFn){
+ const el=ELECTIONS.find(e=>e.id===electionId);if(!el)return{ok:false,msg:'Election not found.'};
+ if(el.status!=='closed')return{ok:false,msg:'Election must be closed first.'};
+ if(!el.winnerPlayerId)return{ok:false,msg:'No winner to confirm.'};
+ const winner=G.players.get(el.winnerPlayerId);if(!winner)return{ok:false,msg:'Winner player not found.'};
+ /* End existing mayor terms */
+ if(dbPool&&dbReady){try{await dbPool.query("UPDATE mayor_terms SET status='ended' WHERE status='active'");}catch(e){}}
+ for(const t of MAYOR_TERMS)if(t.status==='active')t.status='ended';
+ const term={playerId:winner.id,playerName:winner.name,electionId,startAt:Date.now(),endAt:el.termEnd,status:'active',powers:{proposeFestival:true,proposeBuff:true,requestProject:true}};
+ MAYOR_TERMS.push(term);
+ if(dbPool&&dbReady){try{await dbPool.query('INSERT INTO mayor_terms(player_id,player_name,election_id,start_at,end_at,status,powers) VALUES($1,$2,$3,$4,$5,$6,$7)',[term.playerId,term.playerName,term.electionId,term.startAt,term.endAt,term.status,JSON.stringify(term.powers)]);}catch(e){}}
+ setRoleFn(winner,'Mayor','#ffd24a','glow',{cashPerDay:5000,growBoost:1.2,sellBoost:1.1});
+ el.status='completed';
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE elections SET status=$2 WHERE id=$1',[electionId,el.status]);}catch(e){}}
+ await dbAddAudit('election:confirmWinner',admin.id,admin.name,winner.id,{electionId,winner:winner.name});
+ console.log('[ELECTIONS] Mayor confirmed:',winner.name);
+ return{ok:true,winner:winner.name,termEnd:el.termEnd};
+}
+async function electionsRevokeMayor(admin,reason,setRoleFn){
+ const mayor=electionsGetCurrentMayor();if(!mayor)return{ok:false,msg:'No active mayor.'};
+ mayor.status='revoked';
+ if(dbPool&&dbReady){try{await dbPool.query('UPDATE mayor_terms SET status=$2 WHERE id=$1',[mayor.id,mayor.status]);}catch(e){}}
+ const p=G.players.get(mayor.playerId);if(p)setRoleFn(p,'player','','none',{});
+ await dbAddAudit('mayor:revoke',admin.id,admin.name,mayor.playerId,{reason:reason||'No reason given'});
+ return{ok:true};
+}
+async function electionsGetData(electionId,playerId){
+ const el=ELECTIONS.find(e=>e.id===electionId);if(!el)return null;
+ const allNoms=NOMINATIONS.filter(n=>n.electionId===electionId);
+ const finalists=allNoms.filter(n=>n.status==='finalist').map(n=>({playerId:n.playerId,playerName:n.playerName,statement:n.statement}));
+ let votes=[];
+ if(dbPool&&dbReady){try{const res=await dbPool.query('SELECT player_id,finalist_player_id FROM election_votes WHERE election_id=$1',[electionId]);votes=res.rows.map(r=>({playerId:r.player_id,finalistPlayerId:r.finalist_player_id}));}catch(e){}}
+ const myVote=votes.find(v=>v.playerId===playerId);
+ const showResults=el.status==='closed'||el.status==='completed'||el.status==='closed_nowinner';
+ const tally={};
+ if(showResults){for(const v of votes)tally[v.finalistPlayerId]=(tally[v.finalistPlayerId]||0)+1;}
+ return{id:el.id,status:el.status,startAt:el.startAt,closeAt:el.closeAt,termEnd:el.termEnd,winnerName:el.winnerName,finalists,myVote:myVote?myVote.finalistPlayerId:null,totalVotes:votes.length,tally:showResults?tally:null,showResults,nominationOpen:el.status==='nominating',hasNominated:allNoms.some(n=>n.playerId===playerId),finalistCount:finalists.length};
+}
+async function electionsGetAdminList(){
+ const list=[];
+ for(const el of ELECTIONS){
+  const noms=NOMINATIONS.filter(n=>n.electionId===el.id);
+  let votes=[];
+  if(dbPool&&dbReady){try{const res=await dbPool.query('SELECT player_id,finalist_player_id FROM election_votes WHERE election_id=$1',[el.id]);votes=res.rows.map(r=>({playerId:r.player_id,finalistPlayerId:r.finalist_player_id}));}catch(e){}}
+  list.push({id:el.id,status:el.status,startAt:el.startAt,closeAt:el.closeAt,termEnd:el.termEnd,winnerName:el.winnerName,createdAt:el.createdAt,nominationCount:noms.length,finalistCount:noms.filter(n=>n.status==='finalist').length,totalVotes:votes.length,nominations:noms.map(n=>({id:n.id,playerId:n.playerId,playerName:n.playerName,statement:n.statement,status:n.status,submittedAt:n.submittedAt}))});
+ }
+ return list;
+}
+function electionsGetMayorInfo(){
+ const m=electionsGetCurrentMayor();
+ if(!m)return{active:false};
+ return{active:true,playerName:m.playerName,playerId:m.playerId,startAt:m.startAt,endAt:m.endAt,powers:m.powers};
+}
+function electionsGetMayorHistory(){return MAYOR_TERMS.map(t=>({id:t.id,playerName:t.playerName,playerId:t.playerId,startAt:t.startAt,endAt:t.endAt,status:t.status,powers:t.powers}));}
+function electionsTick(){
+ const now=Date.now();
+ for(const el of ELECTIONS){
+  if(el.status==='voting'&&now>el.closeAt){
+   el.status='closed_pending_confirmation';
+   if(dbPool&&dbReady){dbPool.query('UPDATE elections SET status=$2 WHERE id=$1',[el.id,el.status]).catch(()=>{});}
+   broadcast({t:'electionAutoClosed',electionId:el.id});
+  }
+ }
+}
+function setRoleOnPlayer(player,role,color,effect,benefits){
+ player.role=role;player.roleColor=color;player.roleEffect=effect;player.roleGlow=(effect!=='none');
+ player.roleBenefits=benefits||{};player.roleGivenBy=role==='player'?'':'Election';
+ if(broadcastWorld)broadcastWorld(player.worldId,{t:'pRoleUpdate',id:player.id,role:player.role,roleColor:player.roleColor,roleEffect:player.roleEffect,roleGlow:player.roleGlow},player.id);
+ sendTo(player.id,{t:'me',me:serializePlayer(player)});
+}
+
+/* ============================================================
+   END DATABASE + MARKET + POLLS + ELECTIONS CODE
+   ============================================================ */
 const BAD=['fuck','shit','bitch','cunt','asshole','bastard','dick','piss','whore','slut','nigg','rape','retard','wank','bollock','arse','twat','cock','pussy','fag','spic','chink','kike','hitler','nazi','porn','penis','vagina','anal','jizz','dildo','orgasm','milf','cum'];
 function cleanName(raw){let n=String(raw||'').replace(/[^A-Za-z0-9 _-]/g,'').trim().slice(0,16);
  const low=' '+n.toLowerCase()+' ';
@@ -45,11 +707,18 @@ function genPlayerId(){
    This keeps auth data OUT of farm_save.json. */
 let ACCOUNTS={}; /* {usernameLower: {username, passwordHash, email, emailVerified, playerId, createdAt, verifyToken?}} */
 const resetTokens=new Map(); /* token -> {username, expires, used} */
-function loadAccounts(){
+async function loadAccounts(){
+ /* PostgreSQL mode: load from database. JSON fallback: load from file. */
+ if(dbPool&&dbReady){
+  const dbAccounts=await dbLoadAccounts();
+  if(dbAccounts){ACCOUNTS=dbAccounts;console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts from PostgreSQL');return;}
+ }
  try{if(fs.existsSync(ACCOUNTS_FILE)){ACCOUNTS=JSON.parse(fs.readFileSync(ACCOUNTS_FILE,'utf8'));
-   console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts');}}
+   console.log('[FARM] loaded',Object.keys(ACCOUNTS).length,'accounts from JSON file');}}
  catch(e){console.error('[FARM] accounts load failed:',e.message);ACCOUNTS={};}}
-function saveAccounts(){
+async function saveAccounts(){
+ /* PostgreSQL mode: save to database. Also save to JSON as backup. */
+ if(dbPool&&dbReady){dbSaveAccounts(ACCOUNTS);}
  try{fs.writeFileSync(ACCOUNTS_FILE+'.tmp',JSON.stringify(ACCOUNTS,null,2));fs.renameSync(ACCOUNTS_FILE+'.tmp',ACCOUNTS_FILE);}
  catch(e){console.error('[FARM] accounts save failed:',e.message);}}
 /* ===== RESEND EMAIL ===== */
@@ -600,12 +1269,74 @@ function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,
  season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,
  maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,auction:G.auction,
  event:G.event?{id:G.event.def.id,start:G.event.start,end:G.event.end}:null,
- scubaExpiresAt:global._scubaExpiresAt||0, /* persist Scuba limited-time timer across server restarts */
+ scubaExpiresAt:global._scubaExpiresAt||0,
  players:[...G.players.values()].map(serializePlayer)};
+ /* Save to JSON file (always — as backup) */
  if(fs.existsSync(SAVE_FILE)){try{fs.copyFileSync(SAVE_FILE,SAVE_BAK);}catch(e){}}
  fs.writeFileSync(SAVE_FILE+'.tmp',JSON.stringify(data));fs.renameSync(SAVE_FILE+'.tmp',SAVE_FILE);
+ /* Save to PostgreSQL (if connected) — fire-and-forget */
+ if(dbPool&&dbReady){
+  dbSaveAllPlayers([...G.players.values()].map(serializePlayer));
+  dbSaveGameStateKey('worlds',[...G.worlds.entries()].map(([id,w])=>({id:w.id,plots:w.plots,plants:[...w.plants.values()],createdAt:w.createdAt})));
+  dbSaveGameStateKey('globalState',{nextId:G.nextId,stock:G.stock,restockAt:G.restockAt,season:G.season,shopConfig:G.shopConfig,emoteStock:G.emoteStock,emoteRestockAt:G.emoteRestockAt,maintenance:G.maintenance,s2:G.s2,timer:G.timer,portalEnabled:G.portalEnabled,scubaExpiresAt:global._scubaExpiresAt||0});
+ }
  G.savedAt=Date.now();G.dirty=false;}catch(e){console.error('[FARM] save failed:',e.message);}}
-function load(){let raw=null;
+async function load(){
+ /* PostgreSQL mode: load from database first. JSON fallback: load from file. */
+ if(dbPool&&dbReady){
+  const dbPlayers=await dbLoadAllPlayers();
+  const dbGs=await dbLoadGameState();
+  if(dbGs&&dbPlayers&&dbPlayers.length>0){
+   console.log('[FARM] Loading',dbPlayers.length,'players from PostgreSQL...');
+   /* Load players */
+   G.players.clear();
+   for(const p of dbPlayers){
+    if(!p.worldId)p.worldId='w1';if(!p.pid)p.pid='';
+    if(!p.role)p.role='player';if(!p.roleBenefits)p.roleBenefits={};
+    if(!p.gear)p.gear=['watercan','shovel'];if(!p.gear.includes('shovel'))p.gear.push('shovel');
+    if(!p.portal)p.portal=defaultPortal();
+    if(!p.stats)p.stats={};if(!p.discovered)p.discovered={seeds:['carrot'],muts:[],pets:[]};
+    G.players.set(p.id,p);
+   }
+   /* Load worlds */
+   if(dbGs.worlds){
+    G.worlds=new Map();
+    for(const wData of dbGs.worlds){
+     if(!wData||!wData.id)continue;
+     const plots=Array.isArray(wData.plots)?wData.plots.slice(0,PLOT_POS.length):new Array(PLOT_POS.length).fill(null);
+     while(plots.length<PLOT_POS.length)plots.push(null);
+     const w={id:wData.id,plots,plants:new Map(),players:new Set(),createdAt:wData.createdAt||now()};
+     for(const pl of (wData.plants||[])){if(!pl.dead)w.plants.set(pl.id,pl);}
+     G.worlds.set(wData.id,w);
+    }
+    for(const p of G.players.values()){
+     if(!p.worldId)p.worldId='w1';
+     const w=G.worlds.get(p.worldId)||getOrCreateWorld(p.worldId);
+     w.players.add(p.id);
+     if(p.plot>=0&&p.plot<PLOT_POS.length&&w.plots[p.plot]===null)w.plots[p.plot]=p.id;
+    }
+   }
+   /* Load global state */
+   if(dbGs.globalState){
+    const g=dbGs.globalState;
+    if(g.nextId)G.nextId=Math.max(G.nextId,g.nextId);
+    if(g.stock)G.stock=g.stock;if(g.restockAt)G.restockAt=g.restockAt;
+    if(g.season)G.season=Object.assign(G.season,g.season);
+    if(g.shopConfig)G.shopConfig=Object.assign(G.shopConfig,g.shopConfig);
+    if(g.emoteStock)G.emoteStock=g.emoteStock;if(g.emoteRestockAt)G.emoteRestockAt=g.emoteRestockAt;
+    if(g.maintenance)G.maintenance=Object.assign(G.maintenance,g.maintenance);
+    if(g.s2)G.s2=Object.assign(G.s2,g.s2);if(g.timer)G.timer=Object.assign(G.timer,g.timer);
+    if(g.portalEnabled!==undefined)G.portalEnabled=g.portalEnabled;
+    if(g.scubaExpiresAt)global._scubaExpiresAt=g.scubaExpiresAt;
+   }
+   console.log('[FARM] Loaded from PostgreSQL:',G.players.size,'players across',G.worlds.size,'world(s).');
+   /* Also save to JSON as backup */
+   save();return;
+  }
+  console.log('[FARM] PostgreSQL has no player data. Trying JSON files...');
+ }
+ /* JSON fallback */
+ let raw=null;
  if(fs.existsSync(SAVE_FILE))raw=fs.readFileSync(SAVE_FILE,'utf8');
  else if(fs.existsSync(SAVE_BAK))raw=fs.readFileSync(SAVE_BAK,'utf8');
  if(!raw){G.stock=seedStockInit();G.shopConfig=defaultShopConfig();G.restockAt=Date.now()+RESTOCK_MS;rotateEmoteShop();return;}
@@ -821,7 +1552,11 @@ function sendInitData(sock,p){
   event:G.event?{id:G.event.def.id,end:G.event.end,start:G.event.start}:null,
   plots:worldPlots,plotPos:PLOT_POS,
   /* Only SAME-WORLD online players are visible to this player */
-  players:worldPlayerList(p.worldId)}));
+  players:worldPlayerList(p.worldId),
+  market:marketGetState(),
+  polls:pollsGetActive(),
+  mayor:electionsGetMayorInfo(),
+  dbBackend:dbPool&&dbReady?'postgresql':'json'}));
  /* Tell other players in the SAME world that this player joined — players in other worlds don't see them. */
  broadcastWorld(p.worldId,{t:'pJoin',id:p.id,pid:p.pid||'',name:p.name,
   cb:p.charBody||'farmer',ch:p.charHat||null,cs:p.charShirt||0x4f8a5c,cp:p.charPants||0x4a5a7a,ck:p.charSkinCol||0xe8b48a,
@@ -1440,6 +2175,34 @@ function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
    broadcast({t:'auctionUpdate',auction:G.auction,serverTime:now()});
    sendTo(p.id,{t:'toast',msg:'Bid placed: '+fmt(bid)+' '+G.auction.currency,kind:'good'});
    break;}
+  /* ===== GLOBAL SEED MARKET ===== */
+  case 'marketBuy':{
+   const result=marketProcessPurchase(p,msg.seedId,msg.qty||1);
+   if(!result.ok){sendTo(p.id,{t:'toast',msg:result.msg,kind:'err'});}
+   else{
+    broadcast(stockMsg());sendTo(p.id,{t:'me',me:serializePlayer(p)});G.dirty=true;
+    sendTo(p.id,{t:'toast',msg:'Bought '+result.qty+'x '+(SEED_MAP[msg.seedId]?SEED_MAP[msg.seedId].n:msg.seedId)+' for '+result.totalCost+' (market price)!',kind:'shop'});
+    broadcast({t:'marketPrices',market:marketGetState()});
+   }
+   break;}
+  case 'marketState':{sendTo(p.id,{t:'marketPrices',market:marketGetState()});break;}
+  /* ===== POLLS ===== */
+  case 'pollVote':{pollsVote(p,String(msg.pollId||'').slice(0,32),msg.optionIndex|0).then(r=>{if(!r.ok)sendTo(p.id,{t:'toast',msg:r.msg,kind:'err'});else{sendTo(p.id,{t:'toast',msg:r.changed?'Vote updated!':'Vote submitted!',kind:'good'});pollsGetWithResults(String(msg.pollId).slice(0,32),p.id).then(d=>{if(d)sendTo(p.id,{t:'pollUpdate',poll:d});});}});break;}
+  case 'pollRemoveVote':{pollsRemoveVote(p,String(msg.pollId||'').slice(0,32)).then(r=>{if(!r.ok)sendTo(p.id,{t:'toast',msg:r.msg,kind:'err'});else{sendTo(p.id,{t:'toast',msg:'Vote removed.',kind:'info'});pollsGetWithResults(String(msg.pollId).slice(0,32),p.id).then(d=>{if(d)sendTo(p.id,{t:'pollUpdate',poll:d});});}});break;}
+  case 'pollList':{sendTo(p.id,{t:'pollList',polls:pollsGetActive()});break;}
+  /* ===== ELECTIONS ===== */
+  case 'electionData':{electionsGetData(String(msg.electionId||'').slice(0,32),p.id).then(d=>{if(d)sendTo(p.id,{t:'electionData',election:d});});break;}
+  case 'nominate':{electionsSubmitNomination(p,String(msg.electionId||'').slice(0,32),String(msg.statement||'').slice(0,500)).then(r=>{if(!r.ok)sendTo(p.id,{t:'toast',msg:r.msg,kind:'err'});else{sendTo(p.id,{t:'toast',msg:'Nomination submitted! Wait for admin approval.',kind:'quest'});sendTo(p.id,{t:'nominationConfirmed',electionId:msg.electionId});}});break;}
+  case 'electionVote':{electionsVote(p,String(msg.electionId||'').slice(0,32),String(msg.finalistPlayerId||'').slice(0,64)).then(r=>{if(!r.ok)sendTo(p.id,{t:'toast',msg:r.msg,kind:'err'});else{sendTo(p.id,{t:'toast',msg:'Vote cast!',kind:'good'});electionsGetData(String(msg.electionId).slice(0,32),p.id).then(d=>{if(d)sendTo(p.id,{t:'electionData',election:d});});}});break;}
+  case 'mayorInfo':{sendTo(p.id,{t:'mayorInfo',mayor:electionsGetMayorInfo()});break;}
+  case 'mayorProposeFestival':{
+   if(!electionsIsMayor(p.id)){sendTo(p.id,{t:'toast',msg:'You are not the mayor.',kind:'err'});break;}
+   const ft=String(msg.festivalType||'').slice(0,32);
+   electionsIsMayor(p.id); /* re-check */
+   dbAddAudit('mayor:proposeFestival',p.id,p.name,null,{type:ft});
+   sendTo(p.id,{t:'toast',msg:'Festival proposed! An admin will review it.',kind:'quest'});
+   for(const[tok,sess]of G.adminSessions){sendTo(sess.id,{t:'announce',msg:'[MAYOR] '+p.name+' proposed a '+ft+' festival. Review in admin panel.',color:'#ffd24a',style:'neon',dur:15});}
+   break;}
  }
 }
 function sellFruits(p,uids){const set=new Set(uids);const sold=[];
@@ -1788,6 +2551,28 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
   case 'save':save();sendTo(admin.id,{t:'toast',msg:'Saved.',kind:'good'});break;
   case 'setMutCap':G.mutCap=Math.max(1,Math.min(6,+a.v||3));break;
   case 'clearInv':if(target&&a.confirm){target.produce=[];pushMe(target);}break;
+  /* ===== MARKET ADMIN ===== */
+  case 'marketSetBasePrice':{if(marketSetBasePrice(String(a.seedId||'').slice(0,32),Math.max(1,Math.floor(+a.basePrice||0)))){dbAddAudit('market:setBasePrice',admin.id,admin.name,null,{seedId:a.seedId,basePrice:a.basePrice});sendTo(admin.id,{t:'toast',msg:'Base price set for '+a.seedId,kind:'good'});broadcast({t:'marketPrices',market:marketGetState()});}else sendTo(admin.id,{t:'toast',msg:'Seed not found.',kind:'err'});break;}
+  case 'marketPause':{const paused=marketSetPaused(!!a.paused);dbAddAudit('market:pause',admin.id,admin.name,null,{paused});broadcast({t:'marketPrices',market:marketGetState()});sendTo(admin.id,{t:'toast',msg:'Dynamic pricing '+(paused?'PAUSED':'RESUMED'),kind:'good'});break;}
+  case 'marketReset':{if(a.all){marketResetAllPrices();dbAddAudit('market:resetAll',admin.id,admin.name,null,{});sendTo(admin.id,{t:'toast',msg:'All prices reset.',kind:'good'});}else if(a.seedId){marketResetPrice(String(a.seedId).slice(0,32));dbAddAudit('market:reset',admin.id,admin.name,null,{seedId:a.seedId});sendTo(admin.id,{t:'toast',msg:'Price reset for '+a.seedId,kind:'good'});}broadcast({t:'marketPrices',market:marketGetState()});break;}
+  case 'marketData':{sendTo(admin.id,{t:'admData',kind:'market',data:marketGetAdminData()});break;}
+  /* ===== POLL ADMIN ===== */
+  case 'pollCreate':{pollsCreate(admin,a).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{sendTo(admin.id,{t:'toast',msg:'Poll created!',kind:'good'});broadcast({t:'pollNew',poll:{id:r.poll.id,question:r.poll.question,openAt:r.poll.openAt,closeAt:r.poll.closeAt,color:r.poll.color}});broadcast({t:'announce',msg:'New poll: '+r.poll.question,color:r.poll.color,dur:10});}});break;}
+  case 'pollClose':{pollsClose(admin,String(a.pollId||'').slice(0,32)).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'pollClosed',pollId:a.pollId});sendTo(admin.id,{t:'toast',msg:'Poll closed.',kind:'good'});}});break;}
+  case 'pollCancel':{pollsCancel(admin,String(a.pollId||'').slice(0,32)).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'pollCancelled',pollId:a.pollId});sendTo(admin.id,{t:'toast',msg:'Poll cancelled.',kind:'good'});}});break;}
+  case 'pollList':{pollsGetAdminList().then(list=>sendTo(admin.id,{t:'admData',kind:'polls',data:list}));break;}
+  /* ===== ELECTION ADMIN ===== */
+  case 'electionCreate':{electionsCreate(admin).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'announce',msg:'A new election has been announced! Submit your nomination!',color:'#ffd24a',style:'neon',dur:15});broadcast({t:'electionNew',electionId:r.election.id});sendTo(admin.id,{t:'toast',msg:'Election created.',kind:'good'});}});break;}
+  case 'electionReviewNom':{electionsReviewNomination(admin,String(a.nominationId||'').slice(0,32),String(a.action||'').slice(0,16)).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else sendTo(admin.id,{t:'toast',msg:'Nomination '+a.action+'d (status: '+r.status+')',kind:'good'});});break;}
+  case 'electionPublish':{electionsPublish(admin,String(a.electionId||'').slice(0,32),{startAt:a.startAt,closeAt:a.closeAt,termDays:a.termDays}).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'announce',msg:'Voting is now OPEN! Vote for your next Mayor!',color:'#ffd24a',style:'neon',dur:15});broadcast({t:'electionPublished',electionId:a.electionId});sendTo(admin.id,{t:'toast',msg:'Election published.',kind:'good'});}});break;}
+  case 'electionClose':{electionsClose(admin,String(a.electionId||'').slice(0,32)).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{const e=r.election;if(e.winnerName)broadcast({t:'announce',msg:'Voting closed! Winner: '+e.winnerName+' ('+r.winnerVotes+' votes). Awaiting confirmation.',color:'#ffd24a',style:'neon',dur:20});else broadcast({t:'announce',msg:'Voting closed. No votes cast.',color:'#e8a33d',dur:15});sendTo(admin.id,{t:'toast',msg:'Election closed. Confirm winner to appoint Mayor.',kind:'good'});}});break;}
+  case 'electionConfirmWinner':{electionsConfirmWinner(admin,String(a.electionId||'').slice(0,32),setRoleOnPlayer).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'announce',msg:r.winner+' has been appointed MAYOR!',color:'#ffd24a',style:'neon',dur:20});broadcast({t:'mayorInfo',mayor:electionsGetMayorInfo()});sendTo(admin.id,{t:'toast',msg:'Mayor appointed.',kind:'good'});}});break;}
+  case 'revokeMayor':{electionsRevokeMayor(admin,String(a.reason||'').slice(0,200),setRoleOnPlayer).then(r=>{if(!r.ok)sendTo(admin.id,{t:'toast',msg:r.msg,kind:'err'});else{broadcast({t:'announce',msg:'The Mayor has been removed from office.',color:'#c04434',dur:10});broadcast({t:'mayorInfo',mayor:electionsGetMayorInfo()});sendTo(admin.id,{t:'toast',msg:'Mayor revoked.',kind:'good'});}});break;}
+  case 'electionList':{electionsGetAdminList().then(list=>sendTo(admin.id,{t:'admData',kind:'elections',data:list}));break;}
+  case 'mayorHistory':{sendTo(admin.id,{t:'admData',kind:'mayorHistory',data:electionsGetMayorHistory()});break;}
+  /* ===== DB HEALTH & AUDIT ===== */
+  case 'dbHealth':{dbHealthCheck().then(h=>sendTo(admin.id,{t:'admData',kind:'dbHealth',data:h}));break;}
+  case 'auditLog':{dbLoadAudit(a.limit||100).then(l=>sendTo(admin.id,{t:'admData',kind:'auditLog',data:l}));break;}
   default:sendTo(admin.id,{t:'toast',msg:'Unknown command: '+c,kind:'err'});
  }}
 
@@ -1924,7 +2709,7 @@ const server=http.createServer((req,res)=>{
     if(!acc)return res.writeHead(400).end(JSON.stringify({success:false,message:'No account found with that username.'}));
     bcrypt.hash(password,10,(e,hash)=>{
      if(e)return res.writeHead(500).end(JSON.stringify({success:false,message:'Server error.'}));
-     acc.passwordHash=hash;saveAccounts();
+     acc.passwordHash=hash;saveAccounts();if(dbPool&&dbReady)dbUpsertAccount(findAccountByUsername(acc.username).username.toLowerCase(),acc);
      console.log('[FARM] Password reset for',acc.username);
      res.writeHead(200,{'Content-Type':'application/json'});
      res.end(JSON.stringify({success:true}));});
@@ -1935,7 +2720,7 @@ const server=http.createServer((req,res)=>{
   const token=new URL(fullUrl,'http://localhost').searchParams.get('token');
   if(token){
    const acc=Object.values(ACCOUNTS).find(a=>a.verifyToken===token);
-   if(acc){acc.emailVerified=true;acc.verifyToken=undefined;saveAccounts();
+   if(acc){acc.emailVerified=true;acc.verifyToken=undefined;saveAccounts();if(dbPool&&dbReady){const key=Object.keys(ACCOUNTS).find(k=>ACCOUNTS[k]===acc);if(key)dbUpsertAccount(key,acc);}
     console.log('[FARM] Email verified for',acc.username);
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(VERIFY_OK_HTML);return;}
   }
@@ -1978,7 +2763,7 @@ if(WebSocketServer){
       const id='U'+crypto.randomBytes(6).toString('hex');
       const p=newPlayer(id,username);p.online=true;G.players.set(p.id,p);
       ACCOUNTS[lowUser]={username:lowUser,passwordHash:hash,email:email,emailVerified:false,playerId:id,createdAt:Date.now()};
-      saveAccounts();
+      saveAccounts();if(dbPool&&dbReady)dbUpsertAccount(lowUser,ACCOUNTS[lowUser]);
       /* Send verification email if email provided and Resend is configured */
       if(email&&RESEND_API_KEY){
        const vToken=generateToken();
@@ -2194,8 +2979,24 @@ if(WebSocketServer){
    broadcastWorld(w.id,{t:'worldInfo',world:worldInfoPacket(w.id)});
   }
  },20000);
- load();
- loadAccounts();
+ /* ===== DATABASE + FEATURE INITIALIZATION =====
+    Order matters: dbInit → load → loadAccounts → marketInit → pollsInit → electionsInit
+    All are async but we use .then() to avoid blocking the server listen. */
+ (async()=>{
+  await dbInit();
+  await load();
+  await loadAccounts();
+  await marketInit();
+  await pollsInit();
+  await electionsInit();
+  console.log('[FARM] All systems initialized. Backend:',dbPool&&dbReady?'PostgreSQL':'JSON files');
+ })();
+ /* Market price update timer — every 60 seconds */
+ setInterval(()=>{try{marketUpdatePrices();marketSyncToShopConfig();}catch(e){console.error('[MARKET] tick error:',e.message);}},MARKET_UPDATE_MS);
+ /* Poll + Election auto-close timer — every 5 seconds */
+ setInterval(()=>{try{pollsTick();}catch(e){}try{electionsTick();}catch(e){}},5000);
+ /* Periodic DB save — every 30 seconds (in addition to JSON save) */
+ setInterval(()=>{if(dbPool&&dbReady)save();},30000);
  process.on('SIGINT',()=>{console.log('\n[FARM] saving…');save();saveAccounts();process.exit(0);});
  server.listen(PORT,()=>console.log('[FARM] http://localhost:'+PORT));
 }else{server.listen(PORT,()=>console.log('[FARM] HTTP only. npm install ws'));}
