@@ -7,6 +7,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Creepster&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<!-- Post-processing pipeline for cinematic visuals -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/FilmPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FilmShader.js"></script>
 <style>
 :root{--cream:#f7f0e0;--ink:#3a3226;--green:#2f5d3a;--green2:#3f7a4a;--amber:#e8a33d;--red:#c04434;
 --rCommon:#97a553;--rUncommon:#4fae68;--rRare:#3f9fd6;--rEpic:#a86fd6;--rLegendary:#e8a33d;--rMythical:#e05a8a;--rDemon:#c03030;--rDivine:#f0d060;
@@ -517,7 +526,8 @@ html.touch .card .rname{font-size:14px}
 html.touch #adminDash{width:96vw;height:94vh}
 html.touch #timerBar{top:auto;bottom:120px;max-width:90vw;padding:6px 16px}
 html.touch #timerBar #timerTime{font-size:24px}
-html.touch #annBar{top:auto;bottom:180px;max-width:90vw;padding:10px 16px}
+html.touch #annBar{top:auto;bottom:-200px;max-width:90vw;padding:10px 16px;transition:bottom .5s cubic-bezier(.2,1.2,.4,1)}
+html.touch #annBar.show{bottom:180px}
 html.touch #annBar .msg{font-size:16px}
 html.touch #annBar.style-spooky .msg{font-size:20px}
 html.touch #restockBanner{max-width:90vw;padding:16px 28px}
@@ -1489,25 +1499,89 @@ const QUESTS=[['q1','Plant your first seed','plant',1],['q2','Harvest your first
 const srvNow=()=>Date.now()+ST.srvOffset;
 const seedPrice=id=>(ST.prices&&ST.prices[id]!==undefined)?ST.prices[id]:(SEEDS[id]?SEEDS[id].pr:0);
 const seedRar=id=>(ST.shopCfg&&ST.shopCfg[id]&&ST.shopCfg[id].rarity)||SEEDS[id].rar;
-/* THREE */
+/* THREE — CINEMATIC RENDERER with post-processing */
 const canvas=$('#c3d');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.physicallyCorrectLights=true;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0a1226);
 scene.fog=new THREE.Fog(0x141c30,50,150);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,600);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-const hemi=new THREE.HemisphereLight(0x8aa0c8,0x2a3a4a,.5);scene.add(hemi);
-const sun=new THREE.DirectionalLight(0x9aa8d8,.5);
-sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
-sun.shadow.camera.left=-40;sun.shadow.camera.right=40;sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
-sun.shadow.camera.far=180;scene.add(sun);scene.add(sun.target);
+
+/* ===== POST-PROCESSING PIPELINE =====
+   Bloom makes emissive objects (pumpkins, lanterns, crystals, magic) glow.
+   FilmPass adds subtle grain for cinematic atmosphere.
+   Vignette darkens screen edges for focus and mood. */
+let composer=null,bloomPass=null,filmPass=null;
+function initPostProcessing(){
+ if(typeof THREE.EffectComposer==='undefined'){console.log('[FARM] Post-processing scripts not loaded — using direct render');return false;}
+ composer=new THREE.EffectComposer(renderer);
+ const renderPass=new THREE.RenderPass(scene,camera);
+ composer.addPass(renderPass);
+ /* Bloom — makes everything emissive glow. Threshold 0.6 = only bright things bloom. */
+ bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.8,0.4,0.6);
+ composer.addPass(bloomPass);
+ /* Film grain — very subtle, adds cinematic texture */
+ filmPass=new THREE.FilmPass(0.15,false);
+ composer.addPass(filmPass);
+ /* Vignette via custom ShaderPass — darkens edges */
+ const vignetteShader={
+  uniforms:{tDiffuse:{value:null},offset:{value:0.95},darkness:{value:0.45}},
+  vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+  fragmentShader:'uniform sampler2D tDiffuse;uniform float offset;uniform float darkness;varying vec2 vUv;void main(){vec4 texel=texture2D(tDiffuse,vUv);vec2 uv=(vUv-0.5)*2.0;float dist=length(uv);float vig=smoothstep(offset,darkness,dist);texel.rgb=mix(texel.rgb,texel.rgb*vig,0.6);gl_FragColor=texel;}'
+ };
+ const vignettePass=new THREE.ShaderPass(vignetteShader);
+ vignettePass.renderToScreen=true;
+ composer.addPass(vignettePass);
+ console.log('[FARM] Post-processing pipeline initialized (bloom + film grain + vignette).');
+ return true;
+}
+const postOK=initPostProcessing();
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+ if(composer)composer.setSize(innerWidth,innerHeight);
+});
+
+/* ===== UPGRADED LIGHTING =====
+   Higher shadow resolution, warm/cool fill light, better shadow camera bounds. */
+const hemi=new THREE.HemisphereLight(0x8aa0c8,0x2a3a4a,0.6);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff0d8,1.2);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-50;sun.shadow.camera.right=50;sun.shadow.camera.top=50;sun.shadow.camera.bottom=-50;
+sun.shadow.camera.near=0.5;sun.shadow.camera.far=200;
+sun.shadow.bias=-0.0005;sun.shadow.normalBias=0.02;
+scene.add(sun);scene.add(sun.target);
+/* Warm fill light from the opposite side — eliminates flat black shadows */
+const fillLight=new THREE.DirectionalLight(0xffd0a0,0.25);
+fillLight.position.set(-30,20,-30);
+scene.add(fillLight);
+/* Ambient point light at center — ensures nothing is ever pitch black */
+const ambientPoint=new THREE.PointLight(0xffe8c0,0.4,120);
+ambientPoint.position.set(0,15,0);
+scene.add(ambientPoint);
+
 const MAT={};
-function mat(c,o={}){const k=c+JSON.stringify(o);if(!MAT[k])MAT[k]=new THREE.MeshLambertMaterial(Object.assign({color:c},o));return MAT[k];}
-function um(c){return new THREE.MeshLambertMaterial({color:c});}   /* unique material — for skinnable farmers */
+/* ===== UPGRADED MATERIALS — MeshStandardMaterial with PBR roughness/metalness =====
+   Everything now uses physically-based rendering: wood has high roughness,
+   metal has metalness, glowing items emit real light into the scene. */
+function mat(c,o={}){
+ const defaults={roughness:0.85,metalness:0.0};
+ const opts=Object.assign({color:c,roughness:defaults.roughness,metalness:defaults.metalness},o);
+ const k=c+JSON.stringify(opts);
+ if(!MAT[k])MAT[k]=new THREE.MeshStandardMaterial(opts);
+ return MAT[k];
+}
+/* Unique material — for skinnable farmers. Each gets its own instance. */
+function um(c){return new THREE.MeshStandardMaterial({color:c,roughness:0.7,metalness:0.0});}
 function box(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);return m;}
 function ubox(w,h,d,c,x=0,y=0,z=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),um(c));m.position.set(x,y,z);return m;}
 /* Sphere/cylinder/cone helpers — moderate poly count for performance vs visual quality balance */
@@ -1653,7 +1727,7 @@ function plasterTex(){if(TX.plaster)return TX.plaster;
    c.fillRect(Math.random()*128,Math.random()*128,2,2);}});
  return TX.plaster;}
 function texMat(tex,color,rx,ry){const k='T'+color+rx+ry;
- if(!MAT[k])MAT[k]=new THREE.MeshLambertMaterial({color,map:tex});
+ if(!MAT[k])MAT[k]=new THREE.MeshStandardMaterial({color,map:tex,roughness:0.9,metalness:0.0});
  if(!MAT[k].userData){MAT[k].userData=1;
   const m=MAT[k];m.map=tex.clone();m.map.needsUpdate=true;m.map.wrapS=m.map.wrapT=THREE.RepeatWrapping;
   m.map.repeat.set(rx,ry);}
@@ -1730,7 +1804,7 @@ function buildStall(x,z,rotY,a1,a2){
  g.add(cyl(.09,.09,3.1,0x6a4a2a,-2.2,1.55,0,6));g.add(cyl(.09,.09,3.1,0x6a4a2a,2.2,1.55,0,6));
  const cv=document.createElement('canvas');cv.width=128;cv.height=32;const c2=cv.getContext('2d');
  for(let i=0;i<8;i++){c2.fillStyle=i%2?a1:a2;c2.fillRect(i*16,0,16,32);}
- const awn=new THREE.Mesh(new THREE.BoxGeometry(5.2,.12,2.2),new THREE.MeshLambertMaterial({map:new THREE.CanvasTexture(cv)}));
+ const awn=new THREE.Mesh(new THREE.BoxGeometry(5.2,.12,2.2),new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(cv)}));
  awn.position.set(0,3.15,.3);awn.rotation.x=.22;g.add(awn);
  awn.userData.swayP=Math.random()*7;swayingProps.push(awn);
  g.add(sph(.22,0xe8a33d,-.6,1.4,0,8));g.add(sph(.2,0xe63b2a,.4,1.38,0,8));g.add(woodBox(.6,.3,.4,1.5,1.35,0));
@@ -1780,11 +1854,11 @@ function buildSeedStore(x,z,action){
   const row=Math.floor(i/6),colI=i%6;
   if(colI===0)g.add(woodBox(7.6,.18,.8,0,1.6+row*1.3,-4.2));
   const pk=box(.42,.56,.05,sd.fru,-2.9+colI*1.15,1.95+row*1.3,-4.2);
-  pk.material=new THREE.MeshLambertMaterial({color:new THREE.Color(sd.fru).multiplyScalar(.9)});
+  pk.material=new THREE.MeshStandardMaterial({color:new THREE.Color(sd.fru).multiplyScalar(.9)});
   g.add(pk);
   g.add(box(.42,.1,.05,0xf0e2c0,-2.9+colI*1.15,2.2+row*1.3,-4.16));});
  for(const lx of[-3,3])g.add((()=>{const l=box(.8,.12,.8,0xffd890,lx,4.2,-1);
-  l.material=new THREE.MeshLambertMaterial({color:0xffd890,emissive:new THREE.Color(0xffc060),emissiveIntensity:.9});return l;})());
+  l.material=new THREE.MeshStandardMaterial({color:0xffd890,emissive:new THREE.Color(0xffc060),emissiveIntensity:.9});return l;})());
  g.add(woodBox(1.4,1,1.4,-6.6,.9,5.4));
  g.add(woodBox(1.1,.8,1.1,-6.6,1.85,5.4));
  g.add(woodBox(1.2,1.1,1.2,6.7,1,5.2));
@@ -1805,7 +1879,7 @@ function buildSeedStore(x,z,action){
   const lg=new THREE.Group();
   lg.add(cyl(.05,.05,1.8,0x4a3a2a,0,.9,0,4));
   const gl=box(.5,.6,.5,0xffe8a0,0,1.9,0);
-  gl.material=new THREE.MeshLambertMaterial({color:0xffe8a0,emissive:new THREE.Color(0xffd070),emissiveIntensity:.8});
+  gl.material=new THREE.MeshStandardMaterial({color:0xffe8a0,emissive:new THREE.Color(0xffd070),emissiveIntensity:.8});
   lg.add(gl);lg.position.set(lx,.5,5.2);g.add(lg);}
  scene.add(g);shopGroups.push(g);
  addCollider(x,z,7);
@@ -1890,7 +1964,7 @@ treeSpots.forEach(p=>allTrees.push(makeTree(p[0],p[1],p[2],1+Math.random()*.35))
 function lantern(x,z){const l=new THREE.Group();
  l.add(cyl(.09,.12,2.6,0x4a3a2a,0,1.3,0,6));
  const gl=box(.5,.55,.5,0xffe8a0,0,2.6,0);
- gl.material=new THREE.MeshLambertMaterial({color:0xffe8a0,emissive:new THREE.Color(0xffd070),emissiveIntensity:.8});
+ gl.material=new THREE.MeshStandardMaterial({color:0xffe8a0,emissive:new THREE.Color(0xffd070),emissiveIntensity:.8});
  l.add(gl);l.position.set(x,0,z);decor.add(l);addCollider(x,z,.5);
  l.userData.lamp=gl;return l;}
 const allLanterns=[];
@@ -1998,7 +2072,7 @@ function pumpkinFaceTex(lit){
 function makePumpkin(x,z,s,lit){
  const g=new THREE.Group();
  const body=new THREE.Mesh(new THREE.SphereGeometry(.55*s,12,10),
-  new THREE.MeshLambertMaterial({map:pumpkinFaceTex(lit),
+  new THREE.MeshStandardMaterial({map:pumpkinFaceTex(lit),
    emissive:lit?new THREE.Color(0xff3010):new THREE.Color(0)}));
  body.scale.y=.8;body.position.y=.45*s;body.castShadow=true;g.add(body);
  const stem=cyl(.08*s,.12*s,.3*s,0x5a6a34,0,.85*s,0,5);g.add(stem);
@@ -2052,7 +2126,7 @@ const Spooky={grp:null,moon:null,magma:null,applied:false,encT:0,creature:null,
    const c=new THREE.Group();
    c.add(cyl(.09,.11,.4,0xe8dcc0,0,.2,0,6));
    const fl=new THREE.Mesh(new THREE.SphereGeometry(.07,6,5),
-    new THREE.MeshLambertMaterial({color:0xffd24a,emissive:new THREE.Color(0xff9020),emissiveIntensity:1}));
+    new THREE.MeshStandardMaterial({color:0xffd24a,emissive:new THREE.Color(0xff9020),emissiveIntensity:1}));
    fl.position.y=.48;c.add(fl);c.userData.fl=fl;
    const a=Math.atan2(-p[1],-p[0]);
    c.position.set(p[0]+Math.cos(a)*(PLOT_HALF[0]+3.4),0,p[1]+Math.sin(a)*(PLOT_HALF[0]+3.4));
@@ -2109,8 +2183,8 @@ const Spooky={grp:null,moon:null,magma:null,applied:false,encT:0,creature:null,
   ST.halloween=false;updateGameShopBtn();},
  makeCreature(){
   const g=new THREE.Group();
-  const dk=new THREE.MeshLambertMaterial({color:0x0a0a10});
-  const dk2=new THREE.MeshLambertMaterial({color:0x14141c});
+  const dk=new THREE.MeshStandardMaterial({color:0x0a0a10});
+  const dk2=new THREE.MeshStandardMaterial({color:0x14141c});
   const torso=new THREE.Mesh(new THREE.BoxGeometry(.9,2.6,.55),dk);torso.position.y=4.2;torso.rotation.x=.18;g.add(torso);
   const head=new THREE.Group();head.position.set(0,5.7,.35);
   const hm=new THREE.Mesh(new THREE.BoxGeometry(.5,.7,.45),dk2);head.add(hm);
@@ -2260,8 +2334,8 @@ function rebuildPlayerVisual(){
 /* ===== FULL BODY SKIN MODELS ===== */
 function makeSkeleton(){
  const g=new THREE.Group(),P={};
- const boneMat=new THREE.MeshLambertMaterial({color:0xe8e2d4});
- const darkMat=new THREE.MeshLambertMaterial({color:0x9a9080});
+ const boneMat=new THREE.MeshStandardMaterial({color:0xe8e2d4});
+ const darkMat=new THREE.MeshStandardMaterial({color:0x9a9080});
  const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat);m.castShadow=true;return m;};
  /* Spine + ribcage torso */
  P.torso=new THREE.Group();
@@ -2292,7 +2366,7 @@ function makeSkeleton(){
  g.userData.parts=P;return g;}
 function makeGhost(){
  const g=new THREE.Group(),P={};
- const ghostMat=new THREE.MeshLambertMaterial({color:0xc0d0e8,transparent:true,opacity:.65,
+ const ghostMat=new THREE.MeshStandardMaterial({color:0xc0d0e8,transparent:true,opacity:.65,
   emissive:new THREE.Color(0x4060a0),emissiveIntensity:.25});
  const mk=(geom)=>{const m=new THREE.Mesh(geom,ghostMat);m.castShadow=true;return m;};
  /* Tapered body (no legs — ghost tail) */
@@ -2324,10 +2398,10 @@ function makeGhost(){
  g.userData.parts=P;return g;}
 function makeVampire(){
  const g=new THREE.Group(),P={};
- const suitMat=new THREE.MeshLambertMaterial({color:0x1a0a1a});
- const capeMat=new THREE.MeshLambertMaterial({color:0x3a0a0a,side:THREE.DoubleSide});
- const skinMat=new THREE.MeshLambertMaterial({color:0xe8e0d0});
- const shirtMat=new THREE.MeshLambertMaterial({color:0xf0f0e8});
+ const suitMat=new THREE.MeshStandardMaterial({color:0x1a0a1a});
+ const capeMat=new THREE.MeshStandardMaterial({color:0x3a0a0a,side:THREE.DoubleSide});
+ const skinMat=new THREE.MeshStandardMaterial({color:0xe8e0d0});
+ const shirtMat=new THREE.MeshStandardMaterial({color:0xf0f0e8});
  const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat);m.castShadow=true;return m;};
  P.torso=new THREE.Group();P.torso.position.y=1.55;
  const torsoM=rbox(.7,.95,.42,suitMat);P.torso.add(torsoM);
@@ -2339,17 +2413,17 @@ function makeVampire(){
  /* White shirt V-neck */
  const vneck=mk(new THREE.BoxGeometry(.3,.4,.08),shirtMat);vneck.position.set(0,-.1,.22);P.torso.add(vneck);
  /* Bow tie */
- const bow=mk(new THREE.BoxGeometry(.18,.06,.04),new THREE.MeshLambertMaterial({color:0xc00010}));
+ const bow=mk(new THREE.BoxGeometry(.18,.06,.04),new THREE.MeshStandardMaterial({color:0xc00010}));
  bow.position.set(0,.05,.24);P.torso.add(bow);
  g.add(P.torso);
  /* Head — sphere for smooth look */
  P.head=new THREE.Group();P.head.position.y=2.36;
  const skull=mk(new THREE.SphereGeometry(.32,14,11),skinMat);skull.scale.set(.95,1,.95);P.head.add(skull);
  /* Slicked-back hair */
- const hair=mk(new THREE.SphereGeometry(.34,12,9,0,Math.PI*2,0,Math.PI/2.2),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ const hair=mk(new THREE.SphereGeometry(.34,12,9,0,Math.PI*2,0,Math.PI/2.2),new THREE.MeshStandardMaterial({color:0x1a1a1a}));
  hair.position.y=.04;P.head.add(hair);
  /* Widow's peak */
- const peak=mk(new THREE.ConeGeometry(.1,.12,8),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+ const peak=mk(new THREE.ConeGeometry(.1,.12,8),new THREE.MeshStandardMaterial({color:0x1a1a1a}));
  peak.position.set(0,.1,.22);peak.rotation.x=Math.PI;P.head.add(peak);
  /* Red glowing eyes */
  P.head.add(mk(new THREE.SphereGeometry(.045,12,8),new THREE.MeshBasicMaterial({color:0xff1010}))).position.set(-.12,.04,.28);
@@ -2377,8 +2451,8 @@ function makeVampire(){
  g.userData.parts=P;return g;}
 function makeMummy(){
  const g=new THREE.Group(),P={};
- const bandMat=new THREE.MeshLambertMaterial({color:0xd8c8a0});
- const darkMat=new THREE.MeshLambertMaterial({color:0x6a5a40});
+ const bandMat=new THREE.MeshStandardMaterial({color:0xd8c8a0});
+ const darkMat=new THREE.MeshStandardMaterial({color:0x6a5a40});
  const mk=(geom,mat)=>{const m=new THREE.Mesh(geom,mat||bandMat);m.castShadow=true;return m;};
  P.torso=mk(new THREE.BoxGeometry(.7,.95,.44));P.torso.position.y=1.55;g.add(P.torso);
  /* Bandage strips wrapping the torso */
@@ -2412,7 +2486,7 @@ function attachCosmetic(P){
  P.head.traverse(o=>{if(o.userData&&o.userData.isHat)o.visible=false;});
  if(c==='pumpkin_head'){
   const pk=new THREE.Mesh(new THREE.SphereGeometry(.36,12,10),
-   new THREE.MeshLambertMaterial({map:pumpkinFaceTex(true),emissive:new THREE.Color(0xff3010),emissiveIntensity:.25}));
+   new THREE.MeshStandardMaterial({map:pumpkinFaceTex(true),emissive:new THREE.Color(0xff3010),emissiveIntensity:.25}));
   pk.scale.y=.82;pk.position.y=.62;pk.castShadow=true;P.head.add(pk);}
  else if(c==='witch_hat'){
   const brim=ubox(.72,.08,.76,0x2a1440,0,.38,.05);
@@ -2441,7 +2515,7 @@ function attachCosmetic(P){
   P.head.add(halo);P.head.add(haloLight);}
  else if(c==='demon_horns'){
   for(const sx of[-1,1]){const horn=new THREE.Mesh(new THREE.ConeGeometry(.08,.35,8),
-   new THREE.MeshLambertMaterial({color:0x8a0000}));
+   new THREE.MeshStandardMaterial({color:0x8a0000}));
    horn.position.set(sx*.18,.4,0);horn.rotation.z=sx*.4;P.head.add(horn);}}
  else if(c==='spectral_aura'){
   const aura=new THREE.Mesh(new THREE.SphereGeometry(.7,16,12),
@@ -2723,17 +2797,17 @@ const ShovelItem={
   if(this.grp)return;
   this.grp=new THREE.Group();
   /* Handle — wooden cylinder */
-  const handleMat=new THREE.MeshLambertMaterial({color:0x8a5a2a});
+  const handleMat=new THREE.MeshStandardMaterial({color:0x8a5a2a});
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.045,1.4,8),handleMat);
   handle.position.y=0.7;this.grp.add(handle);
   /* Grip — darker section at top of handle */
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.25,8),new THREE.MeshLambertMaterial({color:0x4a2a10}));
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.25,8),new THREE.MeshStandardMaterial({color:0x4a2a10}));
   grip.position.y=1.4;this.grp.add(grip);
   /* Shaft connector — small metal ring where handle meets blade */
-  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8),new THREE.MeshLambertMaterial({color:0x808080}));
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8),new THREE.MeshStandardMaterial({color:0x808080}));
   ring.position.y=0.05;this.grp.add(ring);
   /* Blade — shovel head (flattened cone shape) */
-  const bladeMat=new THREE.MeshLambertMaterial({color:0xa0a0a8,metal:true});
+  const bladeMat=new THREE.MeshStandardMaterial({color:0xa0a0a8,metal:true});
   const blade=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.35,8),bladeMat);
   blade.position.y=-0.15;blade.scale.set(1,1,0.25); /* flatten the cone into a spade shape */
   this.grp.add(blade);
@@ -2794,7 +2868,7 @@ const HandItem={
  build(){
   this.grp=new THREE.Group();
   this.pkt=new THREE.Mesh(new THREE.BoxGeometry(.26,.34,.045),
-   new THREE.MeshLambertMaterial({}));
+   new THREE.MeshStandardMaterial({}));
   this.pkt.castShadow=true;this.grp.add(this.pkt);
   const rim=new THREE.Mesh(new THREE.BoxGeometry(.28,.36,.03),mat(0xb09a6a));
   rim.position.z=-.012;this.grp.add(rim);
@@ -2948,7 +3022,7 @@ const FX={items:[],
    const f=new THREE.Group();
    f.add(cyl(.03,.04,.5,0x4a8a3a,0,.25,0,4));
    const p=new THREE.Mesh(new THREE.SphereGeometry(.18,7,5),glow
-    ?new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:.8}):mat(col));
+    ?new THREE.MeshStandardMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:.8}):mat(col));
    p.position.y=.55;p.scale.y=.5;f.add(p);
    f.position.set(Math.cos(a)*r,0,Math.sin(a)*r);f.userData.pop=Math.random()*1.5;g.add(f);}
   return{obj:g,tick:(t)=>{for(const f of g.children){const k=Math.max(0,Math.min(1,(t-spawnT-f.userData.pop)/.5));
@@ -3002,7 +3076,7 @@ const FX={items:[],
    sc.add(box(.7,.9,.4,0x8a7a5a,0,1.9,0));
    sc.add(cone(.7,.9,0xd8a55a,0,2.9,0,7));
    const head=new THREE.Mesh(new THREE.SphereGeometry(.34,9,7),
-    new THREE.MeshLambertMaterial({color:0xe8801a,emissive:0xff9020,emissiveIntensity:.5}));
+    new THREE.MeshStandardMaterial({color:0xe8801a,emissive:0xff9020,emissiveIntensity:.5}));
    head.position.y=2.55;sc.add(head);
    const e1=sph(.05,0xffe020,-.11,2.6,.28,5);e1.material=new THREE.MeshBasicMaterial({color:0xffe020});
    const e2=e1.clone();e2.position.x=.11;sc.add(e1);sc.add(e2);
@@ -3075,7 +3149,7 @@ const weather={cur:null,lightning:0,ltTimer:0,rumbleT:0,eventScale:1,targetScale
    const gs=new THREE.Group();
    for(let i=0;i<4;i++){
     const sp=new THREE.Mesh(new THREE.SphereGeometry(.7,8,7),
-     new THREE.MeshLambertMaterial({color:0xe8e8ff,transparent:true,opacity:.28,emissive:new THREE.Color(0xa0a0d0),emissiveIntensity:.3}));
+     new THREE.MeshStandardMaterial({color:0xe8e8ff,transparent:true,opacity:.28,emissive:new THREE.Color(0xa0a0d0),emissiveIntensity:.3}));
     sp.scale.y=1.5;
     sp.position.set((Math.random()-.5)*110,1.2,(Math.random()-.5)*110);
     sp.userData.ph=Math.random()*7;gs.add(sp);}
@@ -3204,7 +3278,7 @@ const weather={cur:null,lightning:0,ltTimer:0,rumbleT:0,eventScale:1,targetScale
    FX.groundTint('#bfeaf4',.18);
    const shards=new THREE.Group();
    for(let i=0;i<16;i++){const s=cone(.16,.7,0x9affff,0,0,0,5);
-    s.material=new THREE.MeshLambertMaterial({color:0x9affff,emissive:0x9affff,emissiveIntensity:.5,transparent:true,opacity:.85});
+    s.material=new THREE.MeshStandardMaterial({color:0x9affff,emissive:0x9affff,emissiveIntensity:.5,transparent:true,opacity:.85});
     s.position.set((Math.random()-.5)*110,20+Math.random()*25,(Math.random()-.5)*110);
     s.rotation.set(Math.random(),0,Math.random());s.userData.v=-4-Math.random()*3;shards.add(s);}
    FX.add(shards,(t,dt)=>{shards.children.forEach(s=>{s.position.y+=s.userData.v*dt;s.rotation.y+=dt*2;
@@ -3212,7 +3286,7 @@ const weather={cur:null,lightning:0,ltTimer:0,rumbleT:0,eventScale:1,targetScale
    const gcr=new THREE.Group();
    for(let i=0;i<8;i++){const a=Math.random()*6.28,d=22+Math.random()*55;
     const c=cone(.4,1.6,0x9affff,Math.cos(a)*d,.8,Math.sin(a)*d,5);
-    c.material=new THREE.MeshLambertMaterial({color:0x9affff,emissive:0x9affff,emissiveIntensity:.4,transparent:true,opacity:.85});
+    c.material=new THREE.MeshStandardMaterial({color:0x9affff,emissive:0x9affff,emissiveIntensity:.4,transparent:true,opacity:.85});
     gcr.add(c);}
    FX.add(gcr,(t)=>{gcr.children.forEach((c,i)=>{c.scale.setScalar(.6+.4*Math.abs(Math.sin(t*.5+i)));});});}
   if(f.solar){
@@ -3375,14 +3449,33 @@ function updateSky(t){
  sun.color.copy(sunC);sun.intensity=sunI;
  hemi.intensity=ST.halloween?.3:.42;
  sun.target.position.set(player.x,0,player.z);
- sun.position.set(player.x+30,60,player.z-40);}
+ sun.position.set(player.x+30,60,player.z-40);
+ /* ===== DYNAMIC POST-PROCESSING — bloom and exposure adapt to lighting =====
+    Dark scenes get more bloom (glowing pumpkins, lanterns, magic effects pop).
+    Bright scenes get less bloom (prevents whiteout on sunny days).
+    This is what makes the game feel cinematic instead of flat. */
+ const darkness=Math.max(0,1-sunI);
+ if(bloomPass){
+  /* Darker scenes → stronger bloom, lower threshold (more things glow) */
+  bloomPass.strength=0.5+darkness*0.6;   /* 0.5 (day) → 1.1 (night) */
+  bloomPass.threshold=Math.max(0.3,0.7-darkness*0.3); /* 0.7 (day) → 0.4 (night) */
+  bloomPass.radius=0.4+darkness*0.2;
+ }
+ if(filmPass){
+  /* More film grain at night for atmosphere */
+  filmPass.intensity=0.1+(ST.halloween?0.08:0)+darkness*0.05;
+ }
+ /* Exposure adjusts — darker scenes get brightened slightly so gameplay is still visible */
+ renderer.toneMappingExposure=1.0+darkness*0.2;
+}
 /* PLANT MODELS — moderate-poly geometry for performance */
 const VGeo2={},VMat={};
 function gLeaf(){if(!VGeo2.leaf){VGeo2.leaf=new THREE.SphereGeometry(1,10,7);VGeo2.leaf.scale(.55,1,.14);}return VGeo2.leaf;}
 function gStem(seg){if(!VGeo2['st'+seg])VGeo2['st'+seg]=new THREE.CylinderGeometry(1,1,1,Math.max(seg,6));return VGeo2['st'+seg];}
 function vmat(c,e){const k=c+'|'+(e||'');
- if(!VMat[k])VMat[k]=new THREE.MeshLambertMaterial({color:c,
-  emissive:e?new THREE.Color(e):new THREE.Color(0)});return VMat[k];}
+ if(!VMat[k])VMat[k]=new THREE.MeshStandardMaterial({color:c,roughness:0.6,metalness:0.0,
+  emissive:e?new THREE.Color(e):new THREE.Color(0),
+  emissiveIntensity:e?0.6:0});return VMat[k];}
 function makeLeaf(len,wid,col,ang){
  const g=new THREE.Group();
  const b=new THREE.Mesh(gLeaf(),vmat(col));b.scale.set(wid,len,wid*.8);
@@ -3519,7 +3612,7 @@ function buildPlantModel(sd,stage,muts){
    break;}
   case 'crystal':{
    const base=stem(.4,.1,0x5a8a7a);g.add(base);
-   const cm=new THREE.MeshLambertMaterial({color:sd.fru,transparent:true,opacity:.85,
+   const cm=new THREE.MeshStandardMaterial({color:sd.fru,transparent:true,opacity:.85,
     emissive:new THREE.Color(sd.fru),emissiveIntensity:sd.id==='rake'?.6:.35});
    const n=stage===2?2:stage===3?3:4;
    for(let i=0;i<n;i++){const a=i/n*6.28;
@@ -3528,7 +3621,7 @@ function buildPlantModel(sd,stage,muts){
     c.rotation.set(Math.cos(a)*.28,0,Math.sin(a)*.28);
     c.scale.setScalar(fs*(stage>=4?1.25:1));g.add(c);sway.push(c);}
    if(sd.id==='rake'&&stage>=4){
-    const hm=new THREE.MeshLambertMaterial({color:sd.fru,emissive:new THREE.Color(sd.fru),emissiveIntensity:.7});
+    const hm=new THREE.MeshStandardMaterial({color:sd.fru,emissive:new THREE.Color(sd.fru),emissiveIntensity:.7});
     const head=box(1.3,.3,.3,sd.fru,0,1.9,0);head.material=hm;g.add(head);
     for(let i=0;i<5;i++){const tt=cone(.09,.5,sd.fru,-.55+i*.27,1.55,0,4);tt.material=hm;g.add(tt);}}
    break;}}
@@ -3560,7 +3653,7 @@ function decorateHarvestFruit(mesh,f){
  const md=MUTS[muts[0]];if(!md)return;
  let col=new THREE.Color(SEEDS[f.s]?SEEDS[f.s].fru:'#888888');
  for(const m of muts){const d=MUTS[m];if(d&&d.tint)col.lerp(new THREE.Color(d.tint),.55);}
- mesh.material=new THREE.MeshLambertMaterial({color:col,
+ mesh.material=new THREE.MeshStandardMaterial({color:col,
   emissive:md.glow>0?col:new THREE.Color(0)});
  mesh.scale.multiplyScalar(muts.includes('giant')||muts.includes('overgrown')?1.9:
   muts.includes('miniature')?.6:1.25);
@@ -3644,7 +3737,7 @@ function updateOthers(list){
 const petObjs=new Map();
 function petModel(pd){
  const g=new THREE.Group(),c=pd.col;
- const em=new THREE.MeshLambertMaterial({color:c,emissive:new THREE.Color(c),emissiveIntensity:.25});
+ const em=new THREE.MeshStandardMaterial({color:c,emissive:new THREE.Color(c),emissiveIntensity:.25});
  const bd=(w,h,d,y)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),em);m.position.y=y;m.castShadow=true;g.add(m);return m;};
  switch(pd.form){
   case 'bunny':bd(.34,.3,.44,.24);g.add(sph(.2,c,0,.5,0,7));
@@ -3680,13 +3773,13 @@ function petModel(pd){
    {const dw=bd(.02,.4,.5,.66);dw.position.x=-.24;const dw2=dw.clone();dw2.position.x=.24;g.userData.wings=[dw,dw2];}break;
   case 'serpent':for(let i=0;i<5;i++)g.add(sph(.14-i*.015,c,0,.15+i*.08,-i*.2,7));break;
   case 'spirit':{const s=sph(.4,c,0,.6,0,9);
-   s.material=new THREE.MeshLambertMaterial({color:c,transparent:true,opacity:.7,emissive:new THREE.Color(c),emissiveIntensity:.5});g.add(s);}break;
+   s.material=new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:.7,emissive:new THREE.Color(c),emissiveIntensity:.5});g.add(s);}break;
   case 'whale':bd(.6,.36,.8,.7);g.children[0].add(box(.3,.05,.3,c,0,.1,-.5));break;
   case 'imp':bd(.3,.3,.3,.3);g.add(sph(.2,c,0,.55,0,7));
    g.children[1].add(cone(.05,.14,0x2a1a1a,-.08,.15,0,4));g.children[1].add(cone(.05,.14,0x2a1a1a,.08,.15,0,4));break;
   case 'eye':{ /* Demon Eye — floating orb with glowing iris + tendrils */
    const body=new THREE.Mesh(new THREE.SphereGeometry(.3,12,10),
-    new THREE.MeshLambertMaterial({color:0x1a0a14,emissive:new THREE.Color(0x300010),emissiveIntensity:.4}));
+    new THREE.MeshStandardMaterial({color:0x1a0a14,emissive:new THREE.Color(0x300010),emissiveIntensity:.4}));
    body.position.y=.6;body.castShadow=true;g.add(body);
    const iris=new THREE.Mesh(new THREE.SphereGeometry(.12,10,8),new THREE.MeshBasicMaterial({color:0xff2010}));
    iris.position.set(0,.6,.22);g.add(iris);
@@ -3778,8 +3871,8 @@ function colAt(stops,t,out){
    return out.set(stops[i][1]).lerp(new THREE.Color(stops[i+1][1]),k);}}
  out.set(stops[stops.length-1][1]);return out;}
 function makeFigure(){
- const dk=new THREE.MeshLambertMaterial({color:0x08080c});
- const rim=new THREE.MeshLambertMaterial({color:0x1c1c26});
+ const dk=new THREE.MeshStandardMaterial({color:0x08080c});
+ const rim=new THREE.MeshStandardMaterial({color:0x1c1c26});
  const g=new THREE.Group();
  const hips=new THREE.Group();hips.position.y=3.55;g.add(hips);
  const torso=new THREE.Group();hips.add(torso);
@@ -5630,7 +5723,7 @@ function animate(){
  /* Tick the Haunted Harvest UI timer every frame */
  if(typeof HauntedHarvest!=='undefined'&&HauntedHarvest.active)HauntedHarvest.tick();
  /* Note: Season 3 runs its own requestAnimationFrame loop — no need to tick here */
- renderer.render(scene,camera);}
+ if(composer)composer.render();else renderer.render(scene,camera);}
 /* ============ CHAOS CINEMATIC (Sammy Snap-style — 3D) ============
    A dramatic 6-second 3D cinematic that plays for ALL connected players when an admin
    triggers chaos activation. A glowing hooded figure rises from BENEATH the ground into
@@ -5654,7 +5747,7 @@ const ChaosCinematic={
   /* Build the 3D figure — a hooded glowing humanoid that rises from below */
   this.figure=new THREE.Group();
   /* Body — dark hooded robe (tapered cylinder) */
-  const robeMat=new THREE.MeshLambertMaterial({color:0x1a0608,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.15});
+  const robeMat=new THREE.MeshStandardMaterial({color:0x1a0608,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.15});
   const robe=new THREE.Mesh(new THREE.CylinderGeometry(0.8,1.8,4,12),robeMat);
   robe.position.y=0;this.figure.add(robe);
   /* Head — sphere */
@@ -5921,7 +6014,7 @@ const HauntedHarvest={
  makePumpkin(color){
   const g=new THREE.Group();
   /* Pumpkin body — 8 segments around */
-  const bodyMat=new THREE.MeshLambertMaterial({color:color,emissive:new THREE.Color(color),emissiveIntensity:0.3});
+  const bodyMat=new THREE.MeshStandardMaterial({color:color,emissive:new THREE.Color(color),emissiveIntensity:0.3});
   for(let i=0;i<8;i++){
    const seg=new THREE.Mesh(new THREE.SphereGeometry(0.7,8,8),bodyMat);
    const ang=i/8*6.28;
@@ -5930,7 +6023,7 @@ const HauntedHarvest={
    g.add(seg);
   }
   /* Stem */
-  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.15,0.4,6),new THREE.MeshLambertMaterial({color:0x4a3a1a}));
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.15,0.4,6),new THREE.MeshStandardMaterial({color:0x4a3a1a}));
   stem.position.y=1.3;g.add(stem);
   /* Glowing eyes */
   const eyeMat=new THREE.MeshBasicMaterial({color:0xffff00});
@@ -5941,7 +6034,7 @@ const HauntedHarvest={
  makePumpkinKing(){
   const g=new THREE.Group();
   /* Enormous pumpkin body */
-  const bodyMat=new THREE.MeshLambertMaterial({color:0xff4010,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.4});
+  const bodyMat=new THREE.MeshStandardMaterial({color:0xff4010,emissive:new THREE.Color(0xff2010),emissiveIntensity:0.4});
   for(let i=0;i<12;i++){
    const seg=new THREE.Mesh(new THREE.SphereGeometry(3,10,8),bodyMat);
    const ang=i/12*6.28;
@@ -5950,7 +6043,7 @@ const HauntedHarvest={
    g.add(seg);
   }
   /* Crown */
-  const crownMat=new THREE.MeshLambertMaterial({color:0xffd24a,emissive:new THREE.Color(0xffa020),emissiveIntensity:0.3});
+  const crownMat=new THREE.MeshStandardMaterial({color:0xffd24a,emissive:new THREE.Color(0xffa020),emissiveIntensity:0.3});
   for(let i=0;i<5;i++){
    const spike=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.5,6),crownMat);
    const ang=i/5*6.28;
@@ -5970,7 +6063,7 @@ const HauntedHarvest={
   const g=new THREE.Group();
   const colors={Common:0x80c0ff,Rare:0xc080ff,Epic:0xff80c0,Legendary:0xffc040};
   const col=colors[rarity]||0x80c0ff;
-  const mat=new THREE.MeshLambertMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:0.5});
+  const mat=new THREE.MeshStandardMaterial({color:col,emissive:new THREE.Color(col),emissiveIntensity:0.5});
   /* Chest body */
   const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.5,0.6),mat);body.position.y=0.3;g.add(body);
   /* Lid */
@@ -6525,7 +6618,7 @@ const Season3={
  /* ===== 3D: Crystal — bigger, more shards, brighter ===== */
  makeCrystal(){
   const g=new THREE.Group();
-  const mat=new THREE.MeshLambertMaterial({color:0x40c0ff,emissive:new THREE.Color(0x2080ff),emissiveIntensity:0.6,transparent:true,opacity:0.9});
+  const mat=new THREE.MeshStandardMaterial({color:0x40c0ff,emissive:new THREE.Color(0x2080ff),emissiveIntensity:0.6,transparent:true,opacity:0.9});
   /* Main crystal — tall, faceted */
   const main=new THREE.Mesh(new THREE.ConeGeometry(0.8,3,6),mat);
   main.position.y=1.5;g.add(main);
@@ -6547,7 +6640,7 @@ const Season3={
  /* ===== 3D: Shadow — bigger, more dramatic, glowing aura ===== */
  makeShadow(){
   const g=new THREE.Group();
-  const darkMat=new THREE.MeshLambertMaterial({color:0x0a0510,emissive:new THREE.Color(0x6020a0),emissiveIntensity:0.4});
+  const darkMat=new THREE.MeshStandardMaterial({color:0x0a0510,emissive:new THREE.Color(0x6020a0),emissiveIntensity:0.4});
   /* Body — wide tapered robe */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.2,6,12),darkMat);
   g.add(body);
@@ -6585,8 +6678,8 @@ const Season3={
  /* ===== 3D: Raven — more detailed ===== */
  makeRaven(){
   const g=new THREE.Group();
-  const darkMat=new THREE.MeshLambertMaterial({color:0x1a1a2e,emissive:new THREE.Color(0x101030),emissiveIntensity:0.25});
-  const cloakMat=new THREE.MeshLambertMaterial({color:0x0a0a18,side:THREE.DoubleSide,transparent:true,opacity:0.9});
+  const darkMat=new THREE.MeshStandardMaterial({color:0x1a1a2e,emissive:new THREE.Color(0x101030),emissiveIntensity:0.25});
+  const cloakMat=new THREE.MeshStandardMaterial({color:0x0a0a18,side:THREE.DoubleSide,transparent:true,opacity:0.9});
   /* Body */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.7,3,8),darkMat);
   g.add(body);
@@ -6594,7 +6687,7 @@ const Season3={
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.45,12,10),darkMat);
   head.position.y=2;g.add(head);
   /* Mask */
-  const mask=new THREE.Mesh(new THREE.SphereGeometry(0.47,12,10,0,Math.PI*2,0,Math.PI/2),new THREE.MeshLambertMaterial({color:0x050510}));
+  const mask=new THREE.Mesh(new THREE.SphereGeometry(0.47,12,10,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x050510}));
   mask.position.y=2.1;g.add(mask);
   /* Glowing blue eyes */
   const eyeMat=new THREE.MeshBasicMaterial({color:0x80c0ff});
@@ -6612,7 +6705,7 @@ const Season3={
   const wingR=new THREE.Mesh(new THREE.PlaneGeometry(2,2.5),cloakMat);
   wingR.position.set(1.2,1.2,0);wingR.rotation.y=-0.4;g.add(wingR);
   /* Sword — glowing */
-  const swordMat=new THREE.MeshLambertMaterial({color:0xa0b0c0,emissive:new THREE.Color(0x406080),emissiveIntensity:0.4,metal:true});
+  const swordMat=new THREE.MeshStandardMaterial({color:0xa0b0c0,emissive:new THREE.Color(0x406080),emissiveIntensity:0.4,metal:true});
   const sword=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,2,6),swordMat);
   sword.position.set(0.9,0.3,0.4);sword.rotation.z=-0.4;g.add(sword);
   /* Blue aura */
@@ -6624,7 +6717,7 @@ const Season3={
  /* ===== 3D: Corrupted Minion — more spikes, brighter eyes ===== */
  makeMinion(){
   const g=new THREE.Group();
-  const mat=new THREE.MeshLambertMaterial({color:0x1a0820,emissive:new THREE.Color(0x501070),emissiveIntensity:0.5});
+  const mat=new THREE.MeshStandardMaterial({color:0x1a0820,emissive:new THREE.Color(0x501070),emissiveIntensity:0.5});
   const body=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8),mat);
   body.position.y=0.4;g.add(body);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.35,10,8),mat);
@@ -7035,7 +7128,7 @@ const Portal = {
       const r = 2.5 - i * 0.5;
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(r, 0.15 + i * 0.05, 16, 48),
-        new THREE.MeshLambertMaterial({ color: ringCols[i], emissive: new THREE.Color(ringCols[i]), emissiveIntensity: 0.7 })
+        new THREE.MeshStandardMaterial({ color: ringCols[i], emissive: new THREE.Color(ringCols[i]), emissiveIntensity: 0.7 })
       );
       ring.position.set(pos.x, 3, pos.z);
       ring.rotation.y = Math.PI / 2;
@@ -7100,14 +7193,14 @@ const Portal = {
     // Stone base — a proper dais
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(3.5, 4, 0.6, 24),
-      new THREE.MeshLambertMaterial({ color: 0x3a2a4a })
+      new THREE.MeshStandardMaterial({ color: 0x3a2a4a })
     );
     base.position.set(pos.x, 0.3, pos.z); base.receiveShadow = true; base.castShadow = true;
     g.add(base);
     // Base rim
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(3.5, 0.1, 8, 24),
-      new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 })
+      new THREE.MeshStandardMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 })
     );
     rim.rotation.x = -Math.PI / 2; rim.position.set(pos.x, 0.6, pos.z);
     g.add(rim);
@@ -7201,6 +7294,9 @@ const Portal = {
     A.zoneRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
     A.zoneRenderer.shadowMap.enabled = true;
     A.zoneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    A.zoneRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    A.zoneRenderer.toneMappingExposure = 1.1;
+    A.zoneRenderer.outputEncoding = THREE.sRGBEncoding;
     A.zoneScene = new THREE.Scene();
     // Sky
     const skyCol = zone === 'beach' ? 0x6ab0d8 : 0x5a6a8a;
@@ -7219,7 +7315,7 @@ const Portal = {
     A.zoneScene.add(new THREE.HemisphereLight(0x8ab0d8, 0x5a4a3a, 0.3));
 
     // Ground — large terrain (200x200)
-    const groundMat = new THREE.MeshLambertMaterial({ color: zone === 'beach' ? 0xe8d090 : 0x5a5a6a });
+    const groundMat = new THREE.MeshStandardMaterial({ color: zone === 'beach' ? 0xe8d090 : 0x5a5a6a });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200, 1, 1), groundMat);
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
     A.zoneScene.add(ground);
@@ -7252,8 +7348,8 @@ const Portal = {
 
   buildRoads(zone) {
     const A = this;
-    const roadMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-    const pathMat = new THREE.MeshLambertMaterial({ color: 0x9a9080 });
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a });
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0x9a9080 });
     // Main cross roads
     const roads = [
       { x: 0, z: 0, w: 200, d: 8 }, // horizontal
@@ -7282,10 +7378,10 @@ const Portal = {
     }
     if (zone === 'beach') {
       // Beach sand + ocean
-      const sand = new THREE.Mesh(new THREE.PlaneGeometry(200, 40), new THREE.MeshLambertMaterial({ color: 0xf0e0a0 }));
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(200, 40), new THREE.MeshStandardMaterial({ color: 0xf0e0a0 }));
       sand.rotation.x = -Math.PI / 2; sand.position.set(0, 0.01, -80); sand.receiveShadow = true;
       A.zoneScene.add(sand);
-      const ocean = new THREE.Mesh(new THREE.PlaneGeometry(200, 60), new THREE.MeshLambertMaterial({ color: 0x2a7abf, transparent: true, opacity: 0.8 }));
+      const ocean = new THREE.Mesh(new THREE.PlaneGeometry(200, 60), new THREE.MeshStandardMaterial({ color: 0x2a7abf, transparent: true, opacity: 0.8 }));
       ocean.rotation.x = -Math.PI / 2; ocean.position.set(0, 0.005, -110);
       A.zoneScene.add(ocean); A.zoneOcean = ocean;
       // Palm trees
@@ -7296,11 +7392,11 @@ const Portal = {
   buildStreetlight(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 5, 8), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 5, 8), new THREE.MeshStandardMaterial({ color: 0x2a2a2a }));
     post.position.y = 2.5; post.castShadow = true; g.add(post);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.1), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x2a2a2a }));
     arm.position.set(0.5, 4.8, 0); g.add(arm);
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 10), new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
     lamp.position.set(1, 4.7, 0); g.add(lamp);
     const light = new THREE.PointLight(0xffd070, 0.4, 10); light.position.set(1, 4.5, 0); g.add(light);
     g.position.set(x, 0, z); A.zoneScene.add(g);
@@ -7309,10 +7405,10 @@ const Portal = {
   buildPalmTree(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 5, 8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a }));
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 5, 8), new THREE.MeshStandardMaterial({ color: 0x8a6a3a }));
     trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
     for (let i = 0; i < 6; i++) {
-      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 4), new THREE.MeshLambertMaterial({ color: 0x2f8a3a }));
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 4), new THREE.MeshStandardMaterial({ color: 0x2f8a3a }));
       leaf.position.y = 5; leaf.rotation.z = (i / 6) * Math.PI * 2; leaf.rotation.x = 0.7;
       leaf.position.x = Math.cos(i / 6 * Math.PI * 2) * 0.8; leaf.position.z = Math.sin(i / 6 * Math.PI * 2) * 0.8;
       g.add(leaf);
@@ -7347,13 +7443,13 @@ const Portal = {
     const A = this;
     const g = new THREE.Group();
     // Main body
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: col }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: col }));
     body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true; g.add(body);
     // Roof
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.4, d + 0.4), new THREE.MeshLambertMaterial({ color: 0x3a2a1a }));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.4, d + 0.4), new THREE.MeshStandardMaterial({ color: 0x3a2a1a }));
     roof.position.y = h + 0.2; g.add(roof);
     // Windows — rows of small emissive boxes
-    const winMat = new THREE.MeshLambertMaterial({ color: 0xa0d0e0, emissive: new THREE.Color(0x6090a0), emissiveIntensity: 0.2 });
+    const winMat = new THREE.MeshStandardMaterial({ color: 0xa0d0e0, emissive: new THREE.Color(0x6090a0), emissiveIntensity: 0.2 });
     const floors = Math.floor(h / 2.5);
     const wPerRow = Math.floor(w / 1.5);
     for (let f = 0; f < floors; f++) {
@@ -7365,7 +7461,7 @@ const Portal = {
       }
     }
     // Door
-    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a2a1a }));
     door.position.set(0, 1.1, d / 2 + 0.05); g.add(door);
     g.position.set(x, 0, z); g.rotation.y = rot;
     A.zoneScene.add(g);
@@ -7374,7 +7470,7 @@ const Portal = {
   buildPark(x, z) {
     const A = this;
     // Grass
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshStandardMaterial({ color: 0x4a8a3a }));
     grass.rotation.x = -Math.PI / 2; grass.position.set(x, 0.02, z); grass.receiveShadow = true;
     A.zoneScene.add(grass);
     // Trees
@@ -7383,19 +7479,19 @@ const Portal = {
       A.buildTree(x + Math.cos(a) * 4, z + Math.sin(a) * 4);
     }
     // Fountain
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 0.5, 16), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 0.5, 16), new THREE.MeshStandardMaterial({ color: 0x8a8a8a }));
     base.position.set(x, 0.25, z); base.castShadow = true; A.zoneScene.add(base);
-    const water = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.1, 16), new THREE.MeshLambertMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
     water.position.set(x, 0.5, z); A.zoneScene.add(water);
   },
 
   buildTree(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.5, 8), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.5, 8), new THREE.MeshStandardMaterial({ color: 0x6a4a2a }));
     trunk.position.y = 1.25; trunk.castShadow = true; g.add(trunk);
     for (let i = 0; i < 3; i++) {
-      const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.2 - i * 0.2, 12, 10), new THREE.MeshLambertMaterial({ color: 0x3a7a2a }));
+      const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.2 - i * 0.2, 12, 10), new THREE.MeshStandardMaterial({ color: 0x3a7a2a }));
       leaves.position.y = 2.5 + i * 0.7; leaves.castShadow = true; g.add(leaves);
     }
     g.position.set(x, 0, z); A.zoneScene.add(g);
@@ -7409,77 +7505,77 @@ const Portal = {
     const t = A.HOUSE_TIERS[tier] || A.HOUSE_TIERS[0];
     if (tier === 0) {
       // Starter — small cottage
-      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 5), new THREE.MeshLambertMaterial({ color: 0xc0b090 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 5), new THREE.MeshStandardMaterial({ color: 0xc0b090 }));
       body.position.y = 1.75; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(4, 2, 4), new THREE.MeshLambertMaterial({ color: 0x8a3a2a }));
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(4, 2, 4), new THREE.MeshStandardMaterial({ color: 0x8a3a2a }));
       roof.position.y = 4; roof.rotation.y = Math.PI / 4; g.add(roof);
-      const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a2a1a }));
       door.position.set(0, 1, 2.55); g.add(door);
       for (const wx of [-1.5, 1.5]) {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshStandardMaterial({ color: 0xa0d0e0 }));
         win.position.set(wx, 1.8, 2.55); g.add(win);
       }
     } else if (tier === 1) {
       // Family home — two-story
-      const body = new THREE.Mesh(new THREE.BoxGeometry(7, 5, 6), new THREE.MeshLambertMaterial({ color: 0xe0d0a0 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(7, 5, 6), new THREE.MeshStandardMaterial({ color: 0xe0d0a0 }));
       body.position.y = 2.5; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(5.5, 2.5, 4), new THREE.MeshLambertMaterial({ color: 0x6a3a2a }));
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(5.5, 2.5, 4), new THREE.MeshStandardMaterial({ color: 0x6a3a2a }));
       roof.position.y = 6.25; roof.rotation.y = Math.PI / 4; g.add(roof);
-      const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a }));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a2a1a }));
       door.position.set(0, 1.2, 3.05); g.add(door);
       for (const wx of [-2.2, 2.2]) {
         for (const wy of [1.5, 3.5]) {
-          const win = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.1), new THREE.MeshStandardMaterial({ color: 0xa0d0e0 }));
           win.position.set(wx, wy, 3.05); g.add(win);
         }
       }
-      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), new THREE.MeshLambertMaterial({ color: 0x5a4a3a }));
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), new THREE.MeshStandardMaterial({ color: 0x5a4a3a }));
       chim.position.set(2, 5.5, 0); g.add(chim);
     } else if (tier === 2) {
       // Luxury villa
-      const body = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 8), new THREE.MeshLambertMaterial({ color: 0xf0e8d0 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 8), new THREE.MeshStandardMaterial({ color: 0xf0e8d0 }));
       body.position.y = 2.5; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 9), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 9), new THREE.MeshStandardMaterial({ color: 0x4a3a2a }));
       roof.position.y = 5.25; g.add(roof);
       for (const cx of [-3.5, 3.5]) {
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4, 12), new THREE.MeshStandardMaterial({ color: 0xe8e0d0 }));
         col.position.set(cx, 2, 4.1); g.add(col);
       }
-      const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 3, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.2 }));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 3, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.2 }));
       door.position.set(0, 1.5, 4.05); g.add(door);
       for (const wx of [-3, 3]) {
         for (const wy of [1.5, 3.5]) {
-          const win = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.1), new THREE.MeshStandardMaterial({ color: 0xa0d0e0 }));
           win.position.set(wx, wy, 4.05); g.add(win);
         }
       }
       // Garden
-      const garden = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+      const garden = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshStandardMaterial({ color: 0x4a8a3a }));
       garden.rotation.x = -Math.PI / 2; garden.position.set(0, 0.02, 5.5); g.add(garden);
     } else {
       // Grand mansion
-      const body = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 10), new THREE.MeshLambertMaterial({ color: 0xf8f0e0 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 10), new THREE.MeshStandardMaterial({ color: 0xf8f0e0 }));
       body.position.y = 3.5; body.castShadow = true; g.add(body);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(10, 3.5, 4), new THREE.MeshLambertMaterial({ color: 0x5a3a2a }));
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(10, 3.5, 4), new THREE.MeshStandardMaterial({ color: 0x5a3a2a }));
       roof.position.y = 8.75; roof.rotation.y = Math.PI / 4; g.add(roof);
       for (const cx of [-4.5, 4.5]) {
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 12), new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }));
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 12), new THREE.MeshStandardMaterial({ color: 0xe8e0d0 }));
         col.position.set(cx, 3, 5.1); g.add(col);
       }
-      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4, 0.1), new THREE.MeshLambertMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.3 }));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 4, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a2a1a, emissive: new THREE.Color(0x2a1a0a), emissiveIntensity: 0.3 }));
       door.position.set(0, 2, 5.05); g.add(door);
       for (const wx of [-4.5, 4.5]) {
         for (const wy of [2, 5]) {
-          const win = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2, 0.1), new THREE.MeshLambertMaterial({ color: 0xa0d0e0 }));
+          const win = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2, 0.1), new THREE.MeshStandardMaterial({ color: 0xa0d0e0 }));
           win.position.set(wx, wy, 5.05); g.add(win);
         }
       }
       // Fountain garden
-      const garden = new THREE.Mesh(new THREE.PlaneGeometry(12, 4), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+      const garden = new THREE.Mesh(new THREE.PlaneGeometry(12, 4), new THREE.MeshStandardMaterial({ color: 0x4a8a3a }));
       garden.rotation.x = -Math.PI / 2; garden.position.set(0, 0.02, 7); g.add(garden);
-      const fb = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 0.6, 16), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      const fb = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 0.6, 16), new THREE.MeshStandardMaterial({ color: 0x8a8a8a }));
       fb.position.set(0, 0.3, 7); g.add(fb);
-      const fw = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16), new THREE.MeshLambertMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
+      const fw = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x4a8abf, transparent: true, opacity: 0.7 }));
       fw.position.set(0, 0.55, 7); g.add(fw);
     }
     g.position.set(x, 0, z);
@@ -7492,10 +7588,10 @@ const Portal = {
   buildReturnPortal(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 12, 24), new THREE.MeshLambertMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 12, 24), new THREE.MeshStandardMaterial({ color: 0xa86fd6, emissive: new THREE.Color(0x6a3fd6), emissiveIntensity: 0.5 }));
     ring.position.y = 2.5; g.add(ring);
     const light = new THREE.PointLight(0xa86fd6, 1.5, 10); light.position.y = 2.5; g.add(light);
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 0.3, 16), new THREE.MeshLambertMaterial({ color: 0x3a2a4a }));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 0.3, 16), new THREE.MeshStandardMaterial({ color: 0x3a2a4a }));
     base.position.y = 0.15; g.add(base);
     g.position.set(x, 0, z); A.zoneScene.add(g);
     A.returnPortalPos = { x, z };
@@ -7504,9 +7600,9 @@ const Portal = {
   buildJobBoard(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.5, 8), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.5, 8), new THREE.MeshStandardMaterial({ color: 0x6a4a2a }));
     post.position.y = 1.75; post.castShadow = true; g.add(post);
-    const board = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.2, 0.2), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    const board = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x8a6a4a }));
     board.position.y = 3; board.castShadow = true; g.add(board);
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
     const cx = cv.getContext('2d');
@@ -7522,9 +7618,9 @@ const Portal = {
   buildUpgradeNPC(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshLambertMaterial({ color: 0xe8a33d }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshStandardMaterial({ color: 0xe8a33d }));
     body.position.y = 1.55; body.castShadow = true; g.add(body);
-    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xe8c030 }));
+    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe8c030 }));
     hat.position.y = 2.4; g.add(hat);
     const tagCv = document.createElement('canvas'); tagCv.width = 256; tagCv.height = 64;
     const tc = tagCv.getContext('2d');
@@ -7540,9 +7636,9 @@ const Portal = {
   buildEggShop(x, z) {
     const A = this;
     const g = new THREE.Group();
-    const stall = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1, 2.5), new THREE.MeshLambertMaterial({ color: 0x6a4a8a }));
+    const stall = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1, 2.5), new THREE.MeshStandardMaterial({ color: 0x6a4a8a }));
     stall.position.y = 0.5; stall.castShadow = true; g.add(stall);
-    const egg = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshLambertMaterial({ color: 0xd8b0ff, emissive: new THREE.Color(0x7a3fd6), emissiveIntensity: 0.4 }));
+    const egg = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshStandardMaterial({ color: 0xd8b0ff, emissive: new THREE.Color(0x7a3fd6), emissiveIntensity: 0.4 }));
     egg.scale.y = 1.3; egg.position.y = 1.5; g.add(egg);
     const light = new THREE.PointLight(0xa86fd6, 1.2, 8); light.position.y = 2; g.add(light);
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -7560,9 +7656,9 @@ const Portal = {
     const A = this;
     // Dog park
     const dp = new THREE.Group();
-    const fence = new THREE.Mesh(new THREE.TorusGeometry(5, 0.1, 8, 24), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    const fence = new THREE.Mesh(new THREE.TorusGeometry(5, 0.1, 8, 24), new THREE.MeshStandardMaterial({ color: 0x8a6a4a }));
     fence.rotation.x = -Math.PI / 2; fence.position.y = 1; dp.add(fence);
-    const grass = new THREE.Mesh(new THREE.CircleGeometry(5, 24), new THREE.MeshLambertMaterial({ color: 0x4a8a3a }));
+    const grass = new THREE.Mesh(new THREE.CircleGeometry(5, 24), new THREE.MeshStandardMaterial({ color: 0x4a8a3a }));
     grass.rotation.x = -Math.PI / 2; grass.position.y = 0.02; dp.add(grass);
     dp.position.set(25, 0, -25); A.zoneScene.add(dp); A.dogParkPos = { x: 25, z: -25 };
     // Factory
@@ -7603,20 +7699,20 @@ const Portal = {
     const A = this;
     const g = new THREE.Group();
     // Body — friendly guy in a blue shirt
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshLambertMaterial({ color: 0x3a6abf }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), new THREE.MeshStandardMaterial({ color: 0x3a6abf }));
     body.position.y = 1.55; body.castShadow = true; g.add(body);
     // Head
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshLambertMaterial({ color: 0xe8b48a }));
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: 0xe8b48a }));
     head.position.y = 2.36; head.castShadow = true; g.add(head);
     // Hat — friendly cap
-    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2a5a9a }));
+    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2a5a9a }));
     hat.position.y = 2.55; g.add(hat);
     // Arms
-    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.68, 0.16), new THREE.MeshLambertMaterial({ color: 0x3a6abf }));
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.68, 0.16), new THREE.MeshStandardMaterial({ color: 0x3a6abf }));
     armL.position.set(-0.46, 1.9, 0); g.add(armL);
     const armR = armL.clone(); armR.position.x = 0.46; g.add(armR);
     // Legs
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x2a2a3a }));
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshStandardMaterial({ color: 0x2a2a3a }));
     legL.position.set(-0.15, 1.14, 0); g.add(legL);
     const legR = legL.clone(); legR.position.x = 0.15; g.add(legR);
     // Name tag
@@ -7807,8 +7903,8 @@ const Portal = {
 
   makePlayerAvatar() {
     const g = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color: 0x4f8a5c });
-    const skinMat = new THREE.MeshLambertMaterial({ color: 0xe8b48a });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x4f8a5c });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b48a });
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.95, 0.42), mat);
     torso.position.y = 1.55; torso.castShadow = true; g.add(torso);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
@@ -7816,7 +7912,7 @@ const Portal = {
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.68, 0.16), mat);
     armL.position.set(-0.46, 1.9, 0); g.add(armL);
     const armR = armL.clone(); armR.position.x = 0.46; g.add(armR);
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x4a5a7a }));
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.75, 0.22), new THREE.MeshStandardMaterial({ color: 0x4a5a7a }));
     legL.position.set(-0.15, 1.14, 0); g.add(legL);
     const legR = legL.clone(); legR.position.x = 0.15; g.add(legR);
     return g;
@@ -7881,6 +7977,9 @@ const Portal = {
     const canvas = document.getElementById('portalCanvas');
     A.interiorRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     A.interiorRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    A.interiorRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    A.interiorRenderer.toneMappingExposure = 1.0;
+    A.interiorRenderer.outputEncoding = THREE.sRGBEncoding;
     A.interiorRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
     A.interiorRenderer.shadowMap.enabled = true;
     A.interiorScene = new THREE.Scene();
@@ -7891,10 +7990,10 @@ const Portal = {
     A.interiorScene.add(new THREE.AmbientLight(0xfff0d0, 0.6));
     const ceil = new THREE.PointLight(0xffe8a0, 1.5, 20); ceil.position.set(0, 4, 0); A.interiorScene.add(ceil);
     // Floor
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ color: 0x8a6a4a }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; A.interiorScene.add(floor);
     // Walls — bigger interior (16x16)
-    const wallMat = new THREE.MeshLambertMaterial({ color: 0xe0d0b0 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xe0d0b0 });
     const walls = [
       { p: [0, 2.5, -8], s: [16, 5, 0.2] }, // back
       { p: [0, 2.5, 8], s: [16, 5, 0.2] },  // front
@@ -7906,29 +8005,29 @@ const Portal = {
       m.position.set(...w.p); A.interiorScene.add(m);
     });
     // Bed
-    const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 3), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+    const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 3), new THREE.MeshStandardMaterial({ color: 0x4a3a2a }));
     bedFrame.position.set(-3, 0.25, -3); A.interiorScene.add(bedFrame);
-    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 2.8), new THREE.MeshLambertMaterial({ color: 0xf0e8d0 }));
+    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 2.8), new THREE.MeshStandardMaterial({ color: 0xf0e8d0 }));
     mattress.position.set(-3, 0.65, -3); A.interiorScene.add(mattress);
-    const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshStandardMaterial({ color: 0xffffff }));
     pillow.position.set(-3, 0.9, -4); A.interiorScene.add(pillow);
     A.interiorBedPos = { x: -3, z: -3 };
     // Table + chair
-    const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1), new THREE.MeshLambertMaterial({ color: 0x6a4a2a }));
+    const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1), new THREE.MeshStandardMaterial({ color: 0x6a4a2a }));
     table.position.set(3, 0.4, 3); A.interiorScene.add(table);
-    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.5), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.5), new THREE.MeshStandardMaterial({ color: 0x4a3a2a }));
     chair.position.set(3, 0.4, 4.2); A.interiorScene.add(chair);
     // Lamp
-    const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
+    const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), new THREE.MeshStandardMaterial({ color: 0x2a2a2a }));
     lampPost.position.set(4, 1.25, -3); A.interiorScene.add(lampPost);
-    const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
+    const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffe8a0, emissive: new THREE.Color(0xffd070), emissiveIntensity: 0.8 }));
     lampHead.position.set(4, 2, -3); A.interiorScene.add(lampHead);
     const lampLight = new THREE.PointLight(0xffd070, 0.8, 8); lampLight.position.set(4, 2, -3); A.interiorScene.add(lampLight);
     // Kitchen counter
-    const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 0.8), new THREE.MeshStandardMaterial({ color: 0x8a8a8a }));
     counter.position.set(-3, 0.5, 5); A.interiorScene.add(counter);
     // Rug
-    const rug = new THREE.Mesh(new THREE.CircleGeometry(2.5, 24), new THREE.MeshLambertMaterial({ color: 0x8a3a2a }));
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(2.5, 24), new THREE.MeshStandardMaterial({ color: 0x8a3a2a }));
     rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.01, 0); A.interiorScene.add(rug);
     // Interior player
     A.interiorPlayer = { x: 0, z: 5, ry: 0, obj: A.makePlayerAvatar() };
@@ -8269,7 +8368,7 @@ const Portal = {
 
   makeDog() {
     const g = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x8a5a3a });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x8a5a3a });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 1), bodyMat);
     body.position.y = 0.5; body.castShadow = true; g.add(body);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), bodyMat);
@@ -9684,9 +9783,9 @@ const Act2 = {
     const yPerStep = A.stairMaxDescent / steps;
 
     // Stone material — warmer, less flat than lambert
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x6a5040 });
-    const stoneDarkMat = new THREE.MeshLambertMaterial({ color: 0x4a3828 });
-    const rockMat = new THREE.MeshLambertMaterial({ color: 0x3a2a20 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6a5040 });
+    const stoneDarkMat = new THREE.MeshStandardMaterial({ color: 0x4a3828 });
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x3a2a20 });
 
     // ===== PIT WALLS — cylindrical rock shaft, open top (NO cover) =====
     const pitWallGeom = new THREE.CylinderGeometry(r, r, A.stairMaxDescent + 4, 48, 1, true);
@@ -9717,7 +9816,7 @@ const Act2 = {
     // ===== INNER RAILING — low wall on the inner edge (so you don't fall through center) =====
     // A thin cylinder around the center column
     const innerRailGeom = new THREE.CylinderGeometry(1.2, 1.2, A.stairMaxDescent, 24, 1, true);
-    const innerRail = new THREE.Mesh(innerRailGeom, new THREE.MeshLambertMaterial({
+    const innerRail = new THREE.Mesh(innerRailGeom, new THREE.MeshStandardMaterial({
       color: 0x5a4030, side: THREE.DoubleSide, transparent: true, opacity: 0.6
     }));
     innerRail.position.set(cx, -A.stairMaxDescent / 2, cz);
@@ -9825,7 +9924,7 @@ const Act2 = {
 
     // Blood lake (floor)
     const lakeGeom = new THREE.CircleGeometry(38, 48);
-    const lakeMat = new THREE.MeshLambertMaterial({
+    const lakeMat = new THREE.MeshStandardMaterial({
       color: 0x4a0808, emissive: new THREE.Color(0x200000), emissiveIntensity: 0.3
     });
     const lake = new THREE.Mesh(lakeGeom, lakeMat);
@@ -9836,7 +9935,7 @@ const Act2 = {
 
     // Floating heart island at center
     const islandGeom = new THREE.CylinderGeometry(8, 6, 3, 16);
-    const islandMat = new THREE.MeshLambertMaterial({ color: 0x3a1a1a });
+    const islandMat = new THREE.MeshStandardMaterial({ color: 0x3a1a1a });
     const island = new THREE.Mesh(islandGeom, islandMat);
     island.position.set(0, floorY + 1.5, 0);
     island.castShadow = true;
@@ -9849,7 +9948,7 @@ const Act2 = {
       const r = 15 + Math.random() * 18;
       const len = 4 + Math.random() * 8;
       const stGeom = new THREE.ConeGeometry(0.6 + Math.random() * 0.4, len, 6);
-      const st = new THREE.Mesh(stGeom, new THREE.MeshLambertMaterial({ color: 0x2a1a1a }));
+      const st = new THREE.Mesh(stGeom, new THREE.MeshStandardMaterial({ color: 0x2a1a1a }));
       st.position.set(Math.cos(a) * r, -len / 2 - 1, Math.sin(a) * r);
       st.rotation.z = (Math.random() - 0.5) * 0.3;
       g.add(st);
@@ -9857,7 +9956,7 @@ const Act2 = {
 
     // Cavern walls (cylinder, BackSide so we see the inside)
     const wallGeom = new THREE.CylinderGeometry(40, 40, 30, 32, 1, true);
-    const wallMat = new THREE.MeshLambertMaterial({
+    const wallMat = new THREE.MeshStandardMaterial({
       color: 0x1a0a0a, side: THREE.BackSide
     });
     const wall = new THREE.Mesh(wallGeom, wallMat);
@@ -9935,7 +10034,7 @@ const Act2 = {
 
     // ===== HEART BODY — anatomical shape using smooth blended spheres =====
     // Use a custom merged geometry feel by overlapping multiple smooth spheres
-    const fleshMat = new THREE.MeshLambertMaterial({
+    const fleshMat = new THREE.MeshStandardMaterial({
       color: 0x9a1010,
       emissive: new THREE.Color(0x4a0000),
       emissiveIntensity: 0.3
@@ -9964,7 +10063,7 @@ const Act2 = {
     g.add(apex);
 
     // ===== AORTA — thick curved tube coming out the top center =====
-    const aortaMat = new THREE.MeshLambertMaterial({
+    const aortaMat = new THREE.MeshStandardMaterial({
       color: 0xb03030,
       emissive: new THREE.Color(0x6a1010),
       emissiveIntensity: 0.2
@@ -10320,7 +10419,7 @@ const Act2 = {
     A.s2gScene.add(rim);
     // Turntable platform
     const platGeom = new THREE.CylinderGeometry(1.5, 1.6, 0.2, 24);
-    const platMat = new THREE.MeshLambertMaterial({
+    const platMat = new THREE.MeshStandardMaterial({
       color: 0x1a0a2a, emissive: new THREE.Color(0x0a2010), emissiveIntensity: 0.3
     });
     const plat = new THREE.Mesh(platGeom, platMat);
