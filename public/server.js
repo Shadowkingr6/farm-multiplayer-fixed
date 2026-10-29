@@ -41,15 +41,43 @@ let WebSocketServer=null,WSS=null;try{WebSocketServer=require('ws');}catch(e){co
    4. If PG connection fails, server keeps running from memory.
    5. All queries use parameterized SQL (no injection).
    ============================================================ */
-let pg=null;try{pg=require('pg');}catch(e){console.log('[FARM-DB] pg package not installed — JSON file mode only');}
+let pg=null;
+try{pg=require('pg');}catch(e){
+ if(process.env.DATABASE_URL){
+  console.error('[FARM-DB] ❌❌❌ CRITICAL: DATABASE_URL is set but the pg package failed to load!');
+  console.error('[FARM-DB] ❌ Ensure "pg" is in package.json dependencies and npm install has run.');
+  console.error('[FARM-DB] ❌ Error:',e.message);
+ }else{
+  console.log('[FARM-DB] pg package not installed (DATABASE_URL not set — JSON file mode).');
+ }
+}
 const DATABASE_URL=process.env.DATABASE_URL||'';
-const USE_PG=!!(pg&&DATABASE_URL);
+const USE_PG=!!(pg&&DATABASE_URL&&DATABASE_URL.startsWith('postgres'));
 let dbPool=null,dbReady=false;
 
 /* Database initialization — called at startup */
 async function dbInit(){
- if(!USE_PG){console.log('[FARM-DB] JSON file mode (no DATABASE_URL set).');return;}
- console.log('[FARM-DB] PostgreSQL mode enabled. Connecting to Supabase...');
+ if(!DATABASE_URL){
+  console.log('[FARM-DB] JSON file mode (DATABASE_URL not set).');
+  console.log('[FARM-DB] ⚠️  Data will NOT survive Render redeployments.');
+  console.log('[FARM-DB] ⚠️  Set DATABASE_URL in Render environment variables to enable PostgreSQL.');
+  return;
+ }
+ if(!DATABASE_URL.startsWith('postgres')){
+  console.error('[FARM-DB] ❌❌❌ DATABASE_URL is set but is not a PostgreSQL connection string!');
+  console.error('[FARM-DB] ❌ Current value starts with: "'+DATABASE_URL.slice(0,20)+'..."');
+  console.error('[FARM-DB] ❌ Expected format: postgresql://user:password@host:5432/dbname');
+  console.error('[FARM-DB] ❌ For Supabase: Project Settings → Database → Connection string');
+  console.error('[FARM-DB] ❌ Server will use JSON files. DATA WILL NOT PERSIST.');
+  return;
+ }
+ if(!pg){
+  console.error('[FARM-DB] ❌❌❌ DATABASE_URL is set but pg package is not installed!');
+  console.error('[FARM-DB] ❌ Add "pg" to package.json dependencies and run npm install.');
+  console.error('[FARM-DB] ❌ Server cannot connect to PostgreSQL. Falling back to JSON (data will NOT persist).');
+  return;
+ }
+ console.log('[FARM-DB] PostgreSQL mode enabled. Connecting to database...');
  try{
   dbPool=new pg.Pool({
    connectionString:DATABASE_URL,
@@ -57,22 +85,28 @@ async function dbInit(){
    ssl:DATABASE_URL.includes('supabase')||DATABASE_URL.includes('render.com')?{rejectUnauthorized:false}:undefined
   });
   await dbPool.query('SELECT 1');
-  console.log('[FARM-DB] Connected to PostgreSQL.');
+  console.log('[FARM-DB] ✅ Connected to PostgreSQL successfully.');
   /* Check if tables exist (user must run schema.sql manually) */
   const tRes=await dbPool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='accounts'");
   if(tRes.rows.length===0){
-   console.error('[FARM-DB] ❌ Tables not found! Run schema.sql in your Supabase SQL Editor first.');
-   console.error('[FARM-DB] Falling back to JSON file mode.');
+   console.error('[FARM-DB] ❌❌❌ Database tables not found!');
+   console.error('[FARM-DB] ❌ You must run schema.sql in your Supabase SQL Editor before starting the server.');
+   console.error('[FARM-DB] ❌ See the schema.sql file for the complete SQL.');
+   console.error('[FARM-DB] ❌ Server will fall back to JSON files until tables are created.');
    dbPool=null;return;
   }
-  console.log('[FARM-DB] Tables verified.');
+  console.log('[FARM-DB] ✅ Database tables verified.');
   /* Auto-migrate JSON → PG if PG is empty and JSON files exist */
   await dbMigrateFromJsonIfNeeded();
   dbReady=true;
-  console.log('[FARM-DB] PostgreSQL ready.');
+  console.log('[FARM-DB] ✅ PostgreSQL fully operational. Data will persist across redeployments.');
  }catch(e){
-  console.error('[FARM-DB] ❌ PostgreSQL connection FAILED:',e.message);
-  console.error('[FARM-DB] Falling back to JSON file mode. DATA WILL NOT BE PERSISTENT.');
+  console.error('[FARM-DB] ❌❌❌ PostgreSQL connection FAILED!');
+  console.error('[FARM-DB] ❌ Error:',e.message);
+  console.error('[FARM-DB] ❌ Check your DATABASE_URL environment variable.');
+  console.error('[FARM-DB] ❌ For Supabase: Settings → Database → Connection string');
+  console.error('[FARM-DB] ❌ Format: postgresql://postgres:PASSWORD@db.PROJECT.supabase.co:5432/postgres');
+  console.error('[FARM-DB] ❌ Server will fall back to JSON files. DATA WILL NOT PERSIST.');
   dbPool=null;
  }
 }
