@@ -1507,8 +1507,6 @@ renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.1;
-renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.physicallyCorrectLights=true;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0a1226);
 scene.fog=new THREE.Fog(0x141c30,50,150);
@@ -4223,6 +4221,7 @@ function handleNet(m){
      rebuildPlayerVisual();
      if(ST.season.status!=='active')IntroSeq.start();},700);},400);
    UI.refreshHUD();rebuildHotbar();rebuildPlots();updateMyPets();
+   checkTimeoutOnJoin();
    if(ST.season.status==='active'||ST.season.active)Spooky.apply();
    break;
   case 'nameRejected':
@@ -4388,7 +4387,49 @@ function handleNet(m){
   case 'watered':toast('Watered!','good');break;
   case 'adminOk':ST.adminToken=m.token;UI.closeAdminLogin();UI.openAdminDash();toast('Admin authorized.','good');break;
   case 'adminErr':$('#admErr').textContent=m.msg;break;
-  case 'admData':UI.renderAdmData(m.kind,m.data);break;}}
+  case 'admData':UI.renderAdmData(m.kind,m.data);break;
+  /* ===== TIMEOUT SYSTEM — player receives timeout ===== */
+  case 'timeout':{
+   ST.me.timeout=m;
+   showTimeoutOverlay(m);
+   break;}
+  case 'timeoutRemoved':{
+   if(ST.me)ST.me.timeout=null;
+   const ov=document.getElementById('timeoutOverlay');if(ov)ov.style.display='none';
+   toast('Your timeout has been lifted. You can play and chat again!','good');
+   break;}}}
+/* ===== TIMEOUT OVERLAY — shows countdown when player is timed out ===== */
+let _timeoutInterval=null;
+function showTimeoutOverlay(m){
+ const ov=document.getElementById('timeoutOverlay');if(!ov)return;
+ if(m.type==='game'||m.type==='all'){
+  ov.style.display='flex';
+  document.getElementById('timeoutReason').textContent=m.reason||'No reason provided.';
+  document.getElementById('timeoutType').textContent=m.type==='all'?'Timed out from chat & game':'Timed out from game';
+  document.getElementById('timeoutBy').textContent='By: '+(m.by||'Admin');
+  if(_timeoutInterval)clearInterval(_timeoutInterval);
+  const update=()=>{
+   if(!ST.me||!ST.me.timeout){ov.style.display='none';clearInterval(_timeoutInterval);return;}
+   const rem=Math.max(0,ST.me.timeout.until-Date.now());
+   if(rem<=0){ov.style.display='none';ST.me.timeout=null;clearInterval(_timeoutInterval);toast('Your timeout has expired.','good');return;}
+   const h=Math.floor(rem/3600000),min=Math.floor(rem%3600000/60000),s=Math.floor(rem%60000/1000);
+   document.getElementById('timeoutTimer').textContent=String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  };
+  update();_timeoutInterval=setInterval(update,1000);
+ }else{
+  /* Chat timeout — don't show full overlay, just a toast */
+  ov.style.display='none';
+  toast('⏱️ You are timed out from chat for '+m.duration+' min. Reason: '+(m.reason||'No reason'),'err');
+ }
+}
+/* Check timeout on init/reconnect */
+function checkTimeoutOnJoin(){
+ if(ST.me&&ST.me.timeout){
+  const rem=ST.me.timeout.until-Date.now();
+  if(rem>0){showTimeoutOverlay(ST.me.timeout);}
+  else{ST.me.timeout=null;}
+ }
+}
 function onHarvested(m){
  AudioSys.play('harvest');
  if(m.fruits.some(f=>f.m&&f.m.length))setTimeout(()=>AudioSys.play('mut'),300);
@@ -5123,7 +5164,7 @@ const UI={openWins:[],
  closeAdminLogin(){$('#adminLogin').style.display='none';$('#admCode').value='';},
  openAdminDash(){
   $('#adminDash').style.display='flex';
-  const tabs=['Overview','Seed Shop','Season','Players','Economy','Weather','Chaos','Announce','Logs','Settings'];
+  const tabs=['Overview','Seed Shop','Season','Players','Economy','Weather','Chaos','Announce','Timeout','Logs','Settings'];
   const tabEl=$('#admTabs');tabEl.innerHTML='';
   tabs.forEach(t=>{const b=document.createElement('button');b.textContent=t;
    b.onclick=()=>{[...tabEl.children].forEach(x=>x.classList.toggle('on',x===b));admTab(t);};
@@ -5338,6 +5379,23 @@ function admTab(t){
    <div class="admRow">
     <button class="btnSm btnGhost" onclick="showAnnounce(admAnnMsg.value||'Preview',{color:admAnnColor.value,style:admAnnStyle.value,dur:+admAnnDur.value})">Preview on me</button>
     <button class="btnSm btnA" onclick="if(admAnnMsg.value.trim())admCmd('announce',{msg:admAnnMsg.value,color:admAnnColor.value,style:admAnnStyle.value,dur:+admAnnDur.value})">Broadcast to all</button></div></div>`;
+ if(t==='Timeout')el.innerHTML=`
+ <div class="admCard"><h4>⏱️ Player Timeout</h4>
+  <div class="desc">Time out a player from chat only, or from the entire game. They see a full-screen overlay with the reason and countdown timer. Timeout persists across reconnects.</div>
+  <div class="admRow"><label>Player ID</label><input id="toTarget" style="flex:1;min-width:200px" placeholder="Paste player ID (from Players tab)"></div>
+  <div class="admRow"><label>Type</label>
+   <select id="toType"><option value="chat">Chat Only (can still play)</option><option value="game">Game + Chat (full block)</option><option value="all">All (same as game)</option></select></div>
+  <div class="admRow"><label>Duration (min)</label><input type="number" id="toDuration" value="5" min="1" max="10080" style="width:100px"></div>
+  <div class="admRow"><label>Reason</label><input id="toReason" style="flex:1;min-width:280px" placeholder="Reason shown to player (e.g. 'Spamming in chat')"></div>
+  <div class="admRow">
+   <button class="btnSm btnR" onclick="admCmd('timeout',{targetId:document.getElementById('toTarget').value,type:document.getElementById('toType').value,duration:+document.getElementById('toDuration').value,reason:document.getElementById('toReason').value})">⏱️ APPLY TIMEOUT</button>
+   <button class="btnSm btnG" onclick="admCmd('removeTimeout',{targetId:document.getElementById('toTarget').value})">✓ REMOVE TIMEOUT</button>
+  </div>
+ </div>
+ <div class="admCard"><h4>Active Timeouts</h4>
+  <div class="desc">Players with active timeouts appear below. The list updates when you refresh the Players tab.</div>
+  <div id="timeoutList" style="margin-top:10px"></div>
+ </div>`;
  if(t==='Logs')send({t:'admin',token:ST.adminToken,cmd:'logs'});
  if(t==='Settings')el.innerHTML=`
   <div class="admCard"><h4>Simulation</h4>
@@ -7296,7 +7354,6 @@ const Portal = {
     A.zoneRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     A.zoneRenderer.toneMapping = THREE.ACESFilmicToneMapping;
     A.zoneRenderer.toneMappingExposure = 1.1;
-    A.zoneRenderer.outputEncoding = THREE.sRGBEncoding;
     A.zoneScene = new THREE.Scene();
     // Sky
     const skyCol = zone === 'beach' ? 0x6ab0d8 : 0x5a6a8a;
@@ -7979,7 +8036,6 @@ const Portal = {
     A.interiorRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     A.interiorRenderer.toneMapping = THREE.ACESFilmicToneMapping;
     A.interiorRenderer.toneMappingExposure = 1.0;
-    A.interiorRenderer.outputEncoding = THREE.sRGBEncoding;
     A.interiorRenderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
     A.interiorRenderer.shadowMap.enabled = true;
     A.interiorScene = new THREE.Scene();
@@ -9163,6 +9219,15 @@ window.TimerCtrl={
  <div id="maintBy"></div>
  <div id="maintCountdown">00:00</div>
 </div></div>
+<!-- ===== TIMEOUT OVERLAY ===== -->
+<div id="timeoutOverlay" style="position:fixed;inset:0;z-index:710;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 50%,#1a0a2a 0%,#0a0408 60%,#000 100%);flex-direction:column;gap:24px">
+ <div style="font-size:64px">⏱️</div>
+ <div id="timeoutTitle" style="font-family:'Fredoka',sans-serif;font-size:36px;color:#ffd24a;letter-spacing:.04em">TIMED OUT</div>
+ <div id="timeoutReason" style="font-family:'Nunito',sans-serif;font-size:16px;color:#f0e8d0;max-width:440px;text-align:center;line-height:1.5;padding:0 20px"></div>
+ <div id="timeoutType" style="font-family:'Fredoka',sans-serif;font-size:14px;color:#a86fd6;letter-spacing:.1em;text-transform:uppercase"></div>
+ <div id="timeoutTimer" style="font-family:'Fredoka',sans-serif;font-size:48px;color:#80e890;letter-spacing:.06em;text-shadow:0 2px 0 #00000088;font-variant-numeric:tabular-nums">--:--:--</div>
+ <div id="timeoutBy" style="font-family:'Nunito',sans-serif;font-size:12px;color:#6a7885;letter-spacing:.15em;text-transform:uppercase"></div>
+</div>
 <div id="bloodChip">
  <div id="bloodIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3C8 7 5 11 5 15a7 7 0 0 0 14 0c0-4-3-8-7-12z" fill="#ff2010" stroke="#ff6040" stroke-width="1"/><path d="M12 8c-2 2.5-3.5 5-3.5 7a3.5 3.5 0 0 0 7 0c0-2-1.5-4.5-3.5-7z" fill="#ff8060" opacity=".6"/></svg></div>
  <div><b class="bd" id="bloodDrops">0</b><span class="bl">Blood Drops</span></div>

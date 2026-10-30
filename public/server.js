@@ -1296,7 +1296,8 @@ function serializePlayer(p){return{id:p.id,pid:p.pid||'',name:p.name,worldId:p.w
  bloodDrops:p.bloodDrops||0,lastAlienTry:p.lastAlienTry||0,deciderBought:!!p.deciderBought,
  hhPumpkins:p.hhPumpkins||0,
  role:p.role||'player',roleColor:p.roleColor||'',roleEffect:p.roleEffect||'none',roleGlow:!!p.roleGlow,roleBenefits:p.roleBenefits||{},roleGivenBy:p.roleGivenBy||'',lastRolePay:p.lastRolePay||0,lastRolePayKey:p.lastRolePayKey||'',
- portal:p.portal||null};}
+ portal:p.portal||null,
+ timeout:p.timeout||null};}
 function save(){try{const data={savedAt:Date.now(),nextId:G.nextId,
  worlds:[...G.worlds.entries()].map(([id,w])=>({id:w.id,plots:w.plots,plants:[...w.plants.values()],createdAt:w.createdAt})),
  stock:G.stock,restockAt:G.restockAt,
@@ -1672,11 +1673,28 @@ function tickSeason2(){
   G.s2.deciderClaimed='available';G.dirty=true;}}
 
 function handleMsg(sock,msg){const p=G.players.get(sock._id);if(!p)return;
+ /* ===== TIMEOUT ENFORCEMENT =====
+    If a player has an active timeout, block chat and/or gameplay actions.
+    Admins are exempt. */
+ const isAdmin=!![...G.adminSessions.values()].find(s=>s.id===p.id&&s.exp>now());
+ if(p.timeout&&!isAdmin){
+  if(p.timeout.until>now()){
+   if(p.timeout.type==='chat'&&msg.t==='chat'){
+    return sendTo(p.id,{t:'toast',msg:'You are timed out from chat. '+Math.ceil((p.timeout.until-now())/60000)+' min remaining.',kind:'err'});
+   }
+   if((p.timeout.type==='game'||p.timeout.type==='all')&&msg.t!=='pos'&&msg.t!=='adminAuth'){
+    return sendTo(p.id,{t:'toast',msg:'You are timed out from the game. '+Math.ceil((p.timeout.until-now())/60000)+' min remaining.',kind:'err'});
+   }
+  }else{
+   /* Timeout expired — clear it */
+   p.timeout=null;pushMe(p);
+   sendTo(p.id,{t:'timeoutRemoved'});
+  }
+ }
  /* ===== MAINTENANCE GAMEPLAY BLOCK =====
    While the server is closed for maintenance, gameplay actions are rejected for everyone
    except admins (who still need to test). Read-only and social actions remain available. */
  const MAINT_GAMEPLAY=new Set(['plant','water','harvest','sell','sellAll','buySeed','buyGear','buyEgg','hatch','equipPet','buyPack','openPack','feedHeart','buyDecider','claimPass','claimDaily','expandPlot','buyEmote','buyCosmetic','equipCosmetic','equipSkin','buyGoldPass','passAbility']);
- const isAdmin=!![...G.adminSessions.values()].find(s=>s.id===p.id&&s.exp>now());
  if(G.maintenance.active&&MAINT_GAMEPLAY.has(msg.t)&&!isAdmin){
   return sendTo(p.id,{t:'maintenance',until:G.maintenance.until,msg:G.maintenance.msg,fix:G.maintenance.fix||'',by:G.maintenance.by||''});}
  switch(msg.t){
@@ -2576,6 +2594,29 @@ function adminCommand(admin,msg){const c=msg.cmd,a=msg.args||{};
    sendTo(t2.id,{t:'kicked',msg:a.msg||'Kicked.'});
    setTimeout(()=>{for(const c of WSS.clients)if(c._id===t2.id)c.close();},500);}break;}
   case 'notify':if(target)sendTo(target.id,{t:'toast',msg:'[Admin] '+(a.msg||''),kind:'info'});break;
+  /* ===== TIMEOUT SYSTEM =====
+     Admin can timeout a player from chat, game, or both.
+     Stored on the player object so it persists across reconnects.
+     Types: 'chat' (can't chat but can play), 'game' (can't play or chat), 'all' (same as game). */
+  case 'timeout':{
+   if(!target)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
+   const type=['chat','game','all'].includes(a.type)?a.type:'chat';
+   const duration=Math.max(1,Math.min(10080,Math.round(+a.duration||0))); /* 1 min to 7 days */
+   const reason=String(a.reason||'').slice(0,200);
+   target.timeout={type,duration,reason,until:now()+duration*60000,by:admin.name,at:now()};
+   pushMe(target);
+   sendTo(target.id,{t:'timeout',type,duration,reason,until:target.timeout.until,by:admin.name});
+   sendTo(admin.id,{t:'toast',msg:'Timed out '+target.name+' for '+duration+' min ('+type+').',kind:'good'});
+   dbAddAudit('admin:timeout',admin.id,admin.name,target.id,{type,duration,reason});
+   log('admin:timeout',target.id,type+'/'+duration+'min:'+(reason||'none'));
+   break;}
+  case 'removeTimeout':{
+   if(!target)return sendTo(admin.id,{t:'toast',msg:'Player not found.',kind:'err'});
+   target.timeout=null;pushMe(target);
+   sendTo(target.id,{t:'timeoutRemoved'});
+   sendTo(admin.id,{t:'toast',msg:'Timeout removed from '+target.name+'.',kind:'good'});
+   dbAddAudit('admin:removeTimeout',admin.id,admin.name,target.id,{});
+   break;}
   case 'announce':broadcast({t:'announce',msg:String(a.msg||'').slice(0,300),
    color:/^#[0-9a-fA-F]{6}$/.test(a.color||'')?a.color:'',
    style:['classic','spooky','neon','elegant'].includes(a.style)?a.style:'classic',
